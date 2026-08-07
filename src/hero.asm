@@ -63,7 +63,7 @@ hu_still:       call h_slipping
 hu_fall:        call h_fall_steps
 hu_done:        call h_support
                 ld   (hero_prev),a
-                ret
+                jp   h_track
 
 ;---------------------------------------------------------------------
 ; h_touch — αντιδράσεις σε ό,τι ακουμπάει το σώμα (μία φορά ανά frame)
@@ -145,6 +145,85 @@ ht_hset:        ld   (hero_energy),a
                 ld   (hud_dirty),a
                 ret
 
+; h_track — καταγράφει τη θέση σε κυκλικό buffer STUCK_FRAMES θέσεων
+;   Μία φορά ανά frame, στο τέλος του hero_update.
+;---------------------------------------------------------------------
+h_track:        call h_hist_ptr
+                ld   de,(hero_x)
+                ld   (hl),e
+                inc  hl
+                ld   (hl),d
+                inc  hl
+                ld   de,(hero_y)
+                ld   (hl),e
+                inc  hl
+                ld   (hl),d
+                ld   a,(h_hidx)
+                inc  a
+                cp   STUCK_FRAMES
+                jr   c,htr_save
+                xor  a
+htr_save:       ld   (h_hidx),a
+                ret
+
+; HL = h_hist + h_hidx*4 — η θέση που δείχνει ο δείκτης είναι η ΠΑΛΑΙΟΤΕΡΗ,
+; γιατί εκεί πρόκειται να γραφτεί η επόμενη.
+h_hist_ptr:     ld   a,(h_hidx)
+                add  a,a
+                add  a,a
+                ld   e,a
+                ld   d,0
+                ld   hl,h_hist
+                add  hl,de
+                ret
+
+;---------------------------------------------------------------------
+; h_stuck — έμεινε ουσιαστικά ακίνητος τα τελευταία STUCK_FRAMES frames;
+;   OUT: CY = ναι (καμία μετατόπιση > STUCK_PX σε ΚΑΝΕΝΑΝ από τους δύο άξονες)
+;
+;   Δικλείδα για τον κανόνα "καμία αλλαγή φοράς στον αέρα": χωρίς αυτήν, ένας
+;   ήρωας που γλιστράει ατέρμονα ή σφηνώνει δεν θα ξανάπαιρνε ποτέ τον έλεγχο.
+;---------------------------------------------------------------------
+h_stuck:        call h_hist_ptr
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                inc  hl
+                push hl
+                ld   hl,(hero_x)
+                or   a
+                sbc  hl,de
+                call h_absle
+                pop  hl
+                ret  nc                 ; κινήθηκε πολύ στον x -> όχι ακίνητος
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                ld   hl,(hero_y)
+                or   a
+                sbc  hl,de
+                ; πέφτει στο h_absle
+
+; h_absle — CY αν |HL| <= STUCK_PX
+h_absle:        bit  7,h
+                jr   z,hab_pos
+                xor  a                  ; HL = -HL
+                sub  l
+                ld   l,a
+                sbc  a,a
+                sub  h
+                ld   h,a
+hab_pos:        ld   a,h
+                or   a
+                ret  nz                 ; > 255 px -> NC
+                ld   a,l
+                cp   STUCK_PX+1
+                ret
+
+h_hidx          db 0
+h_hist          ds STUCK_FRAMES*4, 0
+
+;---------------------------------------------------------------------
 ; h_noflip — είναι μέσα σε ζώνη όπου απαγορεύεται η αλλαγή βαρύτητας;
 ;   OUT: CY = απαγορεύεται
 h_noflip:       ld   (h_nfa),a          ; ΟΧΙ push af: το pop θα επανέφερε ΚΑΙ τα
