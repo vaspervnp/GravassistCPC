@@ -44,6 +44,7 @@ K_F2            equ  14
 K_F3            equ  5
 K_N             equ  46         ; βάδισμα πίσω  (σχετικά με τον ήρωα)
 K_M             equ  38         ; βάδισμα μπροστά
+K_SHIFT         equ  21         ; κρατημένο = τρέξιμο
 
 ;--- Φορές βαρύτητας (docs/sprites.md §2) ----------------------------
 GRAV_DOWN       equ  0
@@ -96,8 +97,26 @@ main_loop:      call read_gravity       ; ο παίκτης ρίχνει τη β
                 ld   a,HST_FALL         ; αλλαγή φοράς -> ξαναμετράει η πτώση
                 ld   (hero_state),a
 ml_walk:        call read_walk
+                ld   (ml_dir),a
                 call hero_update
-                call anim_frame
+
+                ; ΤΡΕΞΙΜΟ: δεύτερο ΠΛΗΡΕΣ βήμα φυσικής, όχι βήμα 2 pixels.
+                ; Με βήμα 2 pixels ο ήρωας θα προσπερνούσε ακμές και ράμπες —
+                ; το μοντέλο ανιχνεύει γωνίες και κλίσεις ανά pixel.
+                xor  a
+                ld   (ml_run),a
+                ld   a,(ml_dir)
+                or   a
+                jr   z,ml_anim          ; τρέξιμο μόνο όταν περπατάει
+                ld   a,K_SHIFT
+                call KM_TEST_KEY
+                jr   z,ml_anim
+                ld   a,1
+                ld   (ml_run),a
+                ld   a,(ml_dir)
+                call hero_update
+
+ml_anim:        call anim_frame
                 call prep_hero          ; μετασχηματισμός sprite (εκτός vblank)
 
                 call MC_WAIT_FLYBACK
@@ -107,6 +126,9 @@ ml_walk:        call read_walk
                 call KM_TEST_KEY
                 jr   z,main_loop
                 ret                     ; επιστροφή στη BASIC
+
+ml_dir          db   0
+ml_run          db   0
 
 ;---------------------------------------------------------------------
 ; set_palette — τα 4 pens του MODE 1
@@ -193,6 +215,11 @@ rw_none:        xor  a
 ;---------------------------------------------------------------------
 anim_frame:     ld   hl,anim_tick
                 inc  (hl)
+                ld   a,(ml_run)         ; στο τρέξιμο, διπλάσιος ρυθμός καρέ
+                or   a
+                jr   z,af_state
+                inc  (hl)
+af_state:
                 ld   a,(hero_state)
                 cp   HST_WALK
                 jr   z,af_walk
