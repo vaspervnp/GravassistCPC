@@ -146,20 +146,22 @@ ht_hset:        ld   (hero_energy),a
 
 ; h_noflip — είναι μέσα σε ζώνη όπου απαγορεύεται η αλλαγή βαρύτητας;
 ;   OUT: CY = απαγορεύεται
-h_noflip:       push af
-                ld   bc,(hero_x)
-                ld   de,(hero_y)
-                call cell_at
+h_noflip:       ld   (h_nfa),a          ; ΟΧΙ push af: το pop θα επανέφερε ΚΑΙ τα
+                ld   bc,(hero_x)        ; flags, σβήνοντας το αποτέλεσμα του AND.
+                ld   de,(hero_y)        ; (Αυτό έκανε να δουλεύει μόνο η φορά 0:
+                call cell_at            ;  τα flags έλεγαν "Z" μόνο για A=0.)
                 ld   e,a
                 ld   d,0
                 ld   hl,tile_props
                 add  hl,de
                 ld   a,(hl)
                 and  F_NOFLIP
-                pop  af
+                ld   a,(h_nfa)          ; το ld ΔΕΝ πειράζει flags
                 ret  z                  ; NC = επιτρέπεται
                 scf
                 ret
+
+h_nfa           db 0
 
 ; h_take — αδειάζει το κελί που μόλις διάβασε το cell_at και το ξαναζωγραφίζει
 h_take:         ld   hl,(cell_ptr)

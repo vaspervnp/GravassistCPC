@@ -9,6 +9,12 @@ builder.Services.AddSingleton<LevelStore>();
 
 var app = builder.Build();
 
+// Προειδοποίηση αν ο κατάλογος τύπων ξέφυγε από το CHARS του tools/physics.py.
+PhysicsCharsCheck.Run(
+    Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath,
+        builder.Configuration["PhysicsPath"] ?? "../tools/physics.py")),
+    app.Logger);
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
