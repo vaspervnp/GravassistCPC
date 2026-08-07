@@ -124,6 +124,13 @@
         cursor: crosshair;
     }
 
+    /* Οι γραμμές του πλέγματος πρέπει να μένουν 1 pixel οθόνης όσο κι αν μεγαλώσει
+       το SVG — χωρίς αυτό το πάχος κλιμακώνεται μαζί με το viewBox και εξαφανίζεται. */
+    #gridlines line {
+        vector-effect: non-scaling-stroke;
+        stroke-width: 1;
+    }
+
     .status {
         margin-top: 10px;
         min-height: 22px;

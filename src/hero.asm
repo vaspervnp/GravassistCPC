@@ -88,6 +88,7 @@ h_touch:        ld   bc,(hero_x)
                 jr   nz,ht_np1
                 ld   a,1
                 ld   (hero_para),a
+                ld   (hud_dirty),a      ; αλλιώς το εικονίδιο δεν εμφανιζόταν
                 jr   ht_spikes
 ht_np1:         cp   T_KEY
                 jr   nz,ht_np2
@@ -183,6 +184,9 @@ h_land:         ld   a,HST_IDLE
                 xor  a
                 ld   (hero_para),a
                 ld   (hero_paraopen),a
+                inc  a
+                ld   (hud_dirty),a      ; σβήσε το εικονίδιο
+                dec  a
                 ld   hl,0
                 ld   (hero_fall),hl
                 ld   hl,FALL_V0
@@ -315,13 +319,13 @@ hf_ok:          call h_snap
 ;---------------------------------------------------------------------
 h_fall_steps:   ld   a,(hero_state)
                 cp   HST_FALL
-                jr   z,hfs_acc
-                ld   hl,FALL_V0         ; νέα πτώση -> αρχική ταχύτητα
+                jr   z,hfs_para         ; ήδη πέφτει: μόνο ο ΜΗΔΕΝΙΣΜΟΣ ταχύτητας
+                ld   hl,FALL_V0         ; παραλείπεται, όχι ο έλεγχος παρακάτω
                 ld   (hero_v),hl
                 xor  a
                 ld   (hero_facc),a
 
-                ; ΑΛΕΞΙΠΤΩΤΟ: ανοίγει μόνο αν το κουβαλάς ΚΑΙ η πτώση έχει ήδη
+hfs_para:       ; ΑΛΕΞΙΠΤΩΤΟ: ανοίγει μόνο αν το κουβαλάς ΚΑΙ η πτώση έχει ήδη
                 ; ξεπεράσει τις 3 φορές το ύψος του ήρωα. Αν άνοιγε σε κάθε
                 ; πτώση, ένα σκαλοπάτι δύο pixel θα το κατανάλωνε.
                 ld   a,(hero_para)
