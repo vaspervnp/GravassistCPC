@@ -1,0 +1,623 @@
+@using System.Text.Json
+@model EditorViewModel
+@{
+    ViewData["Title"] = "Επεξεργαστής πιστών";
+    ViewData["LevelsPath"] = Model.LevelsPath;
+
+    // Τα σχήματα των κελιών γράφονται στο TileType με τα σύμβολα var(--fill)/var(--edge)·
+    // εδώ αντικαθίστανται με τα πραγματικά χρώματα του τύπου, ώστε το SVG να μην
+    // εξαρτάται από κληρονομικότητα CSS μεταβλητών μέσα σε <use> shadow tree.
+    Func<TileType, string> bake = t => t.Svg
+        .Replace("var(--fill)", t.Fill)
+        .Replace("var(--edge)", t.Edge);
+
+    // Ό,τι χρειάζεται το JS: τύποι κελιών + σταθερές του πλέγματος.
+    var tileJson = JsonSerializer.Serialize(new
+    {
+        cols = Model.Cols,
+        rows = Model.Rows,
+        empty = Model.EmptySymbol.ToString(),
+        solid = Model.SolidSymbol.ToString(),
+        tiles = Model.Tiles.Select(t => new
+        {
+            id = t.Id,
+            symbol = t.Symbol.ToString(),
+            name = t.Name,
+            hint = t.Hint,
+        }),
+    });
+}
+
+<style>
+    .workbench {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .sidebar {
+        width: 320px;
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .panel {
+        border: 1px solid var(--line);
+        background: var(--chrome-2);
+        padding: 10px;
+    }
+
+    .panel h2 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        letter-spacing: 1.5px;
+        color: var(--edge);
+        text-transform: uppercase;
+    }
+
+    .panel h3.group {
+        margin: 10px 0 5px;
+        font-size: 11px;
+        font-weight: normal;
+        color: #8a8ac0;
+        letter-spacing: 1px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 2px;
+    }
+
+    .panel h3.group:first-of-type { margin-top: 0; }
+
+    .palette {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 5px;
+    }
+
+    .palette button {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 6px;
+        text-align: left;
+        overflow: hidden;
+    }
+
+    .palette svg {
+        flex: 0 0 auto;
+        background: var(--bg);
+        border: 1px solid var(--line);
+    }
+
+    .palette .label {
+        font-size: 11px;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .palette .key { color: #8a8ac0; }
+
+    .toolbar, .filebar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .filebar select, .filebar input[type=text] { flex: 1 1 100%; }
+
+    .stage {
+        flex: 1 1 640px;
+        min-width: 0;
+    }
+
+    #grid {
+        width: 100%;
+        max-width: 1000px;
+        display: block;
+        background: var(--bg);
+        border: 2px solid var(--edge);
+        touch-action: none;
+        cursor: crosshair;
+    }
+
+    .status {
+        margin-top: 10px;
+        min-height: 22px;
+        font-size: 13px;
+    }
+
+    .status.ok { color: var(--material); }
+    .status.err { color: #ff5050; }
+    .status.info { color: #8a8ac0; }
+
+    .readout {
+        margin-top: 6px;
+        font-size: 12px;
+        color: #8a8ac0;
+    }
+
+    details.source pre {
+        margin: 6px 0 0;
+        padding: 8px;
+        background: #000;
+        color: var(--material);
+        font-size: 11px;
+        line-height: 1.25;
+        overflow-x: auto;
+        white-space: pre;
+    }
+
+    .hintline {
+        font-size: 11px;
+        color: #8a8ac0;
+        margin-top: 8px;
+    }
+</style>
+
+<script id="editor-data" type="application/json">@Html.Raw(tileJson)</script>
+
+<div class="workbench">
+    <div class="sidebar">
+        <div class="panel">
+            <h2>Αρχείο</h2>
+            <div class="filebar">
+                <select id="file-list" title="Πίστες στον φάκελο levels/">
+                    @foreach (var f in Model.Files)
+                    {
+                        <option value="@f">@f</option>
+                    }
+                </select>
+                <button id="btn-open" type="button">Άνοιγμα</button>
+                <button id="btn-new" type="button">Νέα</button>
+                <input type="text" id="file-name" placeholder="όνομα.txt" />
+                <button id="btn-save" type="button">Αποθήκευση</button>
+            </div>
+            <div class="hintline">Ο φάκελος πιστών είναι το <code>levels/</code> του repo.</div>
+        </div>
+
+        <div class="panel">
+            <h2>Τύποι κελιών</h2>
+            @foreach (var group in Model.Tiles.GroupBy(t => t.Group))
+            {
+                <h3 class="group">@group.Key</h3>
+                <div class="palette">
+                    @foreach (var t in group)
+                    {
+                        <button type="button" class="tile-btn" data-symbol="@t.Symbol"
+                                title="@t.Name — @t.Hint (χαρακτήρας '@t.Symbol')">
+                            <svg viewBox="0 0 8 8" width="26" height="26" aria-hidden="true">
+                                <use href="#t-@t.Id" width="8" height="8"></use>
+                            </svg>
+                            <span class="label">@t.Name<br /><span class="key">@t.Symbol</span></span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="panel">
+            <h2>Εργαλεία</h2>
+            <div class="toolbar">
+                <button type="button" class="tool-btn" data-tool="brush">Πινέλο</button>
+                <button type="button" class="tool-btn" data-tool="eraser">Γόμα</button>
+                <button type="button" class="tool-btn" data-tool="fill">Γέμισμα</button>
+            </div>
+            <div class="toolbar" style="margin-top:6px">
+                <button type="button" id="btn-border">Πλαίσιο</button>
+                <button type="button" id="btn-clear">Καθαρισμός</button>
+                <button type="button" id="btn-undo">Αναίρεση</button>
+                <button type="button" id="btn-redo">Επανάληψη</button>
+            </div>
+            <div class="toolbar" style="margin-top:6px">
+                <button type="button" id="btn-gridlines" class="active">Πλέγμα</button>
+            </div>
+            <div class="hintline">
+                Δεξί κλικ = σβήσιμο. Πατώντας τον ίδιο τον χαρακτήρα (π.χ. <code>#</code>,
+                <code>/</code>, <code>k</code>) επιλέγεται ο τύπος. Ctrl+Z / Ctrl+Y = αναίρεση.
+            </div>
+        </div>
+    </div>
+
+    <div class="stage">
+        <svg id="grid" viewBox="0 0 @(Model.Cols * 8) @(Model.Rows * 8)"
+             preserveAspectRatio="xMidYMid meet" role="img"
+             aria-label="Πλέγμα πίστας @Model.Cols επί @Model.Rows">
+            <defs>
+                @* Ένα <symbol> ανά τύπο κελιού, σε συντεταγμένες 8x8 = ένα tile του CPC. *@
+                @foreach (var t in Model.Tiles)
+                {
+                    <symbol id="t-@t.Id" viewBox="0 0 8 8">@Html.Raw(bake(t))</symbol>
+                }
+            </defs>
+            <g id="cells"></g>
+            <g id="gridlines" stroke="#ffffff" stroke-opacity="0.12" stroke-width="0.15"></g>
+            <rect id="cursor" width="8" height="8" fill="none"
+                  stroke="#ffffff" stroke-width="0.4" pointer-events="none" visibility="hidden"></rect>
+        </svg>
+
+        <div class="status info" id="status">Έτοιμο.</div>
+        <div class="readout" id="readout">—</div>
+
+        <details class="source">
+            <summary>Πηγαίο κείμενο πίστας</summary>
+            <pre id="source-view"></pre>
+        </details>
+    </div>
+</div>
+
+<script>
+    "use strict";
+    (function () {
+        // --- Δεδομένα από τον server (ο κατάλογος τύπων ζει στο Models/TileType.cs) ---
+        const DATA = JSON.parse(document.getElementById("editor-data").textContent);
+        const COLS = DATA.cols, ROWS = DATA.rows;
+        const EMPTY = DATA.empty, SOLID = DATA.solid;
+        const CELL = 8;                       // μονάδες SVG ανά κελί (= 8x8 pixel του CPC)
+        const TILE_BY_SYMBOL = new Map(DATA.tiles.map(t => [t.symbol, t]));
+
+        const svg = document.getElementById("grid");
+        const cellsGroup = document.getElementById("cells");
+        const gridlines = document.getElementById("gridlines");
+        const cursor = document.getElementById("cursor");
+        const statusEl = document.getElementById("status");
+        const readoutEl = document.getElementById("readout");
+        const sourceView = document.getElementById("source-view");
+        const fileList = document.getElementById("file-list");
+        const fileName = document.getElementById("file-name");
+
+        // --- Κατάσταση -------------------------------------------------
+        let grid = [];             // grid[row][col] = χαρακτήρας
+        let header = [];           // γραμμές σχολίων κεφαλής (διατηρούνται αυτούσιες)
+        let footer = [];
+        let currentSymbol = SOLID;
+        let currentTool = "brush";
+        let painting = false;
+        let paintSymbol = EMPTY;
+        let dirty = false;
+        const undoStack = [], redoStack = [];
+
+        // Ένα <use> ανά κελί· η αλλαγή τύπου είναι απλή αλλαγή του href.
+        const cellNodes = [];
+
+        function setStatus(text, kind) {
+            statusEl.textContent = text;
+            statusEl.className = "status " + (kind || "info");
+        }
+
+        // --- Στήσιμο του πλέγματος -------------------------------------
+        function buildGrid() {
+            const frag = document.createDocumentFragment();
+            for (let r = 0; r < ROWS; r++) {
+                cellNodes.push([]);
+                for (let c = 0; c < COLS; c++) {
+                    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+                    use.setAttribute("x", c * CELL);
+                    use.setAttribute("y", r * CELL);
+                    use.setAttribute("width", CELL);
+                    use.setAttribute("height", CELL);
+                    frag.appendChild(use);
+                    cellNodes[r].push(use);
+                }
+            }
+            cellsGroup.appendChild(frag);
+
+            const lines = document.createDocumentFragment();
+            for (let c = 0; c <= COLS; c++) {
+                const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                l.setAttribute("x1", c * CELL); l.setAttribute("y1", 0);
+                l.setAttribute("x2", c * CELL); l.setAttribute("y2", ROWS * CELL);
+                lines.appendChild(l);
+            }
+            for (let r = 0; r <= ROWS; r++) {
+                const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                l.setAttribute("x1", 0); l.setAttribute("y1", r * CELL);
+                l.setAttribute("x2", COLS * CELL); l.setAttribute("y2", r * CELL);
+                lines.appendChild(l);
+            }
+            gridlines.appendChild(lines);
+        }
+
+        function drawCell(r, c) {
+            const tile = TILE_BY_SYMBOL.get(grid[r][c]);
+            cellNodes[r][c].setAttribute("href", "#t-" + (tile ? tile.id : "empty"));
+        }
+
+        function drawAll() {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) drawCell(r, c);
+            }
+            refreshSource();
+        }
+
+        function refreshSource() {
+            sourceView.textContent = grid.map(row => row.join("")).join("\n");
+        }
+
+        // --- Αναίρεση --------------------------------------------------
+        function snapshot() {
+            return grid.map(row => row.join(""));
+        }
+
+        function restore(rows) {
+            grid = rows.map(line => line.split(""));
+            drawAll();
+        }
+
+        function pushUndo() {
+            undoStack.push(snapshot());
+            if (undoStack.length > 100) undoStack.shift();
+            redoStack.length = 0;
+        }
+
+        function undo() {
+            if (!undoStack.length) { setStatus("Δεν υπάρχει τίποτα για αναίρεση.", "info"); return; }
+            redoStack.push(snapshot());
+            restore(undoStack.pop());
+            dirty = true;
+        }
+
+        function redo() {
+            if (!redoStack.length) { setStatus("Δεν υπάρχει τίποτα για επανάληψη.", "info"); return; }
+            undoStack.push(snapshot());
+            restore(redoStack.pop());
+            dirty = true;
+        }
+
+        // --- Ζωγραφική -------------------------------------------------
+        function setCell(r, c, symbol) {
+            if (r < 0 || c < 0 || r >= ROWS || c >= COLS) return false;
+            if (grid[r][c] === symbol) return false;
+            grid[r][c] = symbol;
+            drawCell(r, c);
+            dirty = true;
+            return true;
+        }
+
+        function floodFill(r, c, symbol) {
+            const target = grid[r][c];
+            if (target === symbol) return;
+            const stack = [[r, c]];
+            while (stack.length) {
+                const [y, x] = stack.pop();
+                if (y < 0 || x < 0 || y >= ROWS || x >= COLS) continue;
+                if (grid[y][x] !== target) continue;
+                grid[y][x] = symbol;
+                drawCell(y, x);
+                stack.push([y + 1, x], [y - 1, x], [y, x + 1], [y, x - 1]);
+            }
+            dirty = true;
+        }
+
+        function borderBox() {
+            pushUndo();
+            for (let c = 0; c < COLS; c++) { setCell(0, c, SOLID); setCell(ROWS - 1, c, SOLID); }
+            for (let r = 0; r < ROWS; r++) { setCell(r, 0, SOLID); setCell(r, COLS - 1, SOLID); }
+            refreshSource();
+            setStatus("Μπήκε πλαίσιο περιγράμματος.", "ok");
+        }
+
+        function clearAll() {
+            pushUndo();
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) setCell(r, c, EMPTY);
+            }
+            refreshSource();
+            setStatus("Η πίστα καθαρίστηκε.", "ok");
+        }
+
+        // --- Ποντίκι ---------------------------------------------------
+        function cellFromEvent(ev) {
+            const rect = svg.getBoundingClientRect();
+            if (!rect.width || !rect.height) return null;
+            const c = Math.floor((ev.clientX - rect.left) / rect.width * COLS);
+            const r = Math.floor((ev.clientY - rect.top) / rect.height * ROWS);
+            if (r < 0 || c < 0 || r >= ROWS || c >= COLS) return null;
+            return { r: r, c: c };
+        }
+
+        svg.addEventListener("contextmenu", ev => ev.preventDefault());
+
+        svg.addEventListener("pointerdown", function (ev) {
+            const p = cellFromEvent(ev);
+            if (!p) return;
+            ev.preventDefault();
+            // Δεξί κλικ σβήνει, ανεξάρτητα από το επιλεγμένο εργαλείο.
+            const erase = ev.button === 2 || currentTool === "eraser";
+            paintSymbol = erase ? EMPTY : currentSymbol;
+
+            if (currentTool === "fill" && !erase) {
+                pushUndo();
+                floodFill(p.r, p.c, currentSymbol);
+                refreshSource();
+                return;
+            }
+            if (currentTool === "fill" && erase) {
+                pushUndo();
+                floodFill(p.r, p.c, EMPTY);
+                refreshSource();
+                return;
+            }
+
+            pushUndo();
+            painting = true;
+            svg.setPointerCapture(ev.pointerId);
+            setCell(p.r, p.c, paintSymbol);
+        });
+
+        svg.addEventListener("pointermove", function (ev) {
+            const p = cellFromEvent(ev);
+            if (!p) { cursor.setAttribute("visibility", "hidden"); readoutEl.textContent = "—"; return; }
+            cursor.setAttribute("x", p.c * CELL);
+            cursor.setAttribute("y", p.r * CELL);
+            cursor.setAttribute("visibility", "visible");
+            const tile = TILE_BY_SYMBOL.get(grid[p.r][p.c]);
+            readoutEl.textContent = "στήλη " + p.c + ", γραμμή " + p.r +
+                "  ·  " + (tile ? tile.name : "?") + " '" + grid[p.r][p.c] + "'";
+            if (painting) setCell(p.r, p.c, paintSymbol);
+        });
+
+        function endPaint() {
+            if (!painting) return;
+            painting = false;
+            refreshSource();
+        }
+
+        svg.addEventListener("pointerup", endPaint);
+        svg.addEventListener("pointercancel", endPaint);
+        svg.addEventListener("pointerleave", function () {
+            cursor.setAttribute("visibility", "hidden");
+        });
+        window.addEventListener("pointerup", endPaint);
+
+        // --- Παλέτα & εργαλεία ------------------------------------------
+        function selectSymbol(symbol) {
+            if (!TILE_BY_SYMBOL.has(symbol)) return;
+            currentSymbol = symbol;
+            document.querySelectorAll(".tile-btn").forEach(b =>
+                b.classList.toggle("active", b.dataset.symbol === symbol));
+            // Επιλογή τύπου σημαίνει ότι θέλουμε να ζωγραφίσουμε, όχι να σβήσουμε.
+            if (currentTool === "eraser") selectTool("brush");
+        }
+
+        function selectTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll(".tool-btn").forEach(b =>
+                b.classList.toggle("active", b.dataset.tool === tool));
+        }
+
+        document.querySelectorAll(".tile-btn").forEach(b =>
+            b.addEventListener("click", () => selectSymbol(b.dataset.symbol)));
+        document.querySelectorAll(".tool-btn").forEach(b =>
+            b.addEventListener("click", () => selectTool(b.dataset.tool)));
+
+        document.getElementById("btn-border").addEventListener("click", borderBox);
+        document.getElementById("btn-clear").addEventListener("click", clearAll);
+        document.getElementById("btn-undo").addEventListener("click", undo);
+        document.getElementById("btn-redo").addEventListener("click", redo);
+
+        const gridBtn = document.getElementById("btn-gridlines");
+        gridBtn.addEventListener("click", function () {
+            const on = gridlines.style.display !== "none";
+            gridlines.style.display = on ? "none" : "";
+            gridBtn.classList.toggle("active", !on);
+        });
+
+        // Συντόμευση = ο ΙΔΙΟΣ ο χαρακτήρας του κελιού (π.χ. '#', '/', 'k').
+        // Σε ελληνική διάταξη πληκτρολογίου το ev.key δίνει ελληνικό γράμμα, οπότε
+        // υπάρχει και εναλλακτική μέσω ev.code (η φυσική θέση του πλήκτρου).
+        function latinFromCode(ev) {
+            const m = /^Key([A-Z])$/.exec(ev.code);
+            if (!m) return null;
+            return ev.shiftKey ? m[1] : m[1].toLowerCase();
+        }
+
+        document.addEventListener("keydown", function (ev) {
+            if (ev.target.tagName === "INPUT" || ev.target.tagName === "SELECT") return;
+            if (ev.ctrlKey && (ev.key === "z" || ev.key === "Z")) { ev.preventDefault(); undo(); return; }
+            if (ev.ctrlKey && (ev.key === "y" || ev.key === "Y")) { ev.preventDefault(); redo(); return; }
+            if (ev.ctrlKey || ev.altKey || ev.metaKey) return;
+            if (TILE_BY_SYMBOL.has(ev.key)) { selectSymbol(ev.key); return; }
+            const latin = latinFromCode(ev);
+            if (latin && TILE_BY_SYMBOL.has(latin)) selectSymbol(latin);
+        });
+
+        // --- Αρχεία -----------------------------------------------------
+        function loadDocument(dto) {
+            grid = dto.rows.map(line => line.split(""));
+            header = dto.header || [];
+            footer = dto.footer || [];
+            undoStack.length = 0;
+            redoStack.length = 0;
+            dirty = false;
+            drawAll();
+        }
+
+        async function readError(res) {
+            try {
+                const body = await res.json();
+                return body.error || ("Σφάλμα " + res.status);
+            } catch (e) {
+                return "Σφάλμα " + res.status;
+            }
+        }
+
+        async function refreshFileList(selectName) {
+            const res = await fetch("/api/levels");
+            if (!res.ok) return;
+            const body = await res.json();
+            fileList.innerHTML = "";
+            body.files.forEach(function (f) {
+                const opt = document.createElement("option");
+                opt.value = f; opt.textContent = f;
+                fileList.appendChild(opt);
+            });
+            if (selectName) fileList.value = selectName;
+        }
+
+        async function openLevel(name) {
+            if (!name) { setStatus("Δεν υπάρχει πίστα να ανοίξω.", "err"); return; }
+            if (dirty && !confirm("Υπάρχουν μη αποθηκευμένες αλλαγές. Να συνεχίσω;")) return;
+            const res = await fetch("/api/levels/" + encodeURIComponent(name));
+            if (!res.ok) { setStatus(await readError(res), "err"); return; }
+            loadDocument(await res.json());
+            fileName.value = name;
+            setStatus("Φορτώθηκε η πίστα «" + name + "».", "ok");
+        }
+
+        async function newLevel() {
+            if (dirty && !confirm("Υπάρχουν μη αποθηκευμένες αλλαγές. Να συνεχίσω;")) return;
+            const res = await fetch("/api/levels/new");
+            if (!res.ok) { setStatus(await readError(res), "err"); return; }
+            loadDocument(await res.json());
+            fileName.value = "";
+            setStatus("Νέα άδεια πίστα με περίγραμμα.", "ok");
+        }
+
+        async function saveLevel() {
+            const name = fileName.value.trim();
+            if (!name) { setStatus("Δώσε όνομα αρχείου.", "err"); return; }
+            const payload = {
+                name: name,
+                rows: grid.map(row => row.join("")),
+                header: header,
+                footer: footer,
+            };
+            const res = await fetch("/api/levels", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) { setStatus(await readError(res), "err"); return; }
+            const body = await res.json();
+            dirty = false;
+            await refreshFileList(body.saved);
+            fileName.value = body.saved;
+            setStatus("Αποθηκεύτηκε: " + body.saved, "ok");
+        }
+
+        document.getElementById("btn-open").addEventListener("click", () => openLevel(fileList.value));
+        document.getElementById("btn-new").addEventListener("click", newLevel);
+        document.getElementById("btn-save").addEventListener("click", saveLevel);
+
+        window.addEventListener("beforeunload", function (ev) {
+            if (!dirty) return;
+            ev.preventDefault();
+            ev.returnValue = "";
+        });
+
+        // --- Εκκίνηση ---------------------------------------------------
+        buildGrid();
+        selectSymbol(SOLID);
+        selectTool("brush");
+
+        if (fileList.options.length > 0) {
+            openLevel(fileList.value);
+        } else {
+            newLevel();
+        }
+    })();
+</script>

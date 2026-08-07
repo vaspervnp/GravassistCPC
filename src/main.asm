@@ -12,6 +12,10 @@
 
                 org  #4000
 
+; Παραγόμενοι ορισμοί (κωδικοί τύπων, μεγέθη). ΠΡΩΤΑ απ' όλα: τα `ds` των
+; buffers χρειάζονται τις τιμές ήδη στο πρώτο πέρασμα.
+                include "gamedefs.asm"
+
 ;--- Firmware jumpblock ----------------------------------------------
 SCR_SET_MODE    equ  #BC0E      ; A = mode (καθαρίζει την οθόνη)
 SCR_SET_INK     equ  #BC32      ; A=pen, B=colour1, C=colour2
@@ -44,6 +48,8 @@ K_F2            equ  14
 K_F3            equ  5
 K_N             equ  46         ; βάδισμα πίσω  (σχετικά με τον ήρωα)
 K_M             equ  38         ; βάδισμα μπροστά
+K_LEFT          equ  8          ; ισοδύναμα με N
+K_RIGHT         equ  1          ; ισοδύναμα με M
 K_SHIFT         equ  21         ; κρατημένο = τρέξιμο
 
 ;--- Φορές βαρύτητας (docs/sprites.md §2) ----------------------------
@@ -57,9 +63,6 @@ GRAV_RIGHT      equ  6
 GRAV_DOWNRIGHT  equ  7
 
 ;--- Κανόνες παιχνιδιού (plan.md §2.2, §2.4) -------------------------
-FALL_SAFE       equ  36         ; 3 x ύψος ήρωα· πάνω από αυτό, ζημιά
-ENERGY_MAX      equ  8
-
 ;--- Παλέτα (docs/concept-art.md §5) ---------------------------------
 INK_BG          equ  1          ; σκούρο μπλε  - φόντο
 INK_HERO        equ  26         ; λευκό        - ήρωας, HUD
@@ -67,6 +70,16 @@ INK_BODY        equ  18         ; πράσινο      - σώμα υλικού
 INK_EDGE        equ  16         ; πορτοκαλί    - ακμές, κίνδυνος
 
 ;--- Οθόνη ------------------------------------------------------------
+; --- HUD: πάνω 8 scanlines, πάνω από το grid της πίστας ---------------
+HUD_X           equ  2          ; στήλη byte της μπάρας
+HUD_Y           equ  2          ; πρώτη scanline
+HUD_H           equ  4          ; ύψος σε γραμμές
+HUD_SEG         equ  2          ; bytes ανά μονάδα ενέργειας
+HUD_PARA_X      equ  24         ; στήλη byte του εικονιδίου αλεξίπτωτου
+BYTE_PEN2       equ  #0F        ; 4 pixels pen2 (πράσινο)
+BYTE_PEN3       equ  #FF        ; 4 pixels pen3 (πορτοκαλί)
+LOW_ENERGY      equ  3          ; κάτω από αυτό, η μπάρα κοκκινίζει
+
 SCR_BASE        equ  #C000
 SCR_WBYTES      equ  80         ; bytes ανά scanline σε MODE 1
 
@@ -76,6 +89,8 @@ main:           ld   a,1
                 call set_palette
                 call init_linetab
                 call render_room
+                ld   a,1
+                ld   (hud_dirty),a
 
                 ld   hl,60              ; αρχική θέση: πέφτει στο πάτωμα
                 ld   (hero_x),hl
@@ -92,6 +107,8 @@ main:           ld   a,1
 ; φυσική (εκατοντάδες solid_at) έτρεχε ανάμεσα στο σβήσιμο και τη σχεδίαση
 ; και ο ήρωας έλειπε από την οθόνη για το μεγαλύτερο μέρος του frame.
 main_loop:      call read_gravity       ; ο παίκτης ρίχνει τη βαρύτητα
+                jr   c,ml_walk
+                call h_noflip           ; ...εκτός αν είναι σε ζώνη κλειδώματος
                 jr   c,ml_walk
                 ld   (hero_g),a
                 ld   a,HST_FALL         ; αλλαγή φοράς -> ξαναμετράει η πτώση
@@ -121,6 +138,7 @@ ml_anim:        call anim_frame
 
                 call MC_WAIT_FLYBACK
                 call draw_hero          ; μόνο εγγραφές στην οθόνη
+                call draw_hud
 
                 ld   a,K_ESC
                 call KM_TEST_KEY
@@ -194,20 +212,27 @@ grav_keys       db   K_X, K_F2          ; 0 DOWN
                 db   K_C, K_F3          ; 7 DOWN-RIGHT
 
 ;---------------------------------------------------------------------
-; read_walk — M / N· πάντα ΣΧΕΤΙΚΑ με τον προσανατολισμό του ήρωα
+; read_walk — M/N ή τα βελάκια· πάντα ΣΧΕΤΙΚΑ με τον προσανατολισμό
+;             του ήρωα, όχι με την οθόνη
 ;   OUT: A = +1 (M), -1 (N), 0
 ;---------------------------------------------------------------------
 read_walk:      ld   a,K_M
                 call KM_TEST_KEY
-                jr   z,rw_n
-                ld   a,1
-                ret
-rw_n:           ld   a,K_N
+                jr   nz,rw_fwd
+                ld   a,K_RIGHT
                 call KM_TEST_KEY
-                jr   z,rw_none
-                ld   a,-1
+                jr   nz,rw_fwd
+                ld   a,K_N
+                call KM_TEST_KEY
+                jr   nz,rw_back
+                ld   a,K_LEFT
+                call KM_TEST_KEY
+                jr   nz,rw_back
+                xor  a
                 ret
-rw_none:        xor  a
+rw_fwd:         ld   a,1
+                ret
+rw_back:        ld   a,-1
                 ret
 
 ;---------------------------------------------------------------------
@@ -251,6 +276,85 @@ af_set:         ld   (anim_cur),a
 anim_tick       db   0
 anim_cur        db   0
 
+
+;---------------------------------------------------------------------
+; draw_hud — μπάρα ενέργειας και εικονίδιο αλεξίπτωτου
+;   Ζωγραφίζει ΜΟΝΟ όταν κάτι άλλαξε: το HUD είναι στατικό τις περισσότερες
+;   στιγμές και δεν αξίζει 40 bytes εγγραφών ανά frame.
+;---------------------------------------------------------------------
+draw_hud:       ld   a,(hud_dirty)
+                or   a
+                ret  z
+                xor  a
+                ld   (hud_dirty),a
+
+                ld   a,(hero_energy)    ; χαμηλή ενέργεια -> πορτοκαλί
+                ld   b,BYTE_PEN2
+                cp   LOW_ENERGY
+                jr   nc,dhd_col
+                ld   b,BYTE_PEN3
+dhd_col:        ld   c,a                ; C = γεμάτες μονάδες
+                ld   hl,hudbuf
+                ld   d,ENERGY_MAX
+dhd_seg:        ld   a,c
+                or   a
+                jr   z,dhd_empty
+                dec  c
+                ld   a,b
+                jr   dhd_put
+dhd_empty:      xor  a
+dhd_put:        ld   (hl),a
+                inc  hl
+                ld   (hl),a
+                inc  hl
+                dec  d
+                jr   nz,dhd_seg
+
+                ld   a,HUD_H
+                ld   (dhd_rows),a
+                ld   b,HUD_Y
+dhd_line:       push bc
+                ld   c,HUD_X
+                call scr_addr
+                ex   de,hl
+                ld   hl,hudbuf
+                ld   bc,ENERGY_MAX*HUD_SEG
+                ldir
+                pop  bc
+                inc  b
+                ld   hl,dhd_rows
+                dec  (hl)
+                jr   nz,dhd_line
+
+                ; εικονίδιο αλεξίπτωτου: το tile γραφικό του, 8 γραμμές
+                ld   hl,tile_gfx+T_PARACHUTE*16
+                ld   a,(hero_para)
+                or   a
+                jr   nz,dhd_para
+                ld   hl,tile_gfx        ; κενό tile = σβήσιμο
+dhd_para:       ld   (dhd_gfx),hl
+                ld   a,8
+                ld   (dhd_rows),a
+                ld   b,0
+dhd_pline:      push bc
+                ld   c,HUD_PARA_X
+                call scr_addr
+                ex   de,hl
+                ld   hl,(dhd_gfx)
+                ldi
+                ldi
+                ld   (dhd_gfx),hl
+                pop  bc
+                inc  b
+                ld   hl,dhd_rows
+                dec  (hl)
+                jr   nz,dhd_pline
+                ret
+
+hud_dirty       db   1
+dhd_rows        db   0
+dhd_gfx         dw   0
+hudbuf          ds   ENERGY_MAX*HUD_SEG, 0
 
 ;---------------------------------------------------------------------
 ; prep_hero — μετασχηματισμός sprite και θέση. Τρέχει ΕΚΤΟΣ vblank και δεν

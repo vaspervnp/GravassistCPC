@@ -32,11 +32,73 @@ COLS, ROWS = 40, 24
 GRID_Y0 = 8                     # η πρώτη scanline του grid (πάνω από αυτήν = HUD)
 
 # --- Τύποι κελιών -----------------------------------------------------
+# Οι τιμές 0..5 (γεωμετρία) ΔΕΝ αλλάζουν ποτέ: πάνω τους στηρίζεται το
+# solid_at και ο πίνακας ramp_grav. Τα στοιχεία παιχνιδιού μπαίνουν από το 6.
 EMPTY, SOLID = 0, 1
 RAMP_DR, RAMP_DL, RAMP_UR, RAMP_UL = 2, 3, 4, 5     # στερεό κάτω-δεξιά κ.λπ.
 
-CHARS = {".": EMPTY, "#": SOLID,
-         "/": RAMP_DR, "\\": RAMP_DL, "7": RAMP_UR, "F": RAMP_UL}
+SPIKE_U, SPIKE_L, SPIKE_D, SPIKE_R = 6, 7, 8, 9     # η φορά που δείχνουν οι μύτες
+ONEWAY_U, ONEWAY_L, ONEWAY_D, ONEWAY_R = 10, 11, 12, 13
+GRAVLOCK = 14           # ζώνη: απαγορεύεται η αλλαγή βαρύτητας
+CRUMBLE = 15            # στερεό που καταρρέει αφού το πατήσεις
+EXIT = 16
+ENERGY = 17
+PARACHUTE = 18
+KEY = 19
+LOCK = 20               # στερεό μέχρι να έχεις κλειδί
+GATE = 21               # στερεό όσο είναι κλειστό
+SWITCH = 22
+PLATE = 23              # πλάκα πίεσης
+TELEPORT = 24
+CRATE = 25
+
+CHARS = {
+    ".": EMPTY, "#": SOLID,
+    "/": RAMP_DR, "\\": RAMP_DL, "7": RAMP_UR, "F": RAMP_UL,
+    "^": SPIKE_U, "<": SPIKE_L, "v": SPIKE_D, ">": SPIKE_R,
+    "-": ONEWAY_U, "[": ONEWAY_L, "_": ONEWAY_D, "]": ONEWAY_R,
+    ":": GRAVLOCK, "%": CRUMBLE, "X": EXIT, "+": ENERGY, "P": PARACHUTE,
+    "k": KEY, "K": LOCK, "G": GATE, "S": SWITCH, "p": PLATE,
+    "T": TELEPORT, "B": CRATE,
+}
+NAMES = {v: k for k, v in CHARS.items()}
+TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
+              "SPIKE_U", "SPIKE_L", "SPIKE_D", "SPIKE_R",
+              "ONEWAY_U", "ONEWAY_L", "ONEWAY_D", "ONEWAY_R",
+              "GRAVLOCK", "CRUMBLE", "EXIT", "ENERGY", "PARACHUTE",
+              "KEY", "LOCK", "GATE", "SWITCH", "PLATE", "TELEPORT", "CRATE"]
+NTYPES = 26
+
+# --- Ιδιότητες ανά τύπο (bit flags) ----------------------------------
+# Ένας πίνακας αντί για σκόρπια if: ο ίδιος εξάγεται στο src/tables.asm και
+# ο Z80 ρωτάει το ίδιο πράγμα με ένα AND.
+F_SOLID   = 0x01        # μπλοκάρει την κίνηση
+F_DEADLY  = 0x02        # αφαιρεί ενέργεια στην επαφή
+F_PICKUP  = 0x04        # καταναλώνεται μόλις το αγγίξεις
+F_NOFLIP  = 0x08        # μέσα του δεν αλλάζει η βαρύτητα
+F_FRAGILE = 0x10        # καταρρέει αφού το πατήσεις
+F_ONEWAY  = 0x20        # στερεό μόνο από τη μία πλευρά
+F_TRIGGER = 0x40        # ενεργοποιεί κάτι (έξοδος, διακόπτης, τηλεμεταφορά)
+
+PROPS = [0] * NTYPES
+for _t in (SOLID, RAMP_DR, RAMP_DL, RAMP_UR, RAMP_UL, LOCK, GATE, CRATE):
+    PROPS[_t] |= F_SOLID
+for _t in (SPIKE_U, SPIKE_L, SPIKE_D, SPIKE_R):
+    PROPS[_t] |= F_DEADLY | F_SOLID     # στερεά: πατάς πάνω τους, δεν τα περνάς
+for _t in (ENERGY, PARACHUTE, KEY):
+    PROPS[_t] |= F_PICKUP
+for _t in (ONEWAY_U, ONEWAY_L, ONEWAY_D, ONEWAY_R):
+    PROPS[_t] |= F_ONEWAY | F_SOLID
+PROPS[GRAVLOCK] |= F_NOFLIP
+PROPS[CRUMBLE] |= F_SOLID | F_FRAGILE
+for _t in (EXIT, SWITCH, TELEPORT, PLATE):
+    PROPS[_t] |= F_TRIGGER
+
+# Η φορά που "κοιτάει" κάθε κατευθυντικός τύπος (κωδικός βαρύτητας 0..7).
+# Αγκάθι: πονάει αν πέφτεις ΠΑΝΩ στις μύτες. Μονόδρομη: στερεή μόνο όταν
+# την πλησιάζεις από αυτή την πλευρά.
+FACING = {SPIKE_U: 4, SPIKE_L: 2, SPIKE_D: 0, SPIKE_R: 6,
+          ONEWAY_U: 4, ONEWAY_L: 2, ONEWAY_D: 0, ONEWAY_R: 6}
 
 # Για κάθε ράμπα: είναι στερεό το pixel (u,v) μέσα στο κελί 8x8;
 RAMP_TEST = {
@@ -104,6 +166,8 @@ class Room:
                 if len(ln) == COLS and all(c in CHARS for c in ln)]
         assert len(rows) == ROWS, f"περίμενα {ROWS} γραμμές, βρήκα {len(rows)}"
         self.cells = [[CHARS[c] for c in ln] for ln in rows]
+        self.probe_g = 0        # φορά βαρύτητας του ελέγχου (για τις μονόδρομες)
+        self.gate_open = False
 
     def cell(self, col, row):
         if col < 0 or row < 0 or col >= COLS or row >= ROWS:
@@ -111,17 +175,21 @@ class Room:
         return self.cells[row][col]
 
     def solid_at(self, px, py):
-        """Είναι το pixel (px,py) μέσα σε υλικό; Χειρίζεται και τις ράμπες."""
+        """Είναι το pixel (px,py) μέσα σε υλικό; Χειρίζεται ράμπες και μονόδρομες."""
         py -= GRID_Y0
         if py < 0:
             return True
-        col, row = px // CELL, py // CELL
-        t = self.cell(col, row)
-        if t == EMPTY:
-            return False
-        if t == SOLID:
-            return True
-        return RAMP_TEST[t](px % CELL, py % CELL)
+        t = self.cell(px // CELL, py // CELL)
+        if t in RAMP_TEST:
+            return RAMP_TEST[t](px % CELL, py % CELL)
+        if PROPS[t] & F_ONEWAY:
+            # Στερεή μόνο όταν την πλησιάζεις από τη σωστή πλευρά, δηλαδή όταν
+            # η βαρύτητα δείχνει ΑΝΤΙΘΕΤΑ από την όψη της. Το ίδιο tile είναι
+            # πάτωμα ή αέρας ανάλογα με το πού κοιτάς — εκεί είναι η αξία του.
+            return (FACING[t] + 4) % 8 == self.probe_g
+        if t == GATE:
+            return not self.gate_open
+        return bool(PROPS[t] & F_SOLID)
 
 
 # Το σώμα 7x12 μοντελοποιείται ΣΤΕΝΟ: μια κατακόρυφη ράβδος με δύο "πέλματα".
@@ -130,6 +198,10 @@ FEET_B   = 6        # απόσταση πέλματος από το κέντρο
 FOOT_A   = 2        # μισό άνοιγμα ποδιών, κάθετα στη βαρύτητα
 WALL_A   = 3        # μισό πλάτος κορμού
 SCAN_MAX = 14       # πόσο βαθιά ψάχνουμε έδαφος
+ENERGY_MAX = 8
+SPIKE_DMG  = 2
+ENERGY_PICK = 2
+FALL_SAFE = 36      # 3 x ύψος ήρωα
 TILT_45  = 3        # διαφορά ύψους (σε 2*FOOT_A pixels) που μετράει για 45 μοίρες
 
 # --- Επιτάχυνση πτώσης (8.8 σταθερή υποδιαστολή: 256 = 1 pixel/frame) ---
@@ -140,6 +212,7 @@ TILT_45  = 3        # διαφορά ύψους (σε 2*FOOT_A pixels) που μ
 FALL_V0    = 256
 FALL_ACCEL = 26
 FALL_VMAX  = 1024
+PARA_V     = 128        # με αλεξίπτωτο: 0.5 px/frame, χωρίς επιτάχυνση
 
 # ΠΡΟΣΟΧΗ: η ταχύτητα ΔΕΝ γίνεται ποτέ βήμα πολλών pixel. Εκτελούνται πολλαπλά
 # βήματα του ΕΝΟΣ pixel ανά frame, γιατί οι γωνίες, οι ακμές και οι ράμπες
@@ -172,11 +245,17 @@ class Hero:
         self.prev_support = EMPTY
         self.fall_v = FALL_V0
         self.fall_acc = 0
+        self.energy = ENERGY_MAX
+        self.keys = 0
+        self.parachute = 0      # 0 = δεν το έχει, 1 = το κουβαλάει
+        self.para_open = 0      # ανοιγμένο αυτή τη στιγμή
+        self.won = False
 
     # --- πρωτογενείς έλεγχοι --------------------------------------
     def at(self, a, b):
         """Στερεό στο σημείο (a = πλάγια, b = προς τα πόδια) του ήρωα;"""
         dx, dy = off(self.g, a, b)
+        self.room.probe_g = self.g
         return self.room.solid_at(self.x + dx, self.y + dy)
 
     def ground_depth(self, a):
@@ -209,6 +288,46 @@ class Hero:
             return False
         k = self.ground_depth(0)
         return k is not None and k <= FEET_B + 2
+
+    def body_cell(self):
+        """Το κελί στο κέντρο του σώματος — εκεί μαζεύονται τα αντικείμενα."""
+        return self.room.cell(self.x // CELL, (self.y - GRID_Y0) // CELL)
+
+    def touch_objects(self):
+        """Αντιδράσεις σε ό,τι ακουμπάει το σώμα. Καλείται μία φορά ανά frame."""
+        col, row = self.x // CELL, (self.y - GRID_Y0) // CELL
+        t = self.room.cell(col, row)
+        pr = PROPS[t]
+
+        if pr & F_PICKUP:
+            self.room.cells[row][col] = EMPTY
+            if t == ENERGY:
+                self.energy = min(ENERGY_MAX, self.energy + ENERGY_PICK)
+            elif t == PARACHUTE:
+                self.parachute = 1
+            elif t == KEY:
+                self.keys += 1
+        elif t == LOCK and self.keys:
+            self.keys -= 1
+            self.room.cells[row][col] = EMPTY
+        elif t == EXIT:
+            self.won = True
+        elif t == SWITCH:
+            self.room.gate_open = not self.room.gate_open
+            self.room.cells[row][col] = EMPTY    # μία χρήση προς το παρόν
+
+        # Τα αγκάθια πονάνε μόνο αν πέφτεις ΠΑΝΩ στις μύτες: η βαρύτητα πρέπει
+        # να δείχνει αντίθετα από την όψη τους. Από πίσω είναι απλό πάτωμα.
+        st = self.support_type()
+        if PROPS[st] & F_DEADLY and (FACING[st] + 4) % 8 == self.g:
+            self.hurt(SPIKE_DMG)
+
+    def hurt(self, n):
+        self.energy = max(0, self.energy - n)
+
+    def noflip(self):
+        """Είναι μέσα σε ζώνη όπου απαγορεύεται η αλλαγή βαρύτητας;"""
+        return bool(PROPS[self.body_cell()] & F_NOFLIP)
 
     def slipping(self):
         """Γλιστράει; Ναι αν η βαρύτητα δεν είναι κάθετη στην επιφάνεια.
@@ -250,6 +369,7 @@ class Hero:
         δεν "ισιώνει" μόνη της — ο ήρωας γλιστράει. Αν το κάναμε ανάποδα, το
         γλίστρημα δεν θα συνέβαινε ποτέ.
         """
+        self.touch_objects()        # και στον αέρα: μαζεύεις πέφτοντας
         k = self.ground_depth(0)
         if k is None or k > FEET_B + 2:
             self.fall_step()
@@ -278,7 +398,13 @@ class Hero:
         if self.state != "FALL":
             self.fall_v = FALL_V0
             self.fall_acc = 0
+        # Ανοίγει ΜΟΝΟ όταν η πτώση ξεπεράσει το ασφαλές όριο. Αν άνοιγε σε κάθε
+        # πτώση, ένα σκαλοπάτι δύο pixel θα το κατανάλωνε.
+        if self.parachute and not self.para_open and self.fall_dist >= FALL_SAFE:
+            self.para_open = 1
         self.fall_v = min(self.fall_v + FALL_ACCEL, FALL_VMAX)
+        if self.para_open:
+            self.fall_v = PARA_V        # σταθερή, αργή κάθοδος· καμία ζημιά
         self.fall_acc += self.fall_v
         steps = self.fall_acc >> 8
         self.fall_acc &= 0xFF
@@ -307,11 +433,14 @@ class Hero:
 
     def land(self):
         self.state = "IDLE"
-        dmg = max(0, self.fall_dist - 36)
+        if self.para_open:
+            self.parachute = 0          # μία χρήση: καταναλώνεται στην προσγείωση
+            self.para_open = 0
+        elif self.fall_dist > FALL_SAFE:
+            self.hurt(1 + (self.fall_dist - FALL_SAFE) // 12)
         self.fall_dist = 0
         self.fall_v = FALL_V0
         self.fall_acc = 0
-        return dmg
 
     def do_walk(self, d):
         """Ένα pixel. Τέσσερις περιπτώσεις, όλες στροφή γύρω από το ίδιο σημείο:
@@ -392,7 +521,10 @@ class Hero:
             # Μένουμε στην τρέχουσα φορά και ξαναδοκιμάζουμε το επόμενο pixel.
             self.x, self.y, self.g = save
             return False
-        if st == SOLID and self.g % 2 and self.prev_support in RAMP_GRAVITY:
+        # ΟΠΟΙΟΣΔΗΠΟΤΕ επίπεδος στερεός τύπος, όχι μόνο ο SOLID: το εύθραυστο,
+        # η κλειδαριά, η πόρτα και τα αγκάθια είναι επίσης έδρες που πατάς.
+        flat_solid = (PROPS[st] & F_SOLID) and st not in RAMP_GRAVITY
+        if flat_solid and self.g % 2 and self.prev_support in RAMP_GRAVITY:
             # βγαίνουμε από ράμπα σε επίπεδη έδρα: ποια από τις δύο γειτονικές
             # ορθές φορές είναι αυτή; Η επιφάνεια είναι επίπεδη, άρα αποφασίζει.
             for cand in ((self.g - 1) % 8, (self.g + 1) % 8):
@@ -440,6 +572,8 @@ GLYPH = {0: "↓", 1: "↙", 2: "←", 3: "↖",
          4: "↑", 5: "↗", 6: "→", 7: "↘"}
 BACK = {EMPTY: " ", SOLID: "█", RAMP_DR: "◢", RAMP_DL: "◣",
         RAMP_UR: "◥", RAMP_UL: "◤"}
+for _t in range(NTYPES):            # οι υπόλοιποι τύποι με τον χαρακτήρα τους
+    BACK.setdefault(_t, NAMES.get(_t, "?"))
 
 
 def render(room, hero, w=40, h=24):

@@ -7,3 +7,7 @@ build/
 # python bytecode από τα tools/
 __pycache__/
 *.pyc
+
+# παράγωγα του .NET level editor
+editor/bin/
+editor/obj/

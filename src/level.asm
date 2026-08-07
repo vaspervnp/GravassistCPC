@@ -8,12 +8,8 @@
 ;  Αναφορά: tools/physics.py (Room.solid_at)
 ;=====================================================================
 
-T_EMPTY         equ 0
-T_SOLID         equ 1
-T_RAMP_DR       equ 2           ; στερεό κάτω-δεξιά   (u+v >= 7)
-T_RAMP_DL       equ 3           ; στερεό κάτω-αριστερά (v >= u)
-T_RAMP_UR       equ 4           ; στερεό πάνω-δεξιά   (v <= u)
-T_RAMP_UL       equ 5           ; στερεό πάνω-αριστερά (u+v <= 7)
+; Οι κωδικοί τύπων T_* και τα μεγέθη παιχνιδιού παράγονται στο
+; src/level_test.asm από το tools/genasm.py — μία πηγή αλήθειας με το μοντέλο.
 
 ;---------------------------------------------------------------------
 ; cell_at — τύπος κελιού στο pixel (x,y)
@@ -59,11 +55,13 @@ ca_xok:
                 jr   z,ca_col
                 add  a,32
 ca_col:         ld   c,a
+                ld   (cell_col),a
 
                 ld   a,e                ; row = yy >> 3  (0..23)
                 srl  a
                 srl  a
                 srl  a
+                ld   (cell_row),a
                 ld   l,a                ; HL = row*40 + col
                 ld   h,0
                 add  hl,hl              ; x2
@@ -79,6 +77,7 @@ ca_col:         ld   c,a
                 add  hl,de
                 ld   de,level_data
                 add  hl,de
+                ld   (cell_ptr),hl      ; για σβήσιμο pickup / αλλαγή κελιού
                 ld   a,(hl)
                 pop  de
                 pop  bc
@@ -99,8 +98,42 @@ solid_at:       call cell_at
                 ret  z                  ; T_EMPTY -> NC
                 cp   T_SOLID
                 jr   z,sa_yes
+                cp   T_RAMP_UL+1
+                jr   c,sa_ramp          ; 2..5 = γεωμετρία με υπο-κελιακό σχήμα
 
-                ld   hl,(cell_u)        ; L = u, H = v (διαδοχικά bytes)
+                ld   c,a                ; --- τύποι παιχνιδιού ---
+                ld   e,a
+                ld   d,0
+                ld   hl,tile_props
+                add  hl,de
+                ld   a,(hl)
+                ld   b,a
+                and  F_ONEWAY
+                jr   nz,sa_oneway
+                ld   a,b
+                and  F_SOLID
+                jr   z,sa_no
+sa_yes:         scf
+                ret
+
+                ; Μονόδρομη: στερεή μόνο όταν την πλησιάζεις από τη σωστή
+                ; πλευρά, δηλαδή όταν η βαρύτητα δείχνει ΑΝΤΙΘΕΤΑ από την όψη
+                ; της. Το ίδιο tile είναι πάτωμα ή αέρας ανάλογα με το πού
+                ; κοιτάς — εκεί είναι η αξία του.
+sa_oneway:      ld   e,c
+                ld   d,0
+                ld   hl,tile_facing
+                add  hl,de
+                ld   a,(hl)
+                add  a,4
+                and  7
+                ld   hl,hero_g
+                cp   (hl)
+                jr   z,sa_yes
+sa_no:          or   a
+                ret
+
+sa_ramp:        ld   hl,(cell_u)        ; L = u, H = v (διαδοχικά bytes)
                 ld   c,l
                 ld   b,h
                 cp   T_RAMP_DL
@@ -127,11 +160,12 @@ sa_ul:          ld   a,c                ; RAMP_UL: u+v <= 7
                 add  a,b
                 cp   8
                 ret
-sa_yes:         scf
-                ret
 
 cell_u          db 0
 cell_v          db 0                    ; ΠΡΕΠΕΙ να είναι αμέσως μετά το cell_u
+cell_ptr        dw 0                    ; δείκτης στο κελί του level_data
+cell_col        db 0
+cell_row        db 0
 
 ;---------------------------------------------------------------------
 ; render_room — ζωγραφίζει όλα τα 40x24 κελιά. Τρέχει μία φορά.

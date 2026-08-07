@@ -28,6 +28,7 @@ TYPES = [
     ("SPIKES",   "κατευθυντικά αγκάθια· πονάνε από τη μύτη"),
     ("TELEPORT", "ζεύγος τηλεμεταφοράς"),
     ("KEY",      "κλειδί· ανοίγει το LOCK του"),
+    ("PARACHUTE", "μία χρήση· ανοίγει μόνο του σε επικίνδυνη πτώση"),
 ]
 
 
@@ -107,6 +108,13 @@ def _frame(kind, active):
         rect(f, 1, 1, 3, 3, hi)
         line(f, 4, 3, 6, 5, hi)
         line(f, 5, 5, 6, 6, body if not active else hi)
+
+    elif kind == "PARACHUTE":                # θόλος με σχοινιά
+        line(f, 1, 3, 6, 3, hi)
+        line(f, 1, 3, 2, 2, hi); line(f, 2, 2, 5, 2, hi); line(f, 5, 2, 6, 3, hi)
+        line(f, 1, 3, 3, 6, body); line(f, 6, 3, 4, 6, body)
+        if active:
+            line(f, 3, 6, 4, 6, hi)
 
     return f
 

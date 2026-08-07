@@ -1,0 +1,84 @@
+@*
+    Layout του editor. ΟΛΟ το CSS/JS είναι inline — καμία εξάρτηση από CDN,
+    ώστε το εργαλείο να δουλεύει χωρίς σύνδεση στο internet.
+*@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — GRAVASSIST level editor</title>
+    <style>
+        /* --- Παλέτα του παιχνιδιού (docs/concept-art.md §5) --- */
+        :root {
+            --bg: #000080;          /* pen 0 — σκούρο μπλε, φόντο δωματίου */
+            --ink: #ffffff;         /* pen 1 — λευκό, κείμενο */
+            --material: #00ff00;    /* pen 2 — πράσινο, σώμα πλατφόρμας */
+            --edge: #ff8000;        /* pen 3 — πορτοκαλί, ακμή πλατφόρμας */
+            --chrome: #10102a;      /* περιβάλλον του editor, πιο σκούρο από το δωμάτιο */
+            --chrome-2: #1b1b3d;
+            --line: #3a3a6a;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: var(--chrome);
+            color: var(--ink);
+            font-family: ui-monospace, "DejaVu Sans Mono", "Consolas", monospace;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        header {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 10px 16px;
+            border-bottom: 2px solid var(--edge);
+            background: var(--chrome-2);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 18px;
+            letter-spacing: 2px;
+            color: var(--edge);
+        }
+
+        header .path { color: #8a8ac0; font-size: 12px; }
+
+        main { padding: 16px; }
+
+        button, select, input[type=text] {
+            font: inherit;
+            color: var(--ink);
+            background: var(--chrome-2);
+            border: 1px solid var(--line);
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        button:hover, select:hover { border-color: var(--edge); }
+        button:disabled { opacity: .4; cursor: default; }
+        input[type=text] { cursor: text; }
+
+        button.active {
+            border-color: var(--edge);
+            background: #33204a;
+            color: var(--edge);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>GRAVASSIST — ΕΠΕΞΕΡΓΑΣΤΗΣ ΠΙΣΤΩΝ</h1>
+        <span class="path">@ViewData["LevelsPath"]</span>
+    </header>
+    <main>
+        @RenderBody()
+    </main>
+</body>
+</html>

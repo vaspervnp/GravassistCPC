@@ -19,9 +19,7 @@ NO_GROUND       equ 255
 ;--- Επιτάχυνση πτώσης (8.8 σταθερή υποδιαστολή: 256 = 1 pixel/frame) ---
 ; Μεγέθη για οθόνη 200 pixel στα 50 Hz. Πτώση όλης της οθόνης (192 px) σε
 ; 54 frames = 1.08 δευτ.· το ασφαλές όριο των 36 px σε 19 frames.
-FALL_V0         equ 256         ; αρχική  1.0 px/frame
-FALL_ACCEL      equ 26          ; ~0.10 px/frame^2
-FALL_VMAX       equ 1024        ; τερματική 4.0 px/frame
+; Οι σταθερές πτώσης (FALL_V0/ACCEL/VMAX/PARA_V) παράγονται από το μοντέλο
 
 HST_IDLE        equ 0
 HST_WALK        equ 1
@@ -36,6 +34,7 @@ hero_update:    ld   (h_d),a
                 jr   nz,hu_td           ; όταν στέκεται, χρησιμοποιούμε +1
                 ld   a,1
 hu_td:          ld   (h_td),a
+                call h_touch            ; και στον αέρα: μαζεύεις πέφτοντας
 
                 xor  a
                 call h_ground
@@ -67,11 +66,128 @@ hu_done:        call h_support
                 ret
 
 ;---------------------------------------------------------------------
+; h_touch — αντιδράσεις σε ό,τι ακουμπάει το σώμα (μία φορά ανά frame)
+;   Το κελί στο ΚΕΝΤΡΟ του σώματος αποφασίζει για τα αντικείμενα· τα αγκάθια
+;   κρίνονται από το κελί ΣΤΗΡΙΞΗΣ, γιατί πονάνε μόνο όταν τα πατήσεις.
+;---------------------------------------------------------------------
+h_touch:        ld   bc,(hero_x)
+                ld   de,(hero_y)
+                call cell_at
+                ld   (h_cell),a
+                ld   e,a
+                ld   d,0
+                ld   hl,tile_props
+                add  hl,de
+                ld   a,(hl)
+                and  F_PICKUP
+                jr   z,ht_nopick
+
+                call h_take             ; σβήσε το κελί και ξαναζωγράφισέ το
+                ld   a,(h_cell)
+                cp   T_PARACHUTE
+                jr   nz,ht_np1
+                ld   a,1
+                ld   (hero_para),a
+                jr   ht_spikes
+ht_np1:         cp   T_KEY
+                jr   nz,ht_np2
+                ld   hl,hero_keys
+                inc  (hl)
+                jr   ht_spikes
+ht_np2:         ld   a,(hero_energy)    ; ενέργεια
+                add  a,ENERGY_PICK
+                cp   ENERGY_MAX+1
+                jr   c,ht_esave
+                ld   a,ENERGY_MAX
+ht_esave:       ld   (hero_energy),a
+                ld   a,1
+                ld   (hud_dirty),a
+                jr   ht_spikes
+
+ht_nopick:      ld   a,(h_cell)
+                cp   T_LOCK
+                jr   nz,ht_noloc
+                ld   a,(hero_keys)      ; κλειδαριά: ανοίγει με κλειδί
+                or   a
+                jr   z,ht_spikes
+                dec  a
+                ld   (hero_keys),a
+                call h_take
+                jr   ht_spikes
+ht_noloc:       cp   T_EXIT
+                jr   nz,ht_spikes
+                ld   a,1
+                ld   (hero_won),a
+
+ht_spikes:      call h_support          ; αγκάθια: μόνο από τη μύτη
+                ld   e,a
+                ld   d,0
+                ld   hl,tile_props
+                add  hl,de
+                ld   a,(hl)
+                and  F_DEADLY
+                ret  z
+                ld   hl,tile_facing
+                add  hl,de
+                ld   a,(hl)
+                add  a,4
+                and  7
+                ld   hl,hero_g
+                cp   (hl)
+                ret  nz
+                ld   a,(hero_energy)
+                sub  SPIKE_DMG
+                jr   nc,ht_hset
+                xor  a
+ht_hset:        ld   (hero_energy),a
+                ld   a,1
+                ld   (hud_dirty),a
+                ret
+
+; h_noflip — είναι μέσα σε ζώνη όπου απαγορεύεται η αλλαγή βαρύτητας;
+;   OUT: CY = απαγορεύεται
+h_noflip:       push af
+                ld   bc,(hero_x)
+                ld   de,(hero_y)
+                call cell_at
+                ld   e,a
+                ld   d,0
+                ld   hl,tile_props
+                add  hl,de
+                ld   a,(hl)
+                and  F_NOFLIP
+                pop  af
+                ret  z                  ; NC = επιτρέπεται
+                scf
+                ret
+
+; h_take — αδειάζει το κελί που μόλις διάβασε το cell_at και το ξαναζωγραφίζει
+h_take:         ld   hl,(cell_ptr)
+                ld   (hl),T_EMPTY
+                ld   a,(cell_col)
+                ld   c,a
+                ld   a,(cell_row)
+                ld   b,a
+                jp   draw_tile
+
+;---------------------------------------------------------------------
 ; h_land — προσγείωση· υπολογίζει ζημιά από το ύψος πτώσης
 ;---------------------------------------------------------------------
 h_land:         ld   a,HST_IDLE
                 ld   (hero_state),a
-                ld   hl,FALL_V0         ; μηδενισμός ταχύτητας ΠΡΙΝ από τα
+                ld   a,(hero_paraopen)  ; προσγείωση με αλεξίπτωτο: μία χρήση,
+                or   a                  ; καμία ζημιά
+                jr   z,hl_nopara
+                xor  a
+                ld   (hero_para),a
+                ld   (hero_paraopen),a
+                ld   hl,0
+                ld   (hero_fall),hl
+                ld   hl,FALL_V0
+                ld   (hero_v),hl
+                ld   (hero_facc),a
+                ret
+hl_nopara:      ld   hl,FALL_V0         ; μηδενισμός ταχύτητας ΠΡΙΝ από τα
                 ld   (hero_v),hl        ; πρόωρα ret της ασφαλούς πτώσης
                 xor  a
                 ld   (hero_facc),a
@@ -203,6 +319,26 @@ h_fall_steps:   ld   a,(hero_state)
                 xor  a
                 ld   (hero_facc),a
 
+                ; ΑΛΕΞΙΠΤΩΤΟ: ανοίγει μόνο αν το κουβαλάς ΚΑΙ η πτώση έχει ήδη
+                ; ξεπεράσει τις 3 φορές το ύψος του ήρωα. Αν άνοιγε σε κάθε
+                ; πτώση, ένα σκαλοπάτι δύο pixel θα το κατανάλωνε.
+                ld   a,(hero_para)
+                or   a
+                jr   z,hfs_acc
+                ld   a,(hero_paraopen)
+                or   a
+                jr   nz,hfs_slow
+                ld   hl,(hero_fall)
+                ld   de,FALL_SAFE
+                or   a
+                sbc  hl,de
+                jr   c,hfs_acc
+                ld   a,1
+                ld   (hero_paraopen),a
+hfs_slow:       ld   hl,PARA_V          ; σταθερή, αργή κάθοδος
+                ld   (hero_v),hl
+                jr   hfs_frac
+
 hfs_acc:        ld   hl,(hero_v)
                 ld   de,FALL_ACCEL
                 add  hl,de
@@ -211,6 +347,7 @@ hfs_acc:        ld   hl,(hero_v)
                 jr   c,hfs_cap
                 ld   hl,FALL_VMAX       ; τερματική ταχύτητα
 hfs_cap:        ld   (hero_v),hl
+hfs_frac:       ld   hl,(hero_v)
 
                 ld   a,(hero_facc)      ; κλάσμα + ταχύτητα -> ακέραια βήματα
                 ld   e,a
@@ -679,6 +816,11 @@ hero_v          dw FALL_V0      ; ταχύτητα πτώσης, 8.8
 hero_facc       db 0            ; κλάσμα pixel που μεταφέρεται στο επόμενο frame
 hero_energy     db ENERGY_MAX
 hero_prev       db 0            ; κελί στήριξης του προηγούμενου frame
+hero_keys       db 0
+hero_para       db 0            ; κουβαλάει αλεξίπτωτο
+hero_paraopen   db 0            ; ανοιγμένο αυτή τη στιγμή
+hero_won        db 0
+h_cell          db 0
 
 h_d             db 0            ; κατεύθυνση βάδισης αυτού του frame
 h_td            db 1            ; κατεύθυνση για τη μέτρηση κλίσης

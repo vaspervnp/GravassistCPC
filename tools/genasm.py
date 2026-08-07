@@ -83,8 +83,9 @@ def tables_asm():
     out.append("")
     out.append("; Η φορά βαρύτητας που 'στέκεται' πάνω σε κάθε τύπο κελιού.")
     out.append("; #FF = το κελί δεν επιβάλλει φορά (κενό ή επίπεδο στερεό).")
-    rg = [255, 255] + [P.RAMP_GRAVITY[t] for t in
-                       (P.RAMP_DR, P.RAMP_DL, P.RAMP_UR, P.RAMP_UL)]
+    # ΟΛΟΙ οι τύποι, όχι μόνο οι 6 της γεωμετρίας: το h_align δεικτοδοτεί
+    # αυτόν τον πίνακα με τον τύπο κελιού, που πλέον φτάνει το 25.
+    rg = [P.RAMP_GRAVITY.get(i, 255) for i in range(P.NTYPES)]
     out.append("ramp_grav:      db " + ",".join(str(v) for v in rg))
     out.append("")
     return "\n".join(out)
@@ -94,11 +95,36 @@ def tables_asm():
 PEN_BODY, PEN_EDGE = 2, 3
 
 
+# Ο κάθε τύπος παιχνιδιού δανείζεται το placeholder γραφικό του. Οι τέσσερις
+# στροφές των αγκαθιών και των μονόδρομων παράγονται με ακριβή περιστροφή 90.
+PLACEHOLDER = {
+    P.EXIT: ("EXIT", 0), P.ENERGY: ("ENERGY", 0), P.PARACHUTE: ("PARACHUTE", 0),
+    P.KEY: ("KEY", 0), P.LOCK: ("LOCK", 0), P.GATE: ("GATE", 0),
+    P.SWITCH: ("SWITCH", 0), P.PLATE: ("PLATE", 0), P.TELEPORT: ("TELEPORT", 0),
+    P.CRATE: ("CRATE", 0), P.CRUMBLE: ("CRUMBLE", 0), P.GRAVLOCK: ("GRAVLOCK", 0),
+    P.SPIKE_U: ("SPIKES", 0), P.SPIKE_L: ("SPIKES", 1),
+    P.SPIKE_D: ("SPIKES", 2), P.SPIKE_R: ("SPIKES", 3),
+    P.ONEWAY_U: ("ONEWAY", 0), P.ONEWAY_L: ("ONEWAY", 1),
+    P.ONEWAY_D: ("ONEWAY", 2), P.ONEWAY_R: ("ONEWAY", 3),
+}
+
+
+def rot90(g, times):
+    """Περιστροφή 8x8 κατά 90 δεξιόστροφα, `times` φορές. Ακριβής."""
+    for _ in range(times % 4):
+        g = [[g[7 - x][y] for x in range(8)] for y in range(8)]
+    return g
+
+
 def tile_pixels(t):
     """8x8 pixels (pen ανά θέση) για κάθε τύπο κελιού."""
     g = [[0] * 8 for _ in range(8)]
     if t == P.EMPTY:
         return g
+    if t in PLACEHOLDER:
+        import placeholders
+        name, turns = PLACEHOLDER[t]
+        return rot90(placeholders._frame(name, False), turns)
     for v in range(8):
         for u in range(8):
             if t == P.SOLID:
@@ -136,6 +162,43 @@ def pack_mode1(row8):
     return out
 
 
+def defs_asm():
+    """Κωδικοί τύπων και μεγέθη παιχνιδιού.
+
+    Χωριστό αρχείο επειδή πρέπει να μπει ΠΡΩΤΟ στο main.asm: το `ds` για τους
+    buffers χρειάζεται τις τιμές ήδη από το πρώτο πέρασμα του assembler.
+    """
+    out = [";" + "=" * 69,
+           ";  GRAVASSIST — κωδικοί τύπων κελιού και μεγέθη παιχνιδιού",
+           ";  ΠΑΡΑΓΕΤΑΙ ΑΥΤΟΜΑΤΑ από tools/genasm.py — ΜΗΝ το επεξεργάζεσαι.",
+           ";  Μία πηγή αλήθειας με το tools/physics.py.",
+           ";" + "=" * 69,
+           ""]
+    for i, n in enumerate(P.TYPE_NAMES):
+        out.append(f"T_{n:<14} equ {i}")
+    out += ["",
+            f"NTYPES          equ {P.NTYPES}",
+            f"ENERGY_MAX      equ {P.ENERGY_MAX}",
+            f"ENERGY_PICK     equ {P.ENERGY_PICK}",
+            f"SPIKE_DMG       equ {P.SPIKE_DMG}",
+            f"FALL_SAFE       equ {P.FALL_SAFE}",
+            f"FALL_V0         equ {P.FALL_V0}",
+            f"FALL_ACCEL      equ {P.FALL_ACCEL}",
+            f"FALL_VMAX       equ {P.FALL_VMAX}",
+            f"PARA_V          equ {P.PARA_V}",
+            "",
+            "; Ιδιότητες ανά τύπο — ένα AND αντί για σκόρπιες συγκρίσεις",
+            "F_SOLID         equ #01",
+            "F_DEADLY        equ #02",
+            "F_PICKUP        equ #04",
+            "F_NOFLIP        equ #08",
+            "F_FRAGILE       equ #10",
+            "F_ONEWAY        equ #20",
+            "F_TRIGGER       equ #40",
+            ""]
+    return "\n".join(out)
+
+
 def level_asm(room):
     out = [";" + "=" * 69,
            ";  GRAVASSIST — δοκιμαστικό δωμάτιο και γραφικά tiles",
@@ -147,17 +210,23 @@ def level_asm(room):
            f"LVL_CELL        equ {P.CELL}",
            f"LVL_Y0          equ {P.GRID_Y0}",
            "",
-           "; Γραφικά: 6 τύποι x 8 γραμμές x 2 bytes = 96 bytes (MODE 1)",
+           f"; Γραφικά: {P.NTYPES} τύποι x 8 γραμμές x 2 bytes (MODE 1)",
            "tile_gfx:"]
-    for t in range(6):
+    for t in range(P.NTYPES):
         px = tile_pixels(t)
-        name = {0: "EMPTY", 1: "SOLID", 2: "RAMP_DR",
-                3: "RAMP_DL", 4: "RAMP_UR", 5: "RAMP_UL"}[t]
+        name = P.NAMES.get(t, "?")
         out.append(f"                ; {t} {name}")
         for v in range(8):
             a, b = pack_mode1(px[v])
             out.append(f"                db #{a:02X},#{b:02X}")
 
+    out.append("")
+    out.append("tile_props:     db " + ",".join(f"#{v:02X}" for v in P.PROPS))
+    out.append("")
+    out.append("; Η φορά που 'κοιτάει' κάθε κατευθυντικός τύπος· #FF = άσχετο.")
+    out.append("; Στερεό/θανάσιμο όταν η βαρύτητα δείχνει ΑΝΤΙΘΕΤΑ από αυτήν.")
+    face = [P.FACING.get(i, 255) for i in range(P.NTYPES)]
+    out.append("tile_facing:    db " + ",".join(str(v) for v in face))
     out.append("")
     out.append(f"; Δωμάτιο: 1 byte ανά κελί, {P.COLS}x{P.ROWS} = {P.COLS*P.ROWS} bytes")
     out.append("level_data:")
@@ -170,7 +239,8 @@ def level_asm(room):
 
 if __name__ == "__main__":
     room = P.load_room()
-    for name, text in (("src/tables.asm", tables_asm()),
+    for name, text in (("src/gamedefs.asm", defs_asm()),
+                       ("src/tables.asm", tables_asm()),
                        ("src/level_test.asm", level_asm(room))):
         path = os.path.join(ROOT, name)
         with open(path, "w") as f:

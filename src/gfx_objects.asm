@@ -1,13 +1,13 @@
 ;=====================================================================
 ;  GRAVASSIST - sprites αντικειμένων (PLACEHOLDERS)
 ;  ΠΑΡΑΓΕΤΑΙ ΑΥΤΟΜΑΤΑ από tools/sprites.py — ΜΗΝ το επεξεργάζεσαι.
-;  26 frames, 8x8, 1 byte ανά pixel (pen 0..3),
+;  28 frames, 8x8, 1 byte ανά pixel (pen 0..3),
 ;  κανονική φορά βαρύτητας DOWN. Περιστροφή: src/rotate.asm
 ;=====================================================================
 
 obj_gfx_w       equ 8
 obj_gfx_h       equ 8
-obj_gfx_frames  equ 26
+obj_gfx_frames  equ 28
 obj_gfx_size    equ 64
 
 obj_gfx:
@@ -245,6 +245,24 @@ obj_gfx:
                 db 0,0,0,0,0,3,3,0
                 db 0,0,0,0,0,0,3,0
                 db 0,0,0,0,0,0,0,0
+                ; --- frame 26 ---
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                ; --- frame 27 ---
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
+                db 1,1,1,1,1,1,1,1
 
 ; --- δείκτες frame του obj_gfx ---
 obj_gfx_EXIT_0     equ 0
@@ -273,3 +291,5 @@ obj_gfx_TELEPORT_0 equ 22
 obj_gfx_TELEPORT_1 equ 23
 obj_gfx_KEY_0      equ 24
 obj_gfx_KEY_1      equ 25
+obj_gfx_PARACHUTE_0 equ 26
+obj_gfx_PARACHUTE_1 equ 27
