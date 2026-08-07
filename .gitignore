@@ -1,0 +1,9 @@
+# παράγωγα του build
+build/
+
+# WSL: alternate data streams από αντιγραφή αρχείων μέσα από τα Windows
+*:Zone.Identifier
+
+# python bytecode από τα tools/
+__pycache__/
+*.pyc
