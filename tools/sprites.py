@@ -17,6 +17,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import cpcgfx
+import parachute
 import placeholders
 import stickman
 
@@ -45,6 +46,10 @@ SHEETS = [
           stickman.W45, stickman.H45, 32, 8,
           stickman.build_frames45, stickman.FRAME_NAMES,
           "GRAVASSIST - sprites ήρωα στις 45 μοίρες"),
+    Sheet("para", "assets/parachute.png", "src/gfx_para.asm", "para_gfx",
+          parachute.W, parachute.H, len(parachute.FRAME_NAMES), 4,
+          parachute.build_frames, parachute.FRAME_NAMES,
+          "GRAVASSIST - αλεξίπτωτο, 4 φάσεις ανοίγματος"),
     Sheet("objects", "assets/objects.png", "src/gfx_objects.asm", "obj_gfx",
           placeholders.S, placeholders.S, len(placeholders.FRAME_NAMES), 8,
           placeholders.build_frames, placeholders.FRAME_NAMES,

@@ -253,13 +253,6 @@ def level_asm(room):
     face = [P.FACING.get(i, 255) for i in range(P.NTYPES)]
     out.append("tile_facing:    db " + ",".join(str(v) for v in face))
     out.append("")
-    out.append("; Αλεξίπτωτο ως sprite: 8 γραμμές x 2 bytes, ζεύγη (mask,data)")
-    out.append("para_sprite:")
-    pr = sprite_pair(tile_pixels(P.PARACHUTE))
-    for v in range(8):
-        a, b = pr[v * 2], pr[v * 2 + 1]
-        out.append(f"                db #{a[0]:02X},#{a[1]:02X},#{b[0]:02X},#{b[1]:02X}")
-    out.append("")
     out.append(f"; Δωμάτιο: 1 byte ανά κελί, {P.COLS}x{P.ROWS} = {P.COLS*P.ROWS} bytes")
     out.append("level_data:")
     for r in range(P.ROWS):

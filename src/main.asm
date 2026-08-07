@@ -361,7 +361,8 @@ hudbuf          ds   ENERGY_MAX*HUD_SEG, 0
 ; prep_hero — μετασχηματισμός sprite και θέση. Τρέχει ΕΚΤΟΣ vblank και δεν
 ; αγγίζει την οθόνη, ώστε στο vblank να μένουν μόνο εγγραφές.
 ;---------------------------------------------------------------------
-prep_hero:      ld   a,(hero_g)         ; διαστάσεις sprite για αυτή τη φορά
+prep_hero:      call prep_para          ; ΠΡΩΤΑ: γράφει στο spr_buf και το φυλάει
+                ld   a,(hero_g)         ; διαστάσεις sprite για αυτή τη φορά
                 add  a,a
                 ld   e,a
                 ld   d,0
@@ -401,7 +402,6 @@ prep_hero:      ld   a,(hero_g)         ; διαστάσεις sprite για α�
                 ld   a,l
                 ld   (spr_col),a
 
-                call prep_para
                 ld   a,(anim_cur)
                 ld   b,a
                 ld   a,(hero_g)
@@ -412,26 +412,74 @@ prep_hero:      ld   a,(hero_g)         ; διαστάσεις sprite για α�
 ;   "Πάνω" σημαίνει αντίθετα από τη βαρύτητα, όχι προς την κορυφή της οθόνης:
 ;   με βαρύτητα προς τα δεξιά, το αλεξίπτωτο πρέπει να είναι αριστερά του.
 ;---------------------------------------------------------------------
-PARA_DIST       equ  14                 ; απόσταση από το κέντρο του ήρωα
+PARA_DIST       equ  16         ; απόσταση κέντρου αλεξίπτωτου από τον ήρωα
+PARA_W          equ  16
+PARA_H          equ  12
+PARA_SIZE       equ  PARA_W*PARA_H
+PARA_TICKS      equ  5          ; frames ανά φάση ανοίγματος
 
 prep_para:      ld   a,(hero_paraopen)
                 ld   (para_on),a
                 or   a
-                ret  z
+                jr   nz,pp_open
+                xor  a                  ; κλειστό: η animation ξαναρχίζει
+                ld   (para_frame),a
+                ld   (para_tick),a
+                ret
 
-                ld   a,-PARA_DIST+GTAB_OFF   ; GTAB[g][-PARA_DIST]
+pp_open:        ld   a,(para_frame)     ; 4 φάσεις, ΜΙΑ φορά, μετά κρατάει την
+                cp   para_gfx_frames-1      ; τελευταία
+                jr   z,pp_rot
+                ld   hl,para_tick
+                inc  (hl)
+                ld   a,(hl)
+                cp   PARA_TICKS
+                jr   nz,pp_rot
+                ld   (hl),0
+                ld   hl,para_frame
+                inc  (hl)
+
+                ; Το sprite γυρίζει στην πλησιέστερη ΟΡΘΗ φορά. Δεν αξίζει
+                ; δεύτερη δέσμη στις 45 μοίρες για ένα αντικείμενο που φαίνεται
+                ; λίγα δευτερόλεπτα.
+pp_rot:         ld   a,(hero_g)
+                inc  a
+                srl  a
+                and  3
+                ld   (para_rot),a
+                add  a,a
+                ld   e,a
+                ld   d,0
+                ld   hl,para_dims
+                add  hl,de
+                ld   a,(hl)
+                ld   (pp_w),a
+                inc  hl
+                ld   a,(hl)
+                ld   (pp_h),a
+
+                ld   a,-PARA_DIST+GTAB_OFF   ; μετατόπιση ΑΝΤΙΘΕΤΑ στη βαρύτητα
                 ld   hl,gtab
                 call h_tabptr
-                ld   c,(hl)
+                ld   a,(hl)
+                ld   (pp_dx),a
                 inc  hl
-                ld   b,(hl)
+                ld   a,(hl)
+                ld   (pp_dy),a
 
-                ld   a,c                ; x -> στήλη byte (4 pixels ανά byte)
+                ld   a,(pp_dx)          ; px = hero_x + dx - πλάτος/2
                 call h_sext
                 ld   hl,(hero_x)
                 add  hl,de
-                ld   de,-4              ; κεντράρισμα του 8x8
-                add  hl,de
+                ld   a,(pp_w)
+                srl  a
+                ld   e,a
+                ld   d,0
+                or   a
+                sbc  hl,de
+                ld   a,l
+                and  3
+                ld   (spr_shift),a
                 srl  h
                 rr   l
                 srl  h
@@ -439,16 +487,46 @@ prep_para:      ld   a,(hero_paraopen)
                 ld   a,l
                 ld   (para_col),a
 
-                ld   a,b
+                ld   a,(pp_dy)          ; py = hero_y + dy - ύψος/2
                 call h_sext
                 ld   hl,(hero_y)
                 add  hl,de
-                ld   de,-4
-                add  hl,de
+                ld   a,(pp_h)
+                srl  a
+                ld   e,a
+                ld   d,0
+                or   a
+                sbc  hl,de
                 ld   a,l
                 ld   (para_y),a
-                ret
 
+                ld   a,(para_frame)     ; HL = para_gfx + frame*PARA_SIZE
+                ld   de,PARA_SIZE
+                call spr_mul_ade
+                ld   de,para_gfx
+                add  hl,de
+                ld   b,PARA_W
+                ld   c,PARA_H
+                ld   a,(para_rot)
+                call spr_transform
+                ld   a,(spr_bw)
+                ld   (para_bw),a
+                ld   a,(spr_bh)
+                ld   (para_bh),a
+                jp   spr_save_para
+
+; Διαστάσεις εξόδου ανά ορθή στροφή (πλάτος px, ύψος γραμμές)
+para_dims       db   PARA_W,PARA_H, PARA_H,PARA_W
+                db   PARA_W,PARA_H, PARA_H,PARA_W
+para_rot        db   0
+para_frame      db   0
+para_tick       db   0
+para_bw         db   0
+para_bh         db   0
+pp_w            db   0
+pp_h            db   0
+pp_dx           db   0
+pp_dy           db   0
 para_on         db   0
 para_col        db   0
 para_y          db   0
@@ -564,7 +642,9 @@ dh_cur_rect:    ld   a,(spr_col)
                 jr   nc,dcr_c1
                 ld   (hl),a
 dcr_c1:         ld   a,(para_col)
-                add  a,1
+                ld   hl,para_bw
+                add  a,(hl)
+                dec  a
                 ld   hl,cur_c1
                 cp   (hl)
                 jr   c,dcr_y0
@@ -575,7 +655,9 @@ dcr_y0:         ld   a,(para_y)
                 jr   nc,dcr_y1
                 ld   (hl),a
 dcr_y1:         ld   a,(para_y)
-                add  a,7
+                ld   hl,para_bh
+                add  a,(hl)
+                dec  a
                 ld   hl,cur_y1
                 cp   (hl)
                 ret  c
@@ -590,16 +672,22 @@ dh_paraline:    ld   a,(para_on)
                 ld   hl,para_y
                 sub  (hl)
                 ret  c                  ; πάνω από το αλεξίπτωτο
-                cp   8
+                ld   hl,para_bh
+                cp   (hl)
                 ret  nc                 ; ή κάτω από αυτό
-                add  a,a                ; 4 bytes ανά γραμμή
+
+                ld   b,a                ; HL = para_buf + γραμμή*para_bw*2
+                ld   a,(para_bw)
                 add  a,a
                 ld   e,a
                 ld   d,0
-                ld   hl,para_sprite
-                add  hl,de
+                ld   hl,para_buf
+                inc  b
+                jr   dpl_chk
+dpl_mul:        add  hl,de
+dpl_chk:        djnz dpl_mul
 
-                ld   a,(para_col)
+                ld   a,(para_col)       ; DE = linebuf + (para_col - c0)
                 ld   c,a
                 ld   a,(dh_c0)
                 ld   b,a
@@ -612,11 +700,12 @@ dh_paraline:    ld   a,(para_on)
                 add  hl,de
                 ex   de,hl
                 pop  hl
-                ld   b,2
+                ld   a,(para_bw)
+                ld   b,a
 dpl_lp:         ld   a,(de)
-                and  (hl)
+                and  (hl)               ; mask: κράτα το φόντο
                 inc  hl
-                or   (hl)
+                or   (hl)               ; data: βάλε το αλεξίπτωτο
                 inc  hl
                 ld   (de),a
                 inc  de
@@ -844,6 +933,7 @@ linetab         ds   400, 0
 ;--- δεδομένα ---------------------------------------------------------
                 include "gfx_hero.asm"
                 include "gfx_hero45.asm"
+                include "gfx_para.asm"
                 include "gfx_objects.asm"
                 include "level_test.asm"
 
