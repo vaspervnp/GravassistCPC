@@ -208,10 +208,10 @@ public sealed class LevelDocument
         foreach (var group in groups)
         {
             var where = $"στήλη {group.Col}, γραμμή {group.Row}";
+            var size = group.Cells.Count == 1 ? "1 κελί" : $"{group.Cells.Count} κελιά";
             if (!byAnchor.TryGetValue((group.Col, group.Row), out var room))
             {
-                errors.Add($"Η έξοδος στη θέση {where} ({group.Cells.Count} κελιά) " +
-                           "δεν έχει δηλωμένο προορισμό.");
+                errors.Add($"Η έξοδος στη θέση {where} ({size}) δεν έχει δηλωμένο προορισμό.");
                 continue;
             }
 

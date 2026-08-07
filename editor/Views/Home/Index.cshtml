@@ -145,6 +145,7 @@
 
     .status.ok { color: var(--material); }
     .status.err { color: #ff5050; }
+    .status.warn { color: #ffd000; }
     .status.info { color: #8a8ac0; }
 
     .readout {
@@ -425,6 +426,189 @@
 
         function refreshSource() {
             sourceView.textContent = grid.map(row => row.join("")).join("\n");
+            syncExits();
+        }
+
+        // --- Έξοδοι & αίθουσες ------------------------------------------
+        // Ίδιος κανόνας με το Models/RoomLinks.cs: γειτονικά κελιά 'X' σε γειτνίαση 4
+        // αποτελούν ΜΙΑ έξοδο· η σάρωση κατά γραμμές βρίσκει πρώτο το πάνω-αριστερό
+        // κελί της, που γίνεται το αναγνωριστικό της ομάδας.
+        function findExitGroups() {
+            const seen = new Set();
+            const groups = [];
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (grid[r][c] !== EXIT || seen.has(cellKey(c, r))) continue;
+                    seen.add(cellKey(c, r));
+                    const cells = [];
+                    const stack = [[c, r]];
+                    while (stack.length) {
+                        const cur = stack.pop();
+                        cells.push(cur);
+                        const nb = [[cur[0], cur[1] - 1], [cur[0], cur[1] + 1],
+                                    [cur[0] - 1, cur[1]], [cur[0] + 1, cur[1]]];
+                        for (const n of nb) {
+                            if (n[0] < 0 || n[1] < 0 || n[0] >= COLS || n[1] >= ROWS) continue;
+                            if (grid[n[1]][n[0]] !== EXIT) continue;
+                            if (seen.has(cellKey(n[0], n[1]))) continue;
+                            seen.add(cellKey(n[0], n[1]));
+                            stack.push(n);
+                        }
+                    }
+                    cells.sort((a, b) => a[1] !== b[1] ? a[1] - b[1] : a[0] - b[0]);
+                    groups.push({ col: c, row: r, cells: cells, room: null });
+                }
+            }
+            return groups;
+        }
+
+        function syncExits() {
+            if (!grid.length) return;
+            exitGroups = findExitGroups();
+
+            const next = new Map();
+            exitGroups.forEach(function (g) {
+                // Προορισμός της ομάδας = η πρώτη γνωστή τιμή σε σειρά σάρωσης.
+                // Αν ενωθούν δύο ομάδες με διαφορετικούς προορισμούς, κερδίζει η
+                // πάνω-αριστερή — μία έξοδος, ένας προορισμός.
+                let room = null;
+                for (const cell of g.cells) {
+                    const v = exitRooms.get(cellKey(cell[0], cell[1]));
+                    if (v !== undefined && v !== null) { room = v; break; }
+                }
+                g.room = room;
+                g.cells.forEach(cell => next.set(cellKey(cell[0], cell[1]), room));
+            });
+            exitRooms = next;
+
+            renderExitLabels();
+            renderExitPanel();
+        }
+
+        function renderExitLabels() {
+            exitLabels.textContent = "";
+            const frag = document.createDocumentFragment();
+            exitGroups.forEach(function (g) {
+                const text = g.room === null ? "?" : String(g.room);
+                g.cells.forEach(function (cell) {
+                    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    t.setAttribute("x", cell[0] * CELL + CELL / 2);
+                    t.setAttribute("y", cell[1] * CELL + CELL / 2 + 1.8);
+                    t.setAttribute("fill", g.room === null ? "#ff5050" : "#ffffff");
+                    t.textContent = text;
+                    frag.appendChild(t);
+                });
+            });
+            exitLabels.appendChild(frag);
+        }
+
+        function renderExitPanel() {
+            exitListEl.textContent = "";
+            if (!exitGroups.length) {
+                const p = document.createElement("div");
+                p.className = "hintline";
+                p.style.marginTop = "0";
+                p.textContent = "Καμία έξοδος. Ζωγράφισε κελιά «Έξοδος» (X) στο πλέγμα.";
+                exitListEl.appendChild(p);
+                renderExitNote();
+                return;
+            }
+
+            exitGroups.forEach(function (g, i) {
+                const row = document.createElement("div");
+                row.className = "exit-row";
+                if (g.room === null) row.classList.add("missing");
+                else if (!knownRooms.has(g.room)) row.classList.add("unknown");
+
+                const tag = document.createElement("span");
+                tag.className = "exit-tag";
+                tag.textContent = "#" + (i + 1);
+
+                const pos = document.createElement("span");
+                pos.className = "exit-pos";
+                pos.textContent = "στ." + g.col + " γρ." + g.row + " · " + g.cells.length + " κελ.";
+
+                const input = document.createElement("input");
+                input.type = "number";
+                input.min = "1";
+                input.step = "1";
+                input.placeholder = "αίθ.";
+                input.title = "Αριθμός αίθουσας προορισμού (αρχείο room_<N>.txt)";
+                input.value = g.room === null ? "" : String(g.room);
+                input.addEventListener("change", function () {
+                    const raw = input.value.trim();
+                    const n = raw === "" ? null : parseInt(raw, 10);
+                    setGroupRoom(i, (n === null || isNaN(n) || n < 0) ? null : n);
+                });
+
+                // Το πέρασμα του ποντικιού πάνω από τη σειρά δείχνει πού είναι η έξοδος.
+                row.addEventListener("mouseenter", function () {
+                    cursor.setAttribute("x", g.col * CELL);
+                    cursor.setAttribute("y", g.row * CELL);
+                    cursor.setAttribute("visibility", "visible");
+                });
+                row.addEventListener("mouseleave", function () {
+                    cursor.setAttribute("visibility", "hidden");
+                });
+
+                row.append(tag, pos, input);
+                exitListEl.appendChild(row);
+            });
+
+            renderExitNote();
+        }
+
+        function renderExitNote() {
+            const p = problems();
+            if (p.errors.length) {
+                exitNoteEl.className = "exit-note err";
+                exitNoteEl.textContent = p.errors[0];
+            } else if (p.warnings.length) {
+                exitNoteEl.className = "exit-note warn";
+                exitNoteEl.textContent = p.warnings[0];
+            } else {
+                exitNoteEl.className = "exit-note";
+                exitNoteEl.textContent = "";
+            }
+        }
+
+        function setGroupRoom(index, room) {
+            const g = exitGroups[index];
+            if (!g) return;
+            g.room = room;
+            g.cells.forEach(cell => exitRooms.set(cellKey(cell[0], cell[1]), room));
+            dirty = true;
+            renderExitLabels();
+            renderExitPanel();
+        }
+
+        /// Επικύρωση πριν την αποθήκευση. Σφάλμα = δεν αποθηκεύουμε·
+        /// προειδοποίηση = αποθηκεύουμε αλλά το λέμε.
+        function problems() {
+            const errors = [], warnings = [];
+
+            exitGroups.forEach(function (g, i) {
+                const where = "#" + (i + 1) + " (στήλη " + g.col + ", γραμμή " + g.row + ")";
+                if (g.room === null) {
+                    errors.push("Η έξοδος " + where + " δεν έχει δηλωμένο προορισμό.");
+                } else if (!knownRooms.has(g.room)) {
+                    warnings.push("Η έξοδος " + where + " οδηγεί στην αίθουσα " + g.room +
+                        ", που δεν υπάρχει ακόμα ως αρχείο room_" + g.room + ".txt.");
+                }
+            });
+
+            let starts = 0;
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) if (grid[r][c] === START) starts++;
+            }
+            // ΠΡΟΣΟΧΗ: το διπλό at ("@@") είναι escape του Razor — στο JS φτάνει ένα.
+            if (starts > 1) {
+                errors.push("Υπάρχουν " + starts + " δείκτες εκκίνησης '@@' — επιτρέπεται το πολύ ένας.");
+            } else if (starts === 0) {
+                warnings.push("Δεν υπάρχει δείκτης εκκίνησης '@@' στο δωμάτιο.");
+            }
+
+            return { errors: errors, warnings: warnings };
         }
 
         // --- Αναίρεση --------------------------------------------------
@@ -458,12 +642,24 @@
         }
 
         // --- Ζωγραφική -------------------------------------------------
+        // Ξαναϋπολογισμός ομάδων το πολύ μία φορά ανά καρέ, ώστε το σύρσιμο του
+        // πινέλου πάνω σε εξόδους να ενημερώνει τις ετικέτες χωρίς να τρέχει η
+        // πλημμύρα σε κάθε κελί.
+        let exitSyncPending = false;
+        function scheduleExitSync() {
+            if (exitSyncPending) return;
+            exitSyncPending = true;
+            requestAnimationFrame(function () { exitSyncPending = false; syncExits(); });
+        }
+
         function setCell(r, c, symbol) {
             if (r < 0 || c < 0 || r >= ROWS || c >= COLS) return false;
-            if (grid[r][c] === symbol) return false;
+            const previous = grid[r][c];
+            if (previous === symbol) return false;
             grid[r][c] = symbol;
             drawCell(r, c);
             dirty = true;
+            if (previous === EXIT || symbol === EXIT) scheduleExitSync();
             return true;
         }
 
@@ -620,6 +816,12 @@
             grid = dto.rows.map(line => line.split(""));
             header = dto.header || [];
             footer = dto.footer || [];
+            // Ο server δίνει τους προορισμούς στο αναγνωριστικό κάθε ομάδας· το
+            // syncExits() (μέσω του drawAll) τους απλώνει σε όλα τα κελιά της.
+            exitRooms = new Map();
+            (dto.exits || []).forEach(function (e) {
+                exitRooms.set(cellKey(e.col, e.row), (e.room === undefined) ? null : e.room);
+            });
             undoStack.length = 0;
             redoStack.length = 0;
             dirty = false;
@@ -640,12 +842,19 @@
             if (!res.ok) return;
             const body = await res.json();
             fileList.innerHTML = "";
+            knownRooms = new Set();
             body.files.forEach(function (f) {
                 const opt = document.createElement("option");
-                opt.value = f; opt.textContent = f;
+                opt.value = f.name;
+                // Οι αίθουσες φαίνονται με τον αριθμό τους· η σειρά έρχεται από τον
+                // server (αριθμητικά: room_2 πριν το room_10).
+                opt.textContent = (f.room === null || f.room === undefined)
+                    ? f.name : ("Αίθουσα " + f.room + " — " + f.name);
                 fileList.appendChild(opt);
+                if (f.room !== null && f.room !== undefined) knownRooms.add(f.room);
             });
             if (selectName) fileList.value = selectName;
+            if (exitGroups.length) renderExitPanel();
         }
 
         async function openLevel(name) {
@@ -667,14 +876,38 @@
             setStatus("Νέα άδεια πίστα με περίγραμμα.", "ok");
         }
 
+        async function newRoom() {
+            if (dirty && !confirm("Υπάρχουν μη αποθηκευμένες αλλαγές. Να συνεχίσω;")) return;
+            const res = await fetch("/api/levels/room", { method: "POST" });
+            if (!res.ok) { setStatus(await readError(res), "err"); return; }
+            const dto = await res.json();
+            loadDocument(dto);
+            await refreshFileList(dto.name);
+            fileName.value = dto.name;
+            setStatus("Δημιουργήθηκε η αίθουσα " + dto.room + " (" + dto.name + ").", "ok");
+        }
+
         async function saveLevel() {
             const name = fileName.value.trim();
             if (!name) { setStatus("Δώσε όνομα αρχείου.", "err"); return; }
+
+            // ΕΠΙΚΥΡΩΣΗ πριν σταλεί οτιδήποτε: τα σφάλματα σταματούν την αποθήκευση,
+            // οι προειδοποιήσεις ζητούν απλώς επιβεβαίωση.
+            const p = problems();
+            if (p.errors.length) {
+                setStatus("Δεν αποθηκεύτηκε — " + p.errors.join(" "), "err");
+                return;
+            }
+            if (p.warnings.length && !confirm(p.warnings.join("\n") + "\n\nΝα αποθηκεύσω;")) return;
+
             const payload = {
                 name: name,
                 rows: grid.map(row => row.join("")),
                 header: header,
                 footer: footer,
+                exits: exitGroups.map(g => ({
+                    col: g.col, row: g.row, room: g.room, cells: g.cells.length,
+                })),
             };
             const res = await fetch("/api/levels", {
                 method: "POST",
@@ -686,11 +919,14 @@
             dirty = false;
             await refreshFileList(body.saved);
             fileName.value = body.saved;
-            setStatus("Αποθηκεύτηκε: " + body.saved, "ok");
+            const warn = (body.warnings && body.warnings.length)
+                ? " — " + body.warnings.join(" ") : "";
+            setStatus("Αποθηκεύτηκε: " + body.saved + warn, warn ? "warn" : "ok");
         }
 
         document.getElementById("btn-open").addEventListener("click", () => openLevel(fileList.value));
         document.getElementById("btn-new").addEventListener("click", newLevel);
+        document.getElementById("btn-new-room").addEventListener("click", newRoom);
         document.getElementById("btn-save").addEventListener("click", saveLevel);
 
         window.addEventListener("beforeunload", function (ev) {
@@ -704,10 +940,12 @@
         selectSymbol(SOLID);
         selectTool("brush");
 
-        if (fileList.options.length > 0) {
-            openLevel(fileList.value);
-        } else {
-            newLevel();
-        }
+        // Πρώτα η λίστα αρχείων: από εκεί μαθαίνουμε ποιες αίθουσες υπάρχουν, ώστε
+        // ο έλεγχος προορισμού να ξέρει τι να προειδοποιήσει.
+        (async function () {
+            await refreshFileList(fileList.value);
+            if (fileList.options.length > 0) await openLevel(fileList.value);
+            else await newLevel();
+        })();
     })();
 </script>

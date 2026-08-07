@@ -11,3 +11,6 @@ __pycache__/
 # παράγωγα του .NET level editor
 editor/bin/
 editor/obj/
+
+# τοπικές ρυθμίσεις εργαλείων (απόλυτες διαδρομές μηχανήματος)
+.claude/
