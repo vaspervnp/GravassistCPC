@@ -20,6 +20,8 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Home/Error");
 }
 
+// Το wwwroot/game/ σερβίρει το test run και τον έλεγχο ισοδυναμίας.
+app.UseStaticFiles();
 app.UseRouting();
 
 // Τα API endpoints ([ApiController] + [Route]) και μετά η σελίδα του editor.

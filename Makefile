@@ -54,6 +54,13 @@ test:
 	$(PY) tools/verify_rotate.py
 	$(PY) tools/test_physics.py
 
+# Δεδομένα και σενάριο ισοδυναμίας για το test run του editor.
+# Άνοιξε μετά το /game/parity.html: συγκρίνει JavaScript και μοντέλο frame
+# προς frame και δείχνει την πρώτη απόκλιση.
+editor-data:
+	$(PY) tools/genjs.py
+	$(PY) tools/parity.py
+
 # Οπτικό ίχνος της διαδρομής του ήρωα στο δοκιμαστικό δωμάτιο
 trace:
 	$(PY) tools/trace.py
@@ -62,4 +69,4 @@ clean:
 	rm -rf build
 	rm -f assets/*-export.png
 
-.PHONY: all clean test trace sprites-init
+.PHONY: all clean test trace sprites-init editor-data

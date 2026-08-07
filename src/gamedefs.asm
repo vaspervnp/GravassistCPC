@@ -33,6 +33,10 @@ T_CRATE          equ 25
 T_START          equ 26
 T_LOCK_OPEN      equ 27
 
+; Αίθουσα εκκίνησης. Ο editor τη γράφει με --start ώστε να δοκιμάζεις
+; οποιαδήποτε αίθουσα χωρίς να πειράζεις τα αρχεία των πιστών.
+START_ROOM      equ 1
+
 ; Γεωμετρία πινάκων — εδώ ώστε να είναι ορατή σε assert του main.asm
 TAB_ROW         equ 64
 RTAB_OFF        equ 16

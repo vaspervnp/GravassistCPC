@@ -96,7 +96,7 @@ main:           ld   a,1
                 call SCR_SET_MODE
                 call set_palette
                 call init_linetab
-                ld   a,(room_numbers)   ; ξεκίνα από την πρώτη αίθουσα
+                ld   a,START_ROOM       ; ποια αίθουσα· ορίζεται στο build
                 call room_load
                 call prep_hero
                 call draw_hero

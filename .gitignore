@@ -14,3 +14,7 @@ editor/obj/
 
 # τοπικές ρυθμίσεις εργαλείων (απόλυτες διαδρομές μηχανήματος)
 .claude/
+
+# παραγόμενα δεδομένα του test run (tools/genjs.py, tools/parity.py)
+editor/wwwroot/game/data.js
+editor/wwwroot/game/parity-expected.json

@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>GRAVASSIST — δοκιμή</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#0b0b16; color:#ccd; font:13px/1.5 system-ui, sans-serif;
+         display:flex; flex-direction:column; align-items:center; gap:.75rem; padding:1rem; }
+  canvas { image-rendering: pixelated; border:2px solid #234; background:#000080;
+           max-width:100%; height:auto; }
+  header { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; justify-content:center; }
+  h1 { font-size:1rem; margin:0; font-weight:600; }
+  kbd { background:#223; border:1px solid #445; border-radius:3px; padding:0 .3rem; font-size:.85em; }
+  .keys { display:flex; gap:1.2rem; flex-wrap:wrap; justify-content:center; color:#89a; }
+  select, button { background:#1a2030; color:#ccd; border:1px solid #345;
+                   border-radius:4px; padding:.25rem .6rem; font:inherit; }
+  #note { color:#7a8; min-height:1.2em; }
+</style>
+
+<header>
+  <h1>GRAVASSIST — δοκιμή</h1>
+  <select id="level"></select>
+  <button id="restart" type="button">Επανεκκίνηση</button>
+  <span id="note"></span>
+</header>
+
+<canvas id="screen"></canvas>
+
+<div class="keys">
+  <span><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> / <kbd>A</kbd><kbd>D</kbd> / <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> βαρύτητα</span>
+  <span><kbd>M</kbd><kbd>N</kbd> ή <kbd>←</kbd><kbd>→</kbd> βάδισμα</span>
+  <span><kbd>Shift</kbd> τρέξιμο</span>
+  <span><kbd>↓</kbd> ή <kbd>Space</kbd> ενέργεια</span>
+</div>
+
+<script src="data.js"></script>
+<script src="physics.js"></script>
+<script src="render.js"></script>
+<script src="run.js"></script>

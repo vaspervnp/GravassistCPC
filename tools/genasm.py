@@ -162,7 +162,10 @@ def pack_mode1(row8):
     return out
 
 
-def defs_asm():
+START_ROOM = None       # ορίζεται από --start· αλλιώς η πρώτη αίθουσα
+
+
+def defs_asm(rooms=()):
     """Κωδικοί τύπων και μεγέθη παιχνιδιού.
 
     Χωριστό αρχείο επειδή πρέπει να μπει ΠΡΩΤΟ στο main.asm: το `ds` για τους
@@ -176,7 +179,12 @@ def defs_asm():
            ""]
     for i, n in enumerate(P.TYPE_NAMES):
         out.append(f"T_{n:<14} equ {i}")
+    first = rooms[0].number if rooms else 1
     out += ["",
+            "; Αίθουσα εκκίνησης. Ο editor τη γράφει με --start ώστε να δοκιμάζεις",
+            "; οποιαδήποτε αίθουσα χωρίς να πειράζεις τα αρχεία των πιστών.",
+            f"START_ROOM      equ {START_ROOM if START_ROOM is not None else first}",
+            "",
             "; Γεωμετρία πινάκων — εδώ ώστε να είναι ορατή σε assert του main.asm",
             f"TAB_ROW         equ {ROW*2}",
             f"RTAB_OFF        equ {RTAB_OFF}",
@@ -292,10 +300,12 @@ def rooms_asm(rooms):
 
 
 if __name__ == "__main__":
+    if "--start" in sys.argv:
+        START_ROOM = int(sys.argv[sys.argv.index("--start") + 1])
     rooms = P.all_rooms()
     if not rooms:
         sys.exit("δεν βρέθηκε καμία levels/room_<N>.txt")
-    for name, text in (("src/gamedefs.asm", defs_asm()),
+    for name, text in (("src/gamedefs.asm", defs_asm(rooms)),
                        ("src/tables.asm", tables_asm()),
                        ("src/rooms.asm", rooms_asm(rooms))):
         path = os.path.join(ROOT, name)
