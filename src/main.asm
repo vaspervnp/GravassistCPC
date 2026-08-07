@@ -73,6 +73,7 @@ SCR_WBYTES      equ  80         ; bytes ανά scanline σε MODE 1
 main:           ld   a,1
                 call SCR_SET_MODE
                 call set_palette
+                call init_linetab
                 call render_room
 
                 ld   hl,60              ; αρχική θέση: πέφτει στο πάτωμα
@@ -83,30 +84,29 @@ main:           ld   a,1
                 ld   (hero_g),a
                 ld   a,HST_FALL
                 ld   (hero_state),a
+                call prep_hero
                 call draw_hero
 
-main_loop:      call MC_WAIT_FLYBACK
-
-                call read_gravity       ; ο παίκτης ρίχνει τη βαρύτητα
+; Ο βρόχος υπολογίζει ΠΡΩΤΑ και ζωγραφίζει ΜΕΤΑ το flyback. Ανάποδα, η
+; φυσική (εκατοντάδες solid_at) έτρεχε ανάμεσα στο σβήσιμο και τη σχεδίαση
+; και ο ήρωας έλειπε από την οθόνη για το μεγαλύτερο μέρος του frame.
+main_loop:      call read_gravity       ; ο παίκτης ρίχνει τη βαρύτητα
                 jr   c,ml_walk
                 ld   (hero_g),a
                 ld   a,HST_FALL         ; αλλαγή φοράς -> ξαναμετράει η πτώση
                 ld   (hero_state),a
-ml_walk:        call read_walk          ; A = -1 / 0 / +1
-                ld   (ml_dir),a
-
-                call erase_hero
-                ld   a,(ml_dir)
+ml_walk:        call read_walk
                 call hero_update
                 call anim_frame
-                call draw_hero
+                call prep_hero          ; μετασχηματισμός sprite (εκτός vblank)
+
+                call MC_WAIT_FLYBACK
+                call draw_hero          ; μόνο εγγραφές στην οθόνη
 
                 ld   a,K_ESC
                 call KM_TEST_KEY
                 jr   z,main_loop
                 ret                     ; επιστροφή στη BASIC
-
-ml_dir          db   0
 
 ;---------------------------------------------------------------------
 ; set_palette — τα 4 pens του MODE 1
@@ -224,28 +224,29 @@ af_set:         ld   (anim_cur),a
 anim_tick       db   0
 anim_cur        db   0
 
+
 ;---------------------------------------------------------------------
-; draw_hero — μετασχηματίζει και ζωγραφίζει τον ήρωα στη θέση του
-;   Η θέση είναι το ΚΕΝΤΡΟ του σώματος, οπότε το sprite κεντράρεται.
+; prep_hero — μετασχηματισμός sprite και θέση. Τρέχει ΕΚΤΟΣ vblank και δεν
+; αγγίζει την οθόνη, ώστε στο vblank να μένουν μόνο εγγραφές.
 ;---------------------------------------------------------------------
-draw_hero:      ld   a,(hero_g)         ; διαστάσεις sprite για αυτή τη φορά
+prep_hero:      ld   a,(hero_g)         ; διαστάσεις sprite για αυτή τη φορά
                 add  a,a
                 ld   e,a
                 ld   d,0
                 ld   hl,hero_dims
                 add  hl,de
-                ld   c,(hl)             ; C = πλάτος σε pixels
+                ld   c,(hl)             ; C = πλάτος px
                 inc  hl
-                ld   b,(hl)             ; B = ύψος σε γραμμές
+                ld   b,(hl)             ; B = ύψος γραμμές
 
-                ld   a,c                ; px = hero_x - πλάτος/2
+                ld   a,c                ; px = hero_x - πλάτος/2 (θέση = ΚΕΝΤΡΟ)
                 srl  a
                 ld   e,a
                 ld   d,0
                 ld   hl,(hero_x)
                 or   a
                 sbc  hl,de
-                ld   (dh_px),hl
+                push hl
 
                 ld   a,b                ; py = hero_y - ύψος/2
                 srl  a
@@ -255,9 +256,9 @@ draw_hero:      ld   a,(hero_g)         ; διαστάσεις sprite για α�
                 or   a
                 sbc  hl,de
                 ld   a,l
-                ld   (dh_py),a
+                ld   (spr_y),a
 
-                ld   hl,(dh_px)         ; MODE 1: 4 pixels ανά byte
+                pop  hl                 ; MODE 1: 4 pixels ανά byte
                 ld   a,l
                 and  3
                 ld   (spr_shift),a
@@ -266,25 +267,105 @@ draw_hero:      ld   a,(hero_g)         ; διαστάσεις sprite για α�
                 srl  h
                 rr   l
                 ld   a,l
-                ld   (dh_col),a
+                ld   (spr_col),a
 
-                ld   a,(hero_g)
-                ld   b,a
                 ld   a,(anim_cur)
-                ld   c,a
-                ld   a,b
-                ld   b,c
-                call hero_transform     ; A = φορά, B = frame
-
-                ld   a,(dh_col)
-                ld   c,a
-                ld   a,(dh_py)
                 ld   b,a
-                call blit_spr
+                ld   a,(hero_g)
+                jp   hero_transform     ; A = φορά, B = frame
 
-                ld   a,(dh_col)         ; θυμήσου το ορθογώνιο για το σβήσιμο
+; Διαστάσεις sprite ανά φορά βαρύτητας (πλάτος px, ύψος γραμμές)
+hero_dims       db   7,12, 13,13, 12,7, 13,13
+                db   7,12, 13,13, 12,7, 13,13
+spr_col         db   0
+spr_y           db   0
+
+;---------------------------------------------------------------------
+; draw_hero — φόντο και sprite σε ΜΙΑ πέραση, ΧΩΡΙΣ φάση σβησίματος.
+;
+; Για κάθε byte υπολογίζεται το φόντο από τα δεδομένα της πίστας και
+; συντίθεται από πάνω το sprite στην ΙΔΙΑ εγγραφή. Κανένα pixel δεν μένει
+; ποτέ κενό — εκεί ήταν το flicker, όχι στον συγχρονισμό.
+;
+; Η περιοχή είναι η ΕΝΩΣΗ παλιάς και νέας θέσης, ώστε να σβήνει μαζί και το
+; ίχνος της προηγούμενης χωρίς δεύτερο πέρασμα.
+;---------------------------------------------------------------------
+draw_hero:      ld   a,(last_bw)
+                or   a
+                jr   nz,dh_union
+                call dh_remember        ; πρώτο frame: ένωση με τον εαυτό της
+
+dh_union:       ld   a,(spr_col)        ; c0 = min(νέο, παλιό)
+                ld   hl,last_col
+                cp   (hl)
+                jr   c,dh_c0a
+                ld   a,(hl)
+dh_c0a:         ld   (dh_c0),a
+
+                ld   a,(spr_col)        ; c1 = max(τέλος) - 1
+                ld   hl,spr_bw
+                add  a,(hl)
+                ld   c,a
+                ld   a,(last_col)
+                ld   hl,last_bw
+                add  a,(hl)
+                cp   c
+                jr   nc,dh_c1a
+                ld   a,c
+dh_c1a:         dec  a
+                ld   (dh_c1),a
+                ld   hl,dh_c0
+                sub  (hl)
+                inc  a                  ; πλάτος περιοχής σε bytes
+                cp   17                 ; ΦΡΑΓΜΑ: τα pivot γωνίας μετακινούν τον
+                jr   c,dh_wok           ; ήρωα ~12 px σε ένα frame· χωρίς αυτό η
+                ld   a,16               ; ένωση μπορεί να ξεπεράσει το linebuf
+dh_wok:         ld   (dh_w),a
+
+                ld   a,(spr_y)          ; y0 = min
+                ld   hl,last_y
+                cp   (hl)
+                jr   c,dh_y0a
+                ld   a,(hl)
+dh_y0a:         ld   (dh_yy),a
+
+                ld   a,(spr_y)          ; y1 = max(τέλος) - 1
+                ld   hl,spr_bh
+                add  a,(hl)
+                ld   c,a
+                ld   a,(last_y)
+                ld   hl,last_bh
+                add  a,(hl)
+                cp   c
+                jr   nc,dh_y1a
+                ld   a,c
+dh_y1a:         dec  a
+                ld   (dh_y1),a
+
+dh_line:        call dh_bgline          ; φόντο -> linebuf
+                call dh_sprline         ; sprite από πάνω
+                ld   a,(dh_yy)
+                ld   b,a
+                ld   a,(dh_c0)
+                ld   c,a
+                call scr_addr
+                ex   de,hl
+                ld   hl,linebuf
+                ld   a,(dh_w)
+                ld   c,a
+                ld   b,0
+                ldir                    ; μία εγγραφή ανά byte, χωρίς ενδιάμεσο κενό
+                ld   hl,dh_yy
+                inc  (hl)
+                ld   a,(hl)
+                ld   hl,dh_y1
+                cp   (hl)
+                jr   z,dh_line
+                jr   c,dh_line
+
+dh_remember:    ld   a,(spr_col)
                 ld   (last_col),a
-                ld   a,(dh_py)
+                ld   a,(spr_y)
                 ld   (last_y),a
                 ld   a,(spr_bw)
                 ld   (last_bw),a
@@ -292,131 +373,170 @@ draw_hero:      ld   a,(hero_g)         ; διαστάσεις sprite για α�
                 ld   (last_bh),a
                 ret
 
-dh_px           dw   0
-dh_py           db   0
-dh_col          db   0
-
-; Διαστάσεις sprite ανά φορά βαρύτητας (πλάτος px, ύψος γραμμές)
-hero_dims       db   7,12, 13,13, 12,7, 13,13
-                db   7,12, 13,13, 12,7, 13,13
-
-;---------------------------------------------------------------------
-; erase_hero — ξαναζωγραφίζει τα κελιά κάτω από την προηγούμενη θέση
-;---------------------------------------------------------------------
-erase_hero:     ld   a,(last_bh)
-                or   a
-                ret  z                  ; δεν έχει ζωγραφιστεί ακόμα
-
-                ld   a,(last_col)       ; στήλες κελιών: byte/2
-                srl  a
-                ld   (eh_c0),a
-                ld   a,(last_col)
-                ld   hl,last_bw
-                add  a,(hl)
-                dec  a
-                srl  a
-                ld   (eh_c1),a
-
-                ld   a,(last_y)         ; γραμμές κελιών
+;--- φόντο μιας γραμμής από τα δεδομένα της πίστας --------------------
+; Κάθε byte της οθόνης ανήκει σε ΑΚΡΙΒΩΣ ένα κελί (8 px = 2 bytes), οπότε
+; δεν χρειάζεται σύνθεση γειτόνων: byte = tile_gfx[τύπος*16 + γραμμή*2 + μισό]
+dh_bgline:      ld   a,(dh_yy)
                 sub  LVL_Y0
-                jr   nc,eh_r0
-                xor  a
-eh_r0:          srl  a
-                srl  a
-                srl  a
-                ld   (eh_row),a
-                ld   a,(last_y)
-                ld   hl,last_bh
-                add  a,(hl)
-                dec  a
-                sub  LVL_Y0
-                srl  a
-                srl  a
-                srl  a
-                cp   LVL_ROWS
-                jr   c,eh_r1
-                ld   a,LVL_ROWS-1
-eh_r1:          ld   (eh_r1v),a
-
-eh_rowlp:       ld   a,(eh_c0)
-                ld   (eh_col),a
-eh_collp:       ld   a,(eh_col)
-                cp   LVL_COLS
-                jr   nc,eh_nextrow
-                ld   c,a
-                ld   a,(eh_row)
+                jr   nc,dhb_in
+                ld   hl,linebuf         ; πάνω από το grid = ζώνη HUD
+                ld   a,(dh_w)
                 ld   b,a
-                call draw_tile
-                ld   hl,eh_col
-                inc  (hl)
+                xor  a
+dhb_clr:        ld   (hl),a
+                inc  hl
+                djnz dhb_clr
+                ret
+
+dhb_in:         ld   c,a
+                and  7
+                add  a,a
+                ld   (dhb_off),a        ; γραμμή μέσα στο tile, x2 bytes
+                ld   a,c
+                srl  a
+                srl  a
+                srl  a
+                ld   l,a                ; HL = level_data + row*40
+                ld   h,0
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
+                ld   d,h
+                ld   e,l
+                add  hl,hl
+                add  hl,hl
+                add  hl,de
+                ld   de,level_data
+                add  hl,de
+                ld   a,(dh_c0)
+                srl  a
+                ld   e,a
+                ld   d,0
+                add  hl,de              ; HL -> τύπος του πρώτου κελιού
+                ld   a,(dh_c0)
+                and  1
+                ld   (dhb_half),a
+                ld   de,linebuf
+                ld   a,(dh_w)
+                ld   b,a
+
+dhb_lp:         ld   a,(hl)             ; τύπος*16 + offset + μισό  (<= 95)
+                add  a,a
+                add  a,a
+                add  a,a
+                add  a,a
+                ld   c,a
+                ld   a,(dhb_off)
+                add  a,c
+                ld   c,a
+                ld   a,(dhb_half)
+                add  a,c
+                push hl
+                ld   l,a
+                ld   h,0
+                push de
+                ld   de,tile_gfx
+                add  hl,de
                 ld   a,(hl)
-                ld   hl,eh_c1
+                pop  de
+                ld   (de),a
+                inc  de
+                pop  hl
+                ld   a,(dhb_half)       ; κάθε 2 bytes -> επόμενο κελί
+                xor  1
+                ld   (dhb_half),a
+                jr   nz,dhb_next
+                inc  hl
+dhb_next:       djnz dhb_lp
+                ret
+
+;--- σύνθεση του sprite πάνω στο linebuf ------------------------------
+dh_sprline:     ld   a,(dh_yy)
+                ld   hl,spr_y
+                sub  (hl)
+                ret  c                  ; η γραμμή είναι πάνω από το sprite
+                ld   hl,spr_bh
                 cp   (hl)
-                jr   z,eh_collp
-                jr   c,eh_collp
-eh_nextrow:     ld   hl,eh_row
-                inc  (hl)
-                ld   a,(hl)
-                ld   hl,eh_r1v
-                cp   (hl)
-                jr   z,eh_rowlp
-                jr   c,eh_rowlp
+                ret  nc                 ; ή κάτω από αυτό
+
+                ld   b,a                ; HL = spr_buf + γραμμή*spr_bw*2
+                ld   a,(spr_bw)
+                add  a,a
+                ld   e,a
+                ld   d,0
+                ld   hl,spr_buf
+                inc  b
+                jr   dhs_chk
+dhs_mul:        add  hl,de
+dhs_chk:        djnz dhs_mul
+
+                ld   a,(spr_col)        ; DE = linebuf + (spr_col - c0)
+                ld   c,a
+                ld   a,(dh_c0)
+                ld   b,a
+                ld   a,c
+                sub  b
+                ld   e,a
+                ld   d,0
+                push hl
+                ld   hl,linebuf
+                add  hl,de
+                ex   de,hl
+                pop  hl
+                ld   a,(spr_bw)
+                ld   b,a
+dhs_lp:         ld   a,(de)
+                and  (hl)               ; mask: κράτα το φόντο
+                inc  hl
+                or   (hl)               ; data: βάλε τον ήρωα
+                inc  hl
+                ld   (de),a
+                inc  de
+                djnz dhs_lp
                 ret
 
 last_col        db   0
 last_y          db   0
 last_bw         db   0
 last_bh         db   0
-eh_c0           db   0
-eh_c1           db   0
-eh_row          db   0
-eh_r1v          db   0
-eh_col          db   0
-
-;---------------------------------------------------------------------
-; blit_spr — ζωγραφίζει το spr_buf στην οθόνη
-;   IN: C = X σε bytes (0..79), B = Y σε scanlines (0..199)
-;---------------------------------------------------------------------
-blit_spr:       ld   a,(spr_bh)
-                ld   (bs_rows),a
-                ld   hl,spr_buf
-                ld   (bs_src),hl
-
-bs_row:         push bc
-                call scr_addr           ; HL = διεύθυνση οθόνης για (C,B)
-                ld   de,(bs_src)
-                ld   a,(spr_bw)
-                ld   b,a
-bs_byte:        ld   a,(de)             ; mask
-                inc  de
-                ld   c,a
-                ld   a,(hl)
-                and  c
-                ld   c,a
-                ld   a,(de)             ; data
-                inc  de
-                or   c
-                ld   (hl),a
-                inc  hl
-                djnz bs_byte
-                ld   (bs_src),de
-                pop  bc
-                inc  b                  ; επόμενη scanline
-                ld   hl,bs_rows
-                dec  (hl)
-                jr   nz,bs_row
-                ret
-
-bs_rows         db   0
-bs_src          dw   0
+dh_c0           db   0
+dh_c1           db   0
+dh_w            db   0
+dh_yy           db   0
+dh_y1           db   0
+dhb_off         db   0
+dhb_half        db   0
+linebuf         ds   16, 0
 
 ;---------------------------------------------------------------------
 ; scr_addr — διεύθυνση οθόνης για (στήλη byte, scanline)
-;   IN:  C = X σε bytes (0..79), B = Y σε scanlines (0..199)
-;   OUT: HL = διεύθυνση
-;   Διάταξη CPC: HL = base + (Y/8)*80 + (Y&7)*#800 + X
+;   IN: C = X σε bytes, B = Y σε scanlines    OUT: HL = διεύθυνση
+;   Lookup αντί για υπολογισμό: καλείται εκατοντάδες φορές ανά frame και ο
+;   υπολογισμός με ολισθήσεις κόστιζε 4x περισσότερο.
 ;---------------------------------------------------------------------
-scr_addr:       ld   a,b                ; HL = (Y & 7) * #800
+scr_addr:       ld   l,b
+                ld   h,0
+                add  hl,hl
+                ld   de,linetab
+                add  hl,de
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                ld   l,c
+                ld   h,0
+                add  hl,de
+                ret
+
+;---------------------------------------------------------------------
+; init_linetab — χτίζει τον πίνακα διευθύνσεων των 200 scanlines
+;   Διάταξη CPC: base + (Y/8)*80 + (Y&7)*#800
+;---------------------------------------------------------------------
+init_linetab:   ld   hl,linetab
+                ld   b,0
+ilt_lp:         push hl
+                push bc
+
+                ld   a,b                ; HL = (Y & 7) * #800
                 and  7
                 ld   h,a
                 ld   l,0
@@ -424,32 +544,41 @@ scr_addr:       ld   a,b                ; HL = (Y & 7) * #800
                 add  hl,hl
                 add  hl,hl
                 push hl
-
                 ld   a,b                ; DE = (Y >> 3) * 80
                 srl  a
                 srl  a
                 srl  a
                 ld   l,a
                 ld   h,0
-                add  hl,hl              ; x2
-                add  hl,hl              ; x4
-                add  hl,hl              ; x8
-                add  hl,hl              ; x16
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
                 ld   d,h
                 ld   e,l
-                add  hl,hl              ; x32
-                add  hl,hl              ; x64
+                add  hl,hl
+                add  hl,hl
                 add  hl,de              ; x64 + x16 = x80
                 ex   de,hl
-
                 pop  hl
-                add  hl,de
-                ld   e,c                ; + X σε bytes
-                ld   d,0
                 add  hl,de
                 ld   de,SCR_BASE
                 add  hl,de
+
+                ex   de,hl
+                pop  bc
+                pop  hl
+                ld   (hl),e
+                inc  hl
+                ld   (hl),d
+                inc  hl
+                inc  b
+                ld   a,b
+                cp   200
+                jr   nz,ilt_lp
                 ret
+
+linetab         ds   400, 0
 
 ;--- υποσυστήματα -----------------------------------------------------
                 include "rotate.asm"
