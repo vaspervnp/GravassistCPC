@@ -263,7 +263,7 @@ tile_facing:    db 255,255,255,255,255,255,4,2,0,6,4,2,0,6,255,255,255,255,255,2
 ; Θέση εκκίνησης και αρχική φορά βαρύτητας, από το αρχείο πίστας
 LVL_START_X     equ 60
 LVL_START_Y     equ 44
-LVL_START_G     equ 0
+LVL_START_G     equ 6
 
 ; Δωμάτιο: 1 byte ανά κελί, 40x24 = 960 bytes
 level_data:

@@ -125,6 +125,14 @@ main_loop:      call read_gravity       ; ο παίκτης ρίχνει τη β
                 ld   a,(hero_state)
                 cp   HST_FALL
                 jr   nz,ml_gok
+
+                ; Με ανοιγμένο αλεξίπτωτο ΚΑΜΙΑ αλλαγή, ούτε μέσω της δικλείδας:
+                ; η κάθοδος είναι 0.5 px/frame, δηλαδή 2.5 px στα 5 frames, που
+                ; περνάει άνετα για "ακίνητος" και θα έδινε πλήρη έλεγχο εν πτήσει.
+                ld   a,(hero_paraopen)
+                or   a
+                jr   nz,ml_walk
+
                 call h_stuck
                 jr   nc,ml_walk
 

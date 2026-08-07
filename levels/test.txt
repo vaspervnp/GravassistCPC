@@ -49,4 +49,4 @@
 ; --- ρυθμίσεις δωματίου (ΜΕΤΑ το πλέγμα) ---
 ; αρχική φορά βαρύτητας: 0=DOWN 1=D-LEFT 2=LEFT 3=U-LEFT
 ;                        4=UP 5=U-RIGHT 6=RIGHT 7=D-RIGHT
-gravity 0
+gravity 6
