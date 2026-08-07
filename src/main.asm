@@ -50,6 +50,8 @@ K_N             equ  46         ; βάδισμα πίσω  (σχετικά με 
 K_M             equ  38         ; βάδισμα μπροστά
 K_LEFT          equ  8          ; ισοδύναμα με N
 K_RIGHT         equ  1          ; ισοδύναμα με M
+K_DOWN          equ  2          ; ενεργοποίηση αντικειμένου
+K_SPACE         equ  47         ; το ίδιο
 K_SHIFT         equ  21         ; κρατημένο = τρέξιμο
 
 ;--- Δικλείδα ακινησίας ----------------------------------------------
@@ -103,6 +105,7 @@ main:           ld   a,1
                 ld   (hero_y),hl
                 ld   a,LVL_START_G
                 ld   (hero_g),a
+                ld   (world_g),a
                 ld   a,HST_FALL
                 ld   (hero_state),a
                 call prep_hero
@@ -140,9 +143,23 @@ ml_gok:         ld   a,b
                 call h_noflip           ; ...ούτε σε ζώνη κλειδώματος
                 jr   c,ml_walk
                 ld   (hero_g),a
+                ld   (world_g),a        ; ΜΟΝΟ εδώ: τα κιβώτια ακολουθούν την
+                                        ; επιλογή του παίκτη, όχι τις αυτόματες
+                                        ; στροφές του ήρωα στις γωνίες
                 ld   a,HST_FALL         ; αλλαγή φοράς -> ξαναμετράει η πτώση
                 ld   (hero_state),a
-ml_walk:        call read_walk
+                ; Ενεργοποίηση αντικειμένου: ΑΚΜΗ πλήκτρου, όχι κράτημα.
+                ; Αλλιώς ένα πάτημα θα σήκωνε και θα άφηνε το κιβώτιο δεκάδες
+                ; φορές, ή θα τηλεμεταφερόταν πέρα-δώθε 50 φορές το δευτερόλεπτο.
+ml_walk:        call read_use
+                ld   hl,use_prev
+                ld   b,a
+                cp   (hl)
+                ld   (hl),a
+                jr   z,ml_nouse
+                or   a
+                call nz,h_use
+ml_nouse:       call read_walk
                 ld   (ml_dir),a
                 call hero_update
 
@@ -265,6 +282,23 @@ rw_back:        ld   a,-1
                 ret
 
 ;---------------------------------------------------------------------
+; read_use — κάτω βελάκι ή SPACE
+;   OUT: A = 1 αν πατιέται
+;---------------------------------------------------------------------
+read_use:       ld   a,K_DOWN
+                call KM_TEST_KEY
+                jr   nz,ru_yes
+                ld   a,K_SPACE
+                call KM_TEST_KEY
+                jr   nz,ru_yes
+                xor  a
+                ret
+ru_yes:         ld   a,1
+                ret
+
+use_prev        db   0
+
+;---------------------------------------------------------------------
 ; anim_frame — διαλέγει frame ανάλογα με την κατάσταση
 ;---------------------------------------------------------------------
 anim_frame:     ld   hl,anim_tick
@@ -378,9 +412,33 @@ dhd_pline:      push bc
                 ld   hl,dhd_rows
                 dec  (hl)
                 jr   nz,dhd_pline
+
+                ld   hl,tile_gfx+T_CRATE*16   ; εικονίδιο κιβωτίου όταν το κρατά
+                ld   a,(hero_carry)
+                or   a
+                jr   nz,dhd_cr
+                ld   hl,tile_gfx
+dhd_cr:         ld   (dhd_gfx),hl
+                ld   a,8
+                ld   (dhd_rows),a
+                ld   b,0
+dhd_cline:      push bc
+                ld   c,HUD_CRATE_X
+                call scr_addr
+                ex   de,hl
+                ld   hl,(dhd_gfx)
+                ldi
+                ldi
+                ld   (dhd_gfx),hl
+                pop  bc
+                inc  b
+                ld   hl,dhd_rows
+                dec  (hl)
+                jr   nz,dhd_cline
                 ret
 
 hud_dirty       db   1
+HUD_CRATE_X     equ  27
 dhd_rows        db   0
 dhd_gfx         dw   0
 hudbuf          ds   ENERGY_MAX*HUD_SEG, 0

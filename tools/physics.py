@@ -287,6 +287,8 @@ class Hero:
         # κόσμου αλλάζει μόνο όταν το ζητήσει ο παίκτης. Τα κιβώτια ακολουθούν
         # τον κόσμο — αλλιώς θα άλλαζαν φορά κάθε φορά που ο ήρωας στρίβει.
         self.world_g = g
+        self.face = 1           # τελευταία φορά βάδισης· ορίζει το "μπροστά"
+        self.carry = 0          # κουβαλάει κιβώτιο
 
     # --- πρωτογενείς έλεγχοι --------------------------------------
     def at(self, a, b):
@@ -361,6 +363,59 @@ class Hero:
             self.room.cells[nr][nc] = CRATE
             self.moved_cells += [(c, r), (nc, nr)]
 
+    def ahead_cell(self):
+        """Το κελί ΜΠΡΟΣΤΑ του ήρωα, κατά τη φορά που κοιτάει."""
+        rx, ry = RSTEP[self.g]
+        return ((self.x + rx * self.face * CELL) // CELL,
+                (self.y + ry * self.face * CELL - GRID_Y0) // CELL)
+
+    def use(self):
+        """Ενεργοποίηση αντικειμένου. ΜΙΑ φορά ανά πάτημα, όχι όσο κρατιέται.
+
+        Ένα πλήκτρο για όλα, με σαφή σειρά προτεραιότητας: αν κουβαλάς κιβώτιο
+        το αφήνεις (τίποτα άλλο δεν έχει νόημα με γεμάτα χέρια), αλλιώς ενεργεί
+        στο κελί που πατάς, αλλιώς σε αυτό που κοιτάς.
+        """
+        if self.carry:
+            return self.drop()
+
+        col, row = self.x // CELL, (self.y - GRID_Y0) // CELL
+        if self.room.cell(col, row) == TELEPORT:
+            return self.teleport(col, row)
+
+        fc, fr = self.ahead_cell()
+        t = self.room.cell(fc, fr)
+        if t == LOCK and self.keys:
+            self.keys -= 1
+            self.room.cells[fr][fc] = EMPTY
+            return True
+        if t == CRATE:
+            self.room.cells[fr][fc] = EMPTY
+            self.carry = 1
+            return True
+        return False
+
+    def drop(self):
+        fc, fr = self.ahead_cell()
+        if not (0 <= fc < COLS and 0 <= fr < ROWS):
+            return False
+        if self.room.cells[fr][fc] != EMPTY:
+            return False
+        self.room.cells[fr][fc] = CRATE
+        self.carry = 0
+        return True
+
+    def teleport(self, col, row):
+        """Στο ταίρι του. Η φορά βαρύτητας ΔΙΑΤΗΡΕΙΤΑΙ — αλλιώς η τηλεμεταφορά
+        θα ήταν και κρυφό flip, και ο παίκτης δεν θα μπορούσε να το προβλέψει."""
+        for r in range(ROWS):
+            for c in range(COLS):
+                if (c, r) != (col, row) and self.room.cells[r][c] == TELEPORT:
+                    self.x = c * CELL + CELL // 2
+                    self.y = GRID_Y0 + r * CELL + CELL // 2
+                    return True
+        return False
+
     def touch_objects(self):
         """Αντιδράσεις σε ό,τι ακουμπάει το σώμα. Καλείται μία φορά ανά frame."""
         col, row = self.x // CELL, (self.y - GRID_Y0) // CELL
@@ -375,9 +430,6 @@ class Hero:
                 self.parachute = 1
             elif t == KEY:
                 self.keys += 1
-        elif t == LOCK and self.keys:
-            self.keys -= 1
-            self.room.cells[row][col] = EMPTY
         elif t == EXIT:
             self.won = True
         elif t == SWITCH:
@@ -520,6 +572,7 @@ class Hero:
              χάθηκε το έδαφος -> +2 βήματα (κυρτή γωνία, 90 μοίρες)
         """
         self.state = "WALK"
+        self.face = d
         ox, oy, og = self.x, self.y, self.g
 
         if self.wall_ahead(d):

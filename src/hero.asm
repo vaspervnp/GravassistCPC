@@ -107,16 +107,7 @@ ht_esave:       ld   (hero_energy),a
                 jr   ht_spikes
 
 ht_nopick:      ld   a,(h_cell)
-                cp   T_LOCK
-                jr   nz,ht_noloc
-                ld   a,(hero_keys)      ; κλειδαριά: ανοίγει με κλειδί
-                or   a
-                jr   z,ht_spikes
-                dec  a
-                ld   (hero_keys),a
-                call h_take
-                jr   ht_spikes
-ht_noloc:       cp   T_EXIT
+                cp   T_EXIT
                 jr   nz,ht_spikes
                 ld   a,1
                 ld   (hero_won),a
@@ -146,6 +137,149 @@ ht_hset:        ld   (hero_energy),a
                 ld   (hud_dirty),a
                 ret
 
+; h_use — ενεργοποίηση αντικειμένου (πλήκτρο ΚΑΤΩ ή SPACE)
+;
+;   Ένα πλήκτρο για όλα, με σαφή σειρά προτεραιότητας: αν κουβαλάς κιβώτιο το
+;   αφήνεις (με γεμάτα χέρια τίποτα άλλο δεν έχει νόημα), αλλιώς ενεργεί στο
+;   κελί που ΠΑΤΑΣ, αλλιώς σε αυτό που ΚΟΙΤΑΣ.
+;---------------------------------------------------------------------
+h_use:          ld   a,(hero_carry)
+                or   a
+                jr   nz,hu_drop
+
+                ld   bc,(hero_x)        ; το κελί που πατάει
+                ld   de,(hero_y)
+                call cell_at
+                cp   T_TELEPORT
+                jp   z,h_teleport   ; jp: ξεπερνά το εύρος του jr
+
+                call h_ahead            ; το κελί που κοιτάει
+                cp   T_LOCK
+                jr   nz,hu_crate
+                ld   a,(hero_keys)
+                or   a
+                ret  z                  ; χωρίς κλειδί δεν ανοίγει
+                dec  a
+                ld   (hero_keys),a
+                jp   hu_clear
+hu_crate:       cp   T_CRATE
+                ret  nz
+                ld   a,1
+                ld   (hero_carry),a
+                ld   (hud_dirty),a
+hu_clear:       ld   hl,(cell_ptr)      ; άδειασε το κελί και ξαναζωγράφισέ το
+                ld   (hl),T_EMPTY
+                jp   hu_redraw
+
+hu_drop:        call h_ahead            ; άφημα: μόνο σε κενό κελί
+                or   a
+                ret  nz
+                ld   hl,(cell_ptr)
+                ld   (hl),T_CRATE
+                xor  a
+                ld   (hero_carry),a
+                inc  a
+                ld   (hud_dirty),a
+hu_redraw:      ld   a,(cell_col)
+                ld   c,a
+                ld   a,(cell_row)
+                ld   b,a
+                jp   draw_tile
+
+; h_ahead — τύπος του κελιού ΜΠΡΟΣΤΑ, κατά τη φορά που κοιτάει ο ήρωας
+h_ahead:        ld   a,(hero_g)         ; βήμα ενός κελιού κάθετα στη βαρύτητα
+                add  a,a
+                ld   e,a
+                ld   d,0
+                ld   hl,rstep
+                add  hl,de
+                ld   c,(hl)
+                inc  hl
+                ld   b,(hl)
+                ld   a,(hero_face)
+                inc  a
+                jr   z,ha_neg
+                ld   a,c
+                jr   ha_x
+ha_neg:         ld   a,c
+                neg
+ha_x:           add  a,a                ; x LVL_CELL
+                add  a,a
+                add  a,a
+                call h_sext
+                ld   hl,(hero_x)
+                add  hl,de
+                push hl
+                ld   a,(hero_face)
+                inc  a
+                jr   z,ha_negy
+                ld   a,b
+                jr   ha_y
+ha_negy:        ld   a,b
+                neg
+ha_y:           add  a,a
+                add  a,a
+                add  a,a
+                call h_sext
+                ld   hl,(hero_y)
+                add  hl,de
+                ex   de,hl
+                pop  bc
+                jp   cell_at
+
+;---------------------------------------------------------------------
+; h_teleport — στο ταίρι του. Η φορά βαρύτητας ΔΙΑΤΗΡΕΙΤΑΙ: αλλιώς η
+;   τηλεμεταφορά θα ήταν και κρυφό flip, απρόβλεπτο για τον παίκτη.
+;---------------------------------------------------------------------
+h_teleport:     ld   a,(cell_col)       ; θυμήσου από πού φεύγουμε
+                ld   (tp_col),a
+                ld   a,(cell_row)
+                ld   (tp_row),a
+                ld   hl,level_data
+                ld   bc,0               ; B = γραμμή, C = στήλη
+tp_lp:          ld   a,(hl)
+                cp   T_TELEPORT
+                jr   nz,tp_next
+                ld   a,(tp_col)         ; όχι αυτό που ήδη πατάμε
+                cp   c
+                jr   nz,tp_found
+                ld   a,(tp_row)
+                cp   b
+                jr   nz,tp_found
+tp_next:        inc  hl
+                inc  c
+                ld   a,c
+                cp   LVL_COLS
+                jr   nz,tp_lp
+                ld   c,0
+                inc  b
+                ld   a,b
+                cp   LVL_ROWS
+                jr   nz,tp_lp
+                ret                     ; μονήρης τηλεμεταφορά: τίποτα
+
+tp_found:       ld   a,c                ; κέντρο του κελιού προορισμού
+                add  a,a
+                add  a,a
+                add  a,a
+                add  a,LVL_CELL/2
+                ld   l,a
+                ld   h,0
+                ld   (hero_x),hl
+                ld   a,b
+                add  a,a
+                add  a,a
+                add  a,a
+                add  a,LVL_Y0+LVL_CELL/2
+                ld   l,a
+                ld   h,0
+                ld   (hero_y),hl
+                ret
+
+tp_col          db 0
+tp_row          db 0
+
+;---------------------------------------------------------------------
 ; crate_step — τα κιβώτια πέφτουν προς την ΤΡΕΧΟΥΣΑ φορά βαρύτητας
 ;
 ;   Κίνηση ανά ΚΕΛΙ, όχι ανά pixel: το κιβώτιο γεμίζει ακριβώς ένα κελί και η
@@ -165,7 +299,10 @@ crate_step:     ld   hl,crate_tick
                 ret  c
                 ld   (hl),0
 
-                ld   a,(hero_g)         ; βήμα ενός κελιού κατά τη βαρύτητα
+                ; ΤΗ ΦΟΡΑ ΤΟΥ ΠΑΙΚΤΗ, όχι του ήρωα: η δική του γυρίζει αυτόματα
+                ; σε κάθε γωνία που περπατάει, και τα κιβώτια θα άλλαζαν
+                ; κατεύθυνση κάθε φορά που στρίβει.
+                ld   a,(world_g)
                 add  a,a
                 ld   e,a
                 ld   d,0
@@ -441,6 +578,8 @@ hl_set:         ld   (hero_energy),a
 ;---------------------------------------------------------------------
 h_walk:         ld   a,HST_WALK
                 ld   (hero_state),a
+                ld   a,(h_d)
+                ld   (hero_face),a
                 call h_save
 
                 call h_wall
@@ -1036,6 +1175,9 @@ hero_facc       db 0            ; κλάσμα pixel που μεταφέρετα
 hero_energy     db ENERGY_MAX
 hero_prev       db 0            ; κελί στήριξης του προηγούμενου frame
 hero_keys       db 0
+hero_face       db 1            ; τελευταία φορά βάδισης
+hero_carry      db 0            ; κουβαλάει κιβώτιο
+world_g         db 0            ; η φορά που ΟΡΙΣΕ ο παίκτης (τα κιβώτια)
 hero_para       db 0            ; κουβαλάει αλεξίπτωτο
 hero_paraopen   db 0            ; ανοιγμένο αυτή τη στιγμή
 hero_won        db 0

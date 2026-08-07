@@ -204,6 +204,32 @@ def main():
     check("κιβώτιο σταματά σε στερεό", room.cells[22][2] == P.CRATE,
           f"γραμμή 22 = {room.cells[22][2]}")
 
+    # 11. Πλήκτρο ενεργοποίησης: κλειδαριά, τηλεμεταφορά, σήκωμα/άφημα κιβωτίου
+    room = fresh()
+    room.cells[21][12] = P.CRATE
+    h = P.Hero(room, 12 * 8 - 4, 8 + 21 * 8 + 4, 0)
+    h.face = 1
+    check("σήκωμα κιβωτίου", h.use() and h.carry == 1 and room.cells[21][12] == P.EMPTY)
+    check("άφημα κιβωτίου", h.use() and h.carry == 0 and room.cells[21][12] == P.CRATE)
+
+    room = fresh()
+    room.cells[10][12] = P.LOCK
+    h = P.Hero(room, 12 * 8 - 4, 8 + 10 * 8 + 4, 0)
+    h.face = 1
+    check("κλειδαριά χωρίς κλειδί δεν ανοίγει", not h.use())
+    h.keys = 1
+    check("κλειδαριά με κλειδί ανοίγει",
+          h.use() and h.keys == 0 and room.cells[10][12] == P.EMPTY)
+
+    room = fresh()
+    room.cells[10][5] = P.TELEPORT
+    room.cells[12][30] = P.TELEPORT
+    h = P.Hero(room, 5 * 8 + 4, 8 + 10 * 8 + 4, 3)
+    g0 = h.g
+    check("τηλεμεταφορά στο ταίρι",
+          h.use() and (h.x // 8, (h.y - 8) // 8) == (30, 12), f"({h.x},{h.y})")
+    check("τηλεμεταφορά διατηρεί τη φορά βαρύτητας", h.g == g0)
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 
