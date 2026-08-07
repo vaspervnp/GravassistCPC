@@ -424,9 +424,6 @@ prep_hero:      call prep_para          ; ΠΡΩΤΑ: γράφει στο spr_bu
 ;   με βαρύτητα προς τα δεξιά, το αλεξίπτωτο πρέπει να είναι αριστερά του.
 ;---------------------------------------------------------------------
 PARA_DIST       equ  16         ; απόσταση κέντρου αλεξίπτωτου από τον ήρωα
-PARA_W          equ  16
-PARA_H          equ  12
-PARA_SIZE       equ  PARA_W*PARA_H
 PARA_TICKS      equ  5          ; frames ανά φάση ανοίγματος
 
 prep_para:      ld   a,(hero_paraopen)
@@ -453,11 +450,17 @@ pp_open:        ld   a,(para_frame)     ; 4 φάσεις, ΜΙΑ φορά, με�
                 ; Το sprite γυρίζει στην πλησιέστερη ΟΡΘΗ φορά. Δεν αξίζει
                 ; δεύτερη δέσμη στις 45 μοίρες για ένα αντικείμενο που φαίνεται
                 ; λίγα δευτερόλεπτα.
+                ; Το αλεξίπτωτο είναι ΠΑΝΤΑ πάνω από το κεφάλι, άρα γυρίζει
+                ; και στις 8 φορές — όπως ο ήρωας: ζυγή φορά -> κανονική δέσμη,
+                ; μονή -> δέσμη 45 μοιρών, και rot = φορά/2 και στις δύο.
 pp_rot:         ld   a,(hero_g)
-                inc  a
+                and  1
+                ld   (pp_odd),a
+                ld   a,(hero_g)
                 srl  a
-                and  3
                 ld   (para_rot),a
+
+                ld   a,(hero_g)         ; διαστάσεις εξόδου, πίνακας 8 θέσεων
                 add  a,a
                 ld   e,a
                 ld   d,0
@@ -511,14 +514,25 @@ pp_rot:         ld   a,(hero_g)
                 ld   a,l
                 ld   (para_y),a
 
-                ld   a,(para_frame)     ; HL = para_gfx + frame*PARA_SIZE
-                ld   de,PARA_SIZE
+                ld   a,(pp_odd)         ; --- επιλογή δέσμης ---
+                or   a
+                jr   nz,pp_diag
+                ld   a,(para_frame)
+                ld   de,para_gfx_size
                 call spr_mul_ade
                 ld   de,para_gfx
                 add  hl,de
-                ld   b,PARA_W
-                ld   c,PARA_H
-                ld   a,(para_rot)
+                ld   b,para_gfx_w
+                ld   c,para_gfx_h
+                jr   pp_go
+pp_diag:        ld   a,(para_frame)
+                ld   de,para45_gfx_size
+                call spr_mul_ade
+                ld   de,para45_gfx
+                add  hl,de
+                ld   b,para45_gfx_w
+                ld   c,para45_gfx_h
+pp_go:          ld   a,(para_rot)
                 call spr_transform
                 ld   a,(spr_bw)
                 ld   (para_bw),a
@@ -526,9 +540,11 @@ pp_rot:         ld   a,(hero_g)
                 ld   (para_bh),a
                 jp   spr_save_para
 
-; Διαστάσεις εξόδου ανά ορθή στροφή (πλάτος px, ύψος γραμμές)
-para_dims       db   PARA_W,PARA_H, PARA_H,PARA_W
-                db   PARA_W,PARA_H, PARA_H,PARA_W
+; Διαστάσεις εξόδου ανά φορά βαρύτητας (πλάτος px, ύψος γραμμές)
+para_dims       db   para_gfx_w,para_gfx_h,  para45_gfx_w,para45_gfx_h
+                db   para_gfx_h,para_gfx_w,  para45_gfx_w,para45_gfx_h
+                db   para_gfx_w,para_gfx_h,  para45_gfx_w,para45_gfx_h
+                db   para_gfx_h,para_gfx_w,  para45_gfx_w,para45_gfx_h
 para_rot        db   0
 para_frame      db   0
 para_tick       db   0
@@ -538,6 +554,7 @@ pp_w            db   0
 pp_h            db   0
 pp_dx           db   0
 pp_dy           db   0
+pp_odd          db   0
 para_on         db   0
 para_col        db   0
 para_y          db   0
@@ -945,6 +962,7 @@ linetab         ds   400, 0
                 include "gfx_hero.asm"
                 include "gfx_hero45.asm"
                 include "gfx_para.asm"
+                include "gfx_para45.asm"
                 include "gfx_objects.asm"
                 include "level_test.asm"
 
