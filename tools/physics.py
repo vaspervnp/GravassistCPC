@@ -132,6 +132,20 @@ WALL_A   = 3        # μισό πλάτος κορμού
 SCAN_MAX = 14       # πόσο βαθιά ψάχνουμε έδαφος
 TILT_45  = 3        # διαφορά ύψους (σε 2*FOOT_A pixels) που μετράει για 45 μοίρες
 
+# --- Επιτάχυνση πτώσης (8.8 σταθερή υποδιαστολή: 256 = 1 pixel/frame) ---
+# Μεγέθη για οθόνη 200 pixel στα 50 Hz:
+#   αρχική 1.0 px/frame, επιτάχυνση ~0.1, τερματική 4.0 px/frame
+# Πτώση όλης της οθόνης (192 px) ~59 frames = 1.2 δευτερόλεπτα.
+# Το ασφαλές όριο των 36 px καλύπτεται σε ~19 frames με ταχύτητα 2.9 px/frame.
+FALL_V0    = 256
+FALL_ACCEL = 26
+FALL_VMAX  = 1024
+
+# ΠΡΟΣΟΧΗ: η ταχύτητα ΔΕΝ γίνεται ποτέ βήμα πολλών pixel. Εκτελούνται πολλαπλά
+# βήματα του ΕΝΟΣ pixel ανά frame, γιατί οι γωνίες, οι ακμές και οι ράμπες
+# ανιχνεύονται ανά pixel — με βήμα 4 pixel ο ήρωας θα περνούσε μέσα από λεπτά
+# πατώματα και θα προσπερνούσε τις γωνίες.
+
 
 def gvec(g):
     a = math.radians(g * 45)
@@ -156,6 +170,8 @@ class Hero:
         self.fall_dist = 0
         self.state = "FALL"
         self.prev_support = EMPTY
+        self.fall_v = FALL_V0
+        self.fall_acc = 0
 
     # --- πρωτογενείς έλεγχοι --------------------------------------
     def at(self, a, b):
@@ -236,7 +252,7 @@ class Hero:
         """
         k = self.ground_depth(0)
         if k is None or k > FEET_B + 2:
-            self.do_fall()
+            self.fall_step()
             return
         if self.state == "FALL":
             self.land()
@@ -246,10 +262,29 @@ class Hero:
         if walk:
             self.do_walk(walk)
         elif self.slipping():
-            self.do_fall()
+            self.fall_step()
         else:
             self.state = "IDLE"
         self.prev_support = self.support_type()
+
+    def fall_step(self):
+        """Ένα frame πτώσης: επιταχύνει και εκτελεί τόσα βήματα του 1 pixel
+        όσα λέει η ταχύτητα.
+
+        Το γλίστρημα μένει σταθερό στο 1 pixel/frame — είναι κίνηση κατά μήκος
+        επιφάνειας, όχι πτώση, και σε puzzle game η προβλεψιμότητά του μετράει
+        περισσότερο από τη φυσική ακρίβεια.
+        """
+        if self.state != "FALL":
+            self.fall_v = FALL_V0
+            self.fall_acc = 0
+        self.fall_v = min(self.fall_v + FALL_ACCEL, FALL_VMAX)
+        self.fall_acc += self.fall_v
+        steps = self.fall_acc >> 8
+        self.fall_acc &= 0xFF
+        for _ in range(steps):
+            if not self.do_fall():
+                return                  # ακούμπησε ή γλίστρησε
 
     def do_fall(self):
         self.state = "FALL"
@@ -258,7 +293,7 @@ class Hero:
             self.x += gx
             self.y += gy
             self.fall_dist += 1
-            return
+            return True
         # ακουμπάει αλλά η επιφάνεια δεν είναι κάθετη -> γλίστρα κατά μήκος της
         t = self.tilt(1)
         slide = 0 if t is None else (1 if t > 0 else -1)
@@ -274,6 +309,8 @@ class Hero:
         self.state = "IDLE"
         dmg = max(0, self.fall_dist - 36)
         self.fall_dist = 0
+        self.fall_v = FALL_V0
+        self.fall_acc = 0
         return dmg
 
     def do_walk(self, d):

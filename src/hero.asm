@@ -16,6 +16,13 @@ WALL_A          equ 3           ; μισό πλάτος κορμού
 SCAN_MAX        equ 14          ; πόσο βαθιά ψάχνουμε έδαφος
 NO_GROUND       equ 255
 
+;--- Επιτάχυνση πτώσης (8.8 σταθερή υποδιαστολή: 256 = 1 pixel/frame) ---
+; Μεγέθη για οθόνη 200 pixel στα 50 Hz. Πτώση όλης της οθόνης (192 px) σε
+; 54 frames = 1.08 δευτ.· το ασφαλές όριο των 36 px σε 19 frames.
+FALL_V0         equ 256         ; αρχική  1.0 px/frame
+FALL_ACCEL      equ 26          ; ~0.10 px/frame^2
+FALL_VMAX       equ 1024        ; τερματική 4.0 px/frame
+
 HST_IDLE        equ 0
 HST_WALK        equ 1
 HST_FALL        equ 2
@@ -54,7 +61,7 @@ hu_still:       call h_slipping
                 ld   a,HST_IDLE
                 ld   (hero_state),a
                 jr   hu_done
-hu_fall:        call h_fall
+hu_fall:        call h_fall_steps
 hu_done:        call h_support
                 ld   (hero_prev),a
                 ret
@@ -64,6 +71,10 @@ hu_done:        call h_support
 ;---------------------------------------------------------------------
 h_land:         ld   a,HST_IDLE
                 ld   (hero_state),a
+                ld   hl,FALL_V0         ; μηδενισμός ταχύτητας ΠΡΙΝ από τα
+                ld   (hero_v),hl        ; πρόωρα ret της ασφαλούς πτώσης
+                xor  a
+                ld   (hero_facc),a
                 ld   hl,(hero_fall)
                 ld   de,0
                 ld   (hero_fall),de
@@ -144,6 +155,7 @@ h_fall:         ld   a,HST_FALL
                 ld   hl,(hero_fall)
                 inc  hl
                 ld   (hero_fall),hl
+                scf                     ; CY = ήταν ελεύθερη πτώση
                 ret
 
 hf_contact:     call h_tilt             ; ακουμπάει: γλίστρα προς το ακάλυπτο
@@ -169,7 +181,53 @@ hf_slide:       ld   (h_sd),a
                 call h_at               ; μπήκε σε υλικό; -> ακύρωσε
                 jr   nc,hf_ok
                 call h_restore
-hf_ok:          jp   h_snap
+hf_ok:          call h_snap
+                or   a                  ; NC = ακούμπησε ή γλίστρησε
+                ret
+
+;---------------------------------------------------------------------
+; h_fall_steps — ένα frame πτώσης, με επιτάχυνση μέχρι τερματική ταχύτητα
+;
+; Η ταχύτητα ΔΕΝ μετατρέπεται σε βήμα πολλών pixel: εκτελούνται τόσα βήματα
+; του ΕΝΟΣ pixel όσα λέει η ταχύτητα. Γωνίες, ακμές και ράμπες ανιχνεύονται
+; ανά pixel — με βήμα 4 pixel ο ήρωας θα περνούσε μέσα από λεπτά πατώματα.
+;
+; Το γλίστρημα μένει σταθερό στο 1 px/frame: είναι κίνηση κατά μήκος
+; επιφάνειας, όχι πτώση, και η προβλεψιμότητά του μετράει σε puzzle game.
+;---------------------------------------------------------------------
+h_fall_steps:   ld   a,(hero_state)
+                cp   HST_FALL
+                jr   z,hfs_acc
+                ld   hl,FALL_V0         ; νέα πτώση -> αρχική ταχύτητα
+                ld   (hero_v),hl
+                xor  a
+                ld   (hero_facc),a
+
+hfs_acc:        ld   hl,(hero_v)
+                ld   de,FALL_ACCEL
+                add  hl,de
+                ld   a,h
+                cp   FALL_VMAX/256
+                jr   c,hfs_cap
+                ld   hl,FALL_VMAX       ; τερματική ταχύτητα
+hfs_cap:        ld   (hero_v),hl
+
+                ld   a,(hero_facc)      ; κλάσμα + ταχύτητα -> ακέραια βήματα
+                ld   e,a
+                ld   d,0
+                add  hl,de
+                ld   a,l
+                ld   (hero_facc),a
+                ld   a,h
+                or   a
+                ret  z
+                ld   b,a
+hfs_lp:         push bc
+                call h_fall
+                pop  bc
+                ret  nc                 ; ακούμπησε -> μην κάνεις άλλα βήματα
+                djnz hfs_lp
+                ret
 
 ;---------------------------------------------------------------------
 ; h_align — ευθυγραμμίζει τη βαρύτητα με την επιφάνεια, ΔΙΑΒΑΖΟΝΤΑΣ το κελί
@@ -617,6 +675,8 @@ hero_y          dw 0
 hero_g          db 0
 hero_state      db HST_FALL
 hero_fall       dw 0
+hero_v          dw FALL_V0      ; ταχύτητα πτώσης, 8.8
+hero_facc       db 0            ; κλάσμα pixel που μεταφέρεται στο επόμενο frame
 hero_energy     db ENERGY_MAX
 hero_prev       db 0            ; κελί στήριξης του προηγούμενου frame
 
