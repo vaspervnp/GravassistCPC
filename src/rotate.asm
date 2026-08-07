@@ -9,8 +9,8 @@
 ;  Πλήρες σκεπτικό: docs/sprites.md §1-3.
 ;=====================================================================
 
-SPR_MAXW        equ 4           ; μέγιστο πλάτος εξόδου σε bytes (12px + 3 shift)
-SPR_MAXH        equ 12          ; μέγιστο ύψος εξόδου σε γραμμές
+SPR_MAXW        equ 4           ; μέγιστο πλάτος εξόδου σε bytes (13px + 3 shift = 16)
+SPR_MAXH        equ 13          ; μέγιστο ύψος εξόδου (η δέσμη των 45 είναι 13x13)
 SPR_BUFSZ       equ SPR_MAXW*2*SPR_MAXH
 
 ;---------------------------------------------------------------------
@@ -215,7 +215,62 @@ spr_pix_adv:
                 jr   nz,spr_row
                 ret
 
+;---------------------------------------------------------------------
+; hero_transform — ο ήρωας σε οποιαδήποτε από τις 8 φορές βαρύτητας
+;
+;   IN:  A = gravity 0..7,  B = frame 0..31
+;        (spr_shift) = 0..3
+;   OUT: όπως το spr_transform
+;
+;   Οι 8 φορές, δεξιόστροφα ανά 45 μοίρες:
+;        0 DOWN   1 DOWN-LEFT   2 LEFT   3 UP-LEFT
+;        4 UP     5 UP-RIGHT    6 RIGHT  7 DOWN-RIGHT
+;
+;   Οι ΖΥΓΕΣ βγαίνουν από την κανονική δέσμη 7x12, οι ΜΟΝΕΣ από τη δέσμη
+;   των 45 μοιρών 13x13. Και στις δύο περιπτώσεις η υπόλοιπη περιστροφή
+;   είναι πολλαπλάσιο των 90 και την κάνει το spr_transform — γι' αυτό
+;   αποθηκεύεται μόνο ΜΙΑ διαγώνια δέσμη αντί για τέσσερις.
+;---------------------------------------------------------------------
+hero_transform:
+                and  7
+                ld   c,a
+                srl  a
+                ld   (ht_rot),a             ; rot 0..3 = gravity / 2
+                bit  0,c
+                jr   nz,ht_diag
+
+                ld   de,hero_gfx_size       ; ζυγή -> κανονική δέσμη
+                ld   a,b
+                call spr_mul_ade
+                ld   de,hero_gfx
+                add  hl,de
+                ld   b,hero_gfx_w
+                ld   c,hero_gfx_h
+                jr   ht_go
+
+ht_diag:        ld   de,hero45_gfx_size     ; μονή -> δέσμη 45 μοιρών
+                ld   a,b
+                call spr_mul_ade
+                ld   de,hero45_gfx
+                add  hl,de
+                ld   b,hero45_gfx_w
+                ld   c,hero45_gfx_h
+
+ht_go:          ld   a,(ht_rot)
+                jp   spr_transform
+
+ht_rot          db 0
+
 ;--- βοηθητικά --------------------------------------------------------
+; spr_mul_ade: HL = A * DE   (A = 0..31, DE <= 169 -> max 5408)
+spr_mul_ade:    ld   hl,0
+                or   a
+                ret  z
+spr_mul_ade_l:  add  hl,de
+                dec  a
+                jr   nz,spr_mul_ade_l
+                ret
+
 spr_store:      ld   (spr_start),hl         ; HL=start, DE=dx, BC=dy
                 ld   (spr_dx),de
                 ld   (spr_dy),bc

@@ -79,26 +79,27 @@ demo_orients:   xor  a
 do_loop:        push af
                 ld   (do_orient),a
 
-                ld   a,0                ; shift 0 προς το παρόν
-                ld   (spr_shift),a
-                ld   hl,hero_gfx        ; frame 0 = IDLE0
-                ld   b,hero_gfx_w
-                ld   c,hero_gfx_h
+                xor  a
+                ld   (spr_shift),a      ; shift 0 προς το παρόν
                 ld   a,(do_orient)
-                call spr_transform
+                ld   b,0                ; frame 0 = IDLE0
+                call hero_transform
 
                 ld   a,(do_orient)      ; θέση: μία στήλη ανά φορά
-                add  a,a
-                add  a,a
-                add  a,a
-                add  a,10               ; X σε bytes: 10, 18, 26, 34
+                add  a,a                ; x2
+                add  a,a                ; x4
+                add  a,a                ; x8
+                ld   c,a
+                ld   a,(do_orient)
+                add  a,c                ; x9 -> απόσταση 9 bytes = 36 pixels
+                add  a,4                ; X σε bytes: 4, 13, 22, ... 67
                 ld   c,a
                 ld   b,80               ; Y σε scanlines
                 call blit_spr
 
                 pop  af
                 inc  a
-                cp   4
+                cp   8
                 jr   nz,do_loop
                 ret
 
@@ -186,6 +187,7 @@ scr_addr:       ld   a,b                ; HL = (Y & 7) * #800
 ;--- δεδομένα ---------------------------------------------------------
                 include "rotate.asm"
                 include "gfx_hero.asm"
+                include "gfx_hero45.asm"
                 include "gfx_objects.asm"
 
 prog_end

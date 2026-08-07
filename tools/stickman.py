@@ -10,10 +10,12 @@
 """
 
 import math
+import sys
 
 from cpcgfx import blank, line, put
 
 W, H = 7, 12
+W45 = H45 = 13              # στις 45 μοίρες χρειάζεται η διαγώνιος: sqrt(7^2+12^2)=13.9
 PEN = 1                     # ο ήρωας είναι λευκός (pen 1), όπως στο concept art
 
 # --- Ο σκελετός σε κανονική όρθια στάση -------------------------------
@@ -89,14 +91,36 @@ def shear(p, amount):
     return {k: (x + amount * (11 - y) / 10.0, y) for k, (x, y) in p.items()}
 
 
+def rot45(p):
+    """Περιστροφή του ΣΚΕΛΕΤΟΥ κατά 45 μοίρες δεξιόστροφα, με επανατοποθέτηση
+    στο κέντρο καμβά 13x13.
+
+    Περιστρέφουμε τις αρθρώσεις και ξαναζωγραφίζουμε γραμμές — ΔΕΝ κάνουμε
+    resampling της εικόνας. Γι' αυτό το αποτέλεσμα βγαίνει καθαρό σε τόσο
+    μικρό sprite, ενώ μια περιστροφή bitmap θα έδινε σκουπίδια.
+
+    Σε συντεταγμένες οθόνης (y προς τα κάτω) η δεξιόστροφη περιστροφή κατά a
+    είναι (x,y) -> (x*cos a - y*sin a, x*sin a + y*cos a). Για a=45 και τα δύο
+    ημίτονα είναι sqrt(1/2).
+    """
+    k = math.sqrt(0.5)
+    cx, cy = (W - 1) / 2.0, (H - 1) / 2.0        # κέντρο της κανονικής μορφής
+    ncx = ncy = (W45 - 1) / 2.0                  # κέντρο του καμβά 13x13
+    out = {}
+    for name, (x, y) in p.items():
+        dx, dy = x - cx, y - cy
+        out[name] = (ncx + (dx - dy) * k, ncy + (dx + dy) * k)
+    return out
+
+
 # --- Ζωγραφική --------------------------------------------------------
 
-def draw(p):
-    fr = blank(W, H)
+def draw(p, w=W, h=H):
+    fr = blank(w, h)
     # Το κεφάλι είναι δακτύλιος 3x3: το κέντρο πρέπει να απέχει >=1 px από κάθε
     # άκρη, αλλιώς κόβεται η μισή κορυφή του και η φιγούρα διαλύεται.
-    hx = min(max(round(p["head"][0]), 1), W - 2)
-    hy = min(max(round(p["head"][1]), 1), H - 2)
+    hx = min(max(round(p["head"][0]), 1), w - 2)
+    hy = min(max(round(p["head"][1]), 1), h - 2)
 
     # κεφάλι: ανοιχτός δακτύλιος 3x3
     for dx in (-1, 0, 1):
@@ -221,11 +245,23 @@ def build_poses():
 
 
 def build_frames():
+    """Τα 32 frames στην κανονική μορφή (7x12). Δίνουν τις φορές 0/90/180/270."""
     return [draw(p) for p in build_poses()]
+
+
+def build_frames45():
+    """Τα ίδια 32 frames γυρισμένα 45 μοίρες (13x13).
+
+    Από αυτά ο κώδικας των 90 μοιρών βγάζει τις φορές 135/225/315 — γι' αυτό
+    αποθηκεύεται ΜΟΝΟ η μία διαγώνια δέσμη. Δες docs/sprites.md §2.
+    """
+    return [draw(rot45(p), W45, H45) for p in build_poses()]
 
 
 if __name__ == "__main__":
     from cpcgfx import to_ascii
-    for name, fr in zip(FRAME_NAMES, build_frames()):
+    which = sys.argv[1] if len(sys.argv) > 1 else "0"
+    frames = build_frames45() if which == "45" else build_frames()
+    for name, fr in zip(FRAME_NAMES, frames):
         print(f"--- {name} ---")
         print(to_ascii(fr))

@@ -110,9 +110,56 @@ def check(frames, label):
     return bad
 
 
+def rot90_pt(pt, W, H, times):
+    """Πού καταλήγει ένα σημείο μετά από `times` περιστροφές 90 δεξιόστροφα.
+    Ίδια αντιστοίχιση με τη naive(): (x,y) -> (H-1-y, x)."""
+    x, y = pt
+    for _ in range(times % 4):
+        x, y, W, H = H - 1 - y, x, H, W
+    return x, y
+
+
+def check_gravity_dirs():
+    """Ελέγχει ότι για κάθε φορά βαρύτητας 0..7 τα πόδια δείχνουν όντως εκεί.
+
+    Πιάνει το λάθος που είναι πιο εύκολο να γίνει και πιο δύσκολο να δεις:
+    αν η rot45 γυρίζει αριστερόστροφα ενώ ο πίνακας των 90 δεξιόστροφα, οι
+    μονές φορές βγαίνουν καθρεφτισμένες και μόνο ο emulator θα το δείξει.
+    """
+    import math
+    base = stickman.BASE
+    bad = 0
+    for g in range(8):
+        if g % 2 == 0:
+            p, W, H = base, stickman.W, stickman.H
+        else:
+            p, W, H = stickman.rot45(base), stickman.W45, stickman.H45
+        times = g // 2
+
+        head = rot90_pt(p["head"], W, H, times)
+        feet = rot90_pt(((p["foot_l"][0] + p["foot_r"][0]) / 2,
+                         (p["foot_l"][1] + p["foot_r"][1]) / 2), W, H, times)
+        vx, vy = feet[0] - head[0], feet[1] - head[1]
+
+        # αναμενόμενη φορά: το (0,+1) γυρισμένο g*45 δεξιόστροφα
+        a = math.radians(g * 45)
+        ex, ey = -math.sin(a), math.cos(a)
+        cos = (vx * ex + vy * ey) / math.hypot(vx, vy)
+        ok = cos > 0.97                     # < 14 μοίρες απόκλιση
+        if not ok:
+            bad += 1
+            err = math.degrees(math.acos(max(-1, min(1, cos))))
+            print(f"  ΛΑΘΟΣ ΦΟΡΑ: gravity {g} ({g*45} μοίρες), "
+                  f"απόκλιση {err:.0f} μοίρες")
+    print(f"  φορές βαρύτητας: {8 - bad}/8 δείχνουν σωστά")
+    return bad
+
+
 if __name__ == "__main__":
     print("Επαλήθευση αλγορίθμου περιστροφής (src/rotate.asm):")
     bad = check(stickman.build_frames(), "ήρωας 7x12")
+    bad += check(stickman.build_frames45(), "ήρωας 13x13 @45")
+    bad += check_gravity_dirs()
 
     # Μη τετράγωνο μέγεθος: πιάνει λάθη όπου μπερδεύονται W και H.
     odd = [blank(5, 9) for _ in range(1)]
