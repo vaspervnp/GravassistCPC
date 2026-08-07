@@ -41,9 +41,6 @@ def tables_asm():
            f";  {ROW} ζεύγη (dx,dy) = {ROW*2} bytes, ώστε ο δείκτης να είναι g*{ROW*2}.",
            ";" + "=" * 69,
            "",
-           f"TAB_ROW         equ {ROW*2}",
-           f"RTAB_OFF        equ {RTAB_OFF}",
-           f"GTAB_OFF        equ {GTAB_OFF}",
            ""]
 
     out.append("; RTAB[g][a+16] — μετατόπιση a pixel ΚΑΘΕΤΑ στη βαρύτητα")
@@ -177,6 +174,11 @@ def defs_asm():
     for i, n in enumerate(P.TYPE_NAMES):
         out.append(f"T_{n:<14} equ {i}")
     out += ["",
+            "; Γεωμετρία πινάκων — εδώ ώστε να είναι ορατή σε assert του main.asm",
+            f"TAB_ROW         equ {ROW*2}",
+            f"RTAB_OFF        equ {RTAB_OFF}",
+            f"GTAB_OFF        equ {GTAB_OFF}",
+            "",
             f"NTYPES          equ {P.NTYPES}",
             f"ENERGY_MAX      equ {P.ENERGY_MAX}",
             f"ENERGY_PICK     equ {P.ENERGY_PICK}",
