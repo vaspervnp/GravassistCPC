@@ -19,9 +19,9 @@ Puzzle game για **Amstrad CPC 6128**, γραμμένο σε **Z80 assembly**,
 
 ![concept art](docs/concept-art.png)
 
-> **Κατάσταση: υπό ανάπτυξη.** Έτοιμα είναι ο sprite pipeline, ο κώδικας περιστροφής
-> και ο σκελετός του build. Το gameplay δεν έχει υλοποιηθεί ακόμα — δες
-> [plan.md](plan.md) για τα milestones.
+> **Κατάσταση: υπό ανάπτυξη.** Ο πυρήνας παίζει — βάδισμα, αυτόματη στροφή σε γωνίες,
+> ράμπες 45 μοιρών, γλίστρημα, ζημιά πτώσης. Λείπουν τα στοιχεία πίστας (πόρτες,
+> διακόπτες, κιβώτια), το HUD, οι πίστες και ο editor. Δες [plan.md](plan.md).
 
 ---
 
@@ -29,7 +29,8 @@ Puzzle game για **Amstrad CPC 6128**, γραμμένο σε **Z80 assembly**,
 
 ```bash
 make            # assemble + φτιάχνει build/gravassist.dsk
-make test       # επαλήθευση του αλγορίθμου περιστροφής
+make test       # επαληθεύσεις: περιστροφή sprite + μοντέλο φυσικής
+make trace      # οπτικό ίχνος της διαδρομής του ήρωα στο δοκιμαστικό δωμάτιο
 make clean
 ```
 
@@ -75,8 +76,11 @@ RUN"GRAV
 ## Δομή
 
 ```
-src/main.asm          κύριος κώδικας (org #4000)
+src/main.asm          κύριος κώδικας (org #4000), είσοδος, σχεδίαση
+src/hero.asm          φυσική: βάδισμα, γωνίες, ράμπες, πτώση
+src/level.asm         solid_at με ράμπες, σχεδίαση δωματίου
 src/rotate.asm        περιστροφή + packing sprites σε MODE 1
+src/tables.asm        ΠΑΡΑΓΟΜΕΝΟ — πίνακες γεωμετρίας βαρύτητας
 src/gfx_*.asm         ΠΑΡΑΓΟΜΕΝΑ από τα PNG — μην τα επεξεργάζεσαι
 assets/*.png          τα sprites· ΕΔΩ ζωγραφίζεις
 tools/*.py            PNG <-> assembly, γεννήτρια stickman, επαληθεύσεις
@@ -111,6 +115,7 @@ make                                    # τα ξαναμεταφράζει κα
 | [docs/concept-art.md](docs/concept-art.md) | Το concept art και τι δεσμεύει |
 | [docs/sprites.md](docs/sprites.md) | Μορφή sprites, PNG round-trip, περιστροφή |
 | [docs/level-elements.md](docs/level-elements.md) | Τα στοιχεία πίστας και γιατί επιλέχθηκαν |
+| [tools/physics.py](tools/physics.py) | Το μοντέλο φυσικής — **αναφορά** για το src/hero.asm |
 | [CLAUDE.md](CLAUDE.md) | Οδηγίες toolchain και συμβάσεις κώδικα |
 
 ## Τεχνικά αξιοσημείωτα
@@ -125,3 +130,9 @@ make                                    # τα ξαναμεταφράζει κα
 index remap ενώ οι 45 δεν είναι. Η διαγώνια δέσμη βγαίνει καθαρή επειδή περιστρέφουμε
 τον **σκελετό** του stickman και ξαναζωγραφίζουμε γραμμές — όχι την εικόνα.
 Δες [docs/sprites.md §1-2](docs/sprites.md).
+
+**Η φυσική γράφτηκε δύο φορές.** Πρώτα σε Python, όπου μπορεί να τρέξει και να
+επαληθευτεί, και μετά σε Z80. Οι πίνακες γεωμετρίας εξάγονται από το ίδιο μοντέλο
+(`tools/genasm.py`), οπότε η assembly δεν υπολογίζει τίποτα — διαβάζει. Έξι σφάλματα
+του μοντέλου βρέθηκαν στην Python, όπου ένα `make trace` τα δείχνει αμέσως· στον
+emulator θα ήταν αόρατα.
