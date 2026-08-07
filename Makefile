@@ -44,12 +44,17 @@ build:
 sprites-init:
 	$(PY) tools/sprites.py init --force
 
-# Επαλήθευση του αλγορίθμου περιστροφής του src/rotate.asm
+# Επαληθεύσεις: αλγόριθμος περιστροφής + μοντέλο φυσικής
 test:
 	$(PY) tools/verify_rotate.py
+	$(PY) tools/test_physics.py
+
+# Οπτικό ίχνος της διαδρομής του ήρωα στο δοκιμαστικό δωμάτιο
+trace:
+	$(PY) tools/trace.py
 
 clean:
 	rm -rf build
 	rm -f assets/*-export.png
 
-.PHONY: all clean test sprites-init
+.PHONY: all clean test trace sprites-init
