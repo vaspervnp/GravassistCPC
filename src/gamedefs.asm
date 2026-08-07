@@ -31,13 +31,14 @@ T_PLATE          equ 23
 T_TELEPORT       equ 24
 T_CRATE          equ 25
 T_START          equ 26
+T_LOCK_OPEN      equ 27
 
 ; Γεωμετρία πινάκων — εδώ ώστε να είναι ορατή σε assert του main.asm
 TAB_ROW         equ 64
 RTAB_OFF        equ 16
 GTAB_OFF        equ 15
 
-NTYPES          equ 27
+NTYPES          equ 28
 ENERGY_MAX      equ 8
 ENERGY_PICK     equ 2
 SPIKE_DMG       equ 2

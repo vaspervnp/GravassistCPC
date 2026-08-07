@@ -96,6 +96,7 @@ PEN_BODY, PEN_EDGE = 2, 3
 # στροφές των αγκαθιών και των μονόδρομων παράγονται με ακριβή περιστροφή 90.
 PLACEHOLDER = {
     P.EXIT: ("EXIT", 0), P.ENERGY: ("ENERGY", 0), P.PARACHUTE: ("PARACHUTE", 0),
+    P.LOCK_OPEN: ("LOCK", 0, True),   # η "ενεργή" εκδοχή του placeholder
     P.KEY: ("KEY", 0), P.LOCK: ("LOCK", 0), P.GATE: ("GATE", 0),
     P.SWITCH: ("SWITCH", 0), P.PLATE: ("PLATE", 0), P.TELEPORT: ("TELEPORT", 0),
     P.CRATE: ("CRATE", 0), P.CRUMBLE: ("CRUMBLE", 0), P.GRAVLOCK: ("GRAVLOCK", 0),
@@ -120,8 +121,10 @@ def tile_pixels(t):
         return g
     if t in PLACEHOLDER:
         import placeholders
-        name, turns = PLACEHOLDER[t]
-        return rot90(placeholders._frame(name, False), turns)
+        entry = PLACEHOLDER[t]
+        name, turns = entry[0], entry[1]
+        active = entry[2] if len(entry) > 2 else False
+        return rot90(placeholders._frame(name, active), turns)
     for v in range(8):
         for u in range(8):
             if t == P.SOLID:

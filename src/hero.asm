@@ -159,8 +159,9 @@ h_use:          call h_support          ; ΟΛΑ κρίνονται από το 
                 ld   (hero_keys),a
                 ld   a,1
                 ld   (hud_dirty),a
-                jp   hu_clear           ; το cell_ptr δείχνει ακόμα στο κελί
-                                        ; στήριξης, από το h_support
+                ld   hl,(cell_ptr)      ; ΔΕΝ εξαφανίζεται: γίνεται ανοιγμένη
+                ld   (hl),T_LOCK_OPEN   ; πόρτα. Ο παίκτης βλέπει τι ξεκλείδωσε
+                jp   hu_redraw          ; και περνά από μέσα.
 
 hu_notlock:     ld   bc,(hero_x)        ; τηλεμεταφορά: κρίνεται από το κελί του
                 ld   de,(hero_y)        ; ΣΩΜΑΤΟΣ, όχι των ποδιών

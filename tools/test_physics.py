@@ -226,7 +226,15 @@ def main():
     check("κλειδαριά χωρίς κλειδί δεν ανοίγει", not h.use())
     h.keys = 1
     check("κλειδαριά με κλειδί ανοίγει",
-          h.use() and h.keys == 0 and room.cells[22][5] == P.EMPTY)
+          h.use() and h.keys == 0 and room.cells[22][5] == P.LOCK_OPEN,
+          P.TYPE_NAMES[room.cells[22][5]])
+    check("ανοιγμένη κλειδαριά δεν είναι στερεή",
+          not (P.PROPS[P.LOCK_OPEN] & P.F_SOLID))
+    h.state = "IDLE"
+    y0 = h.y
+    for _ in range(20):
+        h.update(0)
+    check("περνάς από μέσα της", h.y > y0, f"y {y0} -> {h.y}")
 
     room = fresh()
     room.cells[10][5] = P.TELEPORT

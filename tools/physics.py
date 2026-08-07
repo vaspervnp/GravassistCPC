@@ -54,6 +54,7 @@ PLATE = 23              # πλάκα πίεσης
 TELEPORT = 24
 CRATE = 25
 START = 26              # δείκτης εκκίνησης· δεν υπάρχει στο παιχνίδι
+LOCK_OPEN = 27          # ξεκλειδωμένο: φαίνεται ακόμα, αλλά περνάς από μέσα
 
 CHARS = {
     ".": EMPTY, "#": SOLID,
@@ -62,7 +63,7 @@ CHARS = {
     "-": ONEWAY_U, "[": ONEWAY_L, "_": ONEWAY_D, "]": ONEWAY_R,
     ":": GRAVLOCK, "%": CRUMBLE, "X": EXIT, "+": ENERGY, "P": PARACHUTE,
     "k": KEY, "K": LOCK, "G": GATE, "S": SWITCH, "p": PLATE,
-    "T": TELEPORT, "B": CRATE, "@": START,
+    "T": TELEPORT, "B": CRATE, "@": START, "|": LOCK_OPEN,
 }
 NAMES = {v: k for k, v in CHARS.items()}
 TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
@@ -70,8 +71,8 @@ TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
               "ONEWAY_U", "ONEWAY_L", "ONEWAY_D", "ONEWAY_R",
               "GRAVLOCK", "CRUMBLE", "EXIT", "ENERGY", "PARACHUTE",
               "KEY", "LOCK", "GATE", "SWITCH", "PLATE", "TELEPORT", "CRATE",
-              "START"]
-NTYPES = 27
+              "START", "LOCK_OPEN"]
+NTYPES = 28
 
 # --- Ιδιότητες ανά τύπο (bit flags) ----------------------------------
 # Ένας πίνακας αντί για σκόρπια if: ο ίδιος εξάγεται στο src/tables.asm και
@@ -398,7 +399,9 @@ class Hero:
 
         if st == LOCK and self.keys:
             self.keys -= 1
-            self.room.cells[sc[1]][sc[0]] = EMPTY
+            # ΔΕΝ εξαφανίζεται: γίνεται ανοιγμένη πόρτα. Ο παίκτης βλέπει τι
+            # ξεκλείδωσε και περνά από μέσα.
+            self.room.cells[sc[1]][sc[0]] = LOCK_OPEN
             return True
 
         col, row = self.x // CELL, (self.y - GRID_Y0) // CELL
