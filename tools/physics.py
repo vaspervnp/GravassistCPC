@@ -51,15 +51,50 @@ RAMP_TEST = {
 # εκτιμηθεί — διαβάζεται. Αυτό εξαφανίζει την ασάφεια στις συμβολές.
 RAMP_GRAVITY = {RAMP_DR: 7, RAMP_DL: 1, RAMP_UR: 5, RAMP_UL: 3}
 
-# --- Γεωμετρία βαρύτητας ---------------------------------------------
-# G = μοναδιαίο διάνυσμα προς τη βαρύτητα, R = "μπροστά" (G γυρισμένο 90 CCW).
-def gvec(g):
+# --- Γεωμετρία βαρύτητας: ΜΟΝΟ ΑΚΕΡΑΙΟΙ, ΜΟΝΟ ΠΙΝΑΚΕΣ --------------
+# Το μοντέλο δεν κάνει πράξεις κινητής υποδιαστολής πουθενά, ώστε ο Z80 να
+# παράγει ΑΚΡΙΒΩΣ τα ίδια αποτελέσματα. Οι ίδιοι πίνακες εξάγονται στο
+# src/tables.asm από το tools/gentables.py.
+# ΠΡΟΣΟΧΗ: ο πίνακας βαρύτητας χρειάζεται και ΑΡΝΗΤΙΚΑ βάθη — το κεφάλι είναι
+# στο b = -7. Χωρίς το offset η Python τα ερμηνεύει ως δείκτες από το τέλος και
+# διαβάζει σιωπηλά λάθος τιμές.
+GSPAN = 16          # βάθη -16..+16 κατά τη βαρύτητα
+RSPAN = 4           # πλάγιες αποστάσεις -4..+4
+
+
+def _unit(g):
     a = math.radians(g * 45)
     return (-math.sin(a), math.cos(a))
 
-def rvec(g):
-    gx, gy = gvec(g)
+
+def _perp(g):
+    gx, gy = _unit(g)
     return (gy, -gx)
+
+
+# GTAB[g][k]  = μετατόπιση k pixel ΚΑΤΑ τη βαρύτητα
+# RTAB[g][a]  = μετατόπιση a pixel ΚΑΘΕΤΑ στη βαρύτητα (a = -4..+4)
+GTAB = [[(r(k * _unit(g)[0]), r(k * _unit(g)[1]))
+         for k in range(-GSPAN, GSPAN + 1)] for g in range(8)]
+RTAB = [[(r(a * _perp(g)[0]), r(a * _perp(g)[1]))
+         for a in range(-RSPAN, RSPAN + 1)] for g in range(8)]
+
+# Βήμα ενός pixel: η πρώτη μη μηδενική εγγραφή των παραπάνω.
+GSTEP = [GTAB[g][GSPAN + 1] for g in range(8)]
+RSTEP = [RTAB[g][RSPAN + 1] for g in range(8)]
+
+
+def off(g, a, b):
+    """Offset σε pixels για τοπικές συντεταγμένες (a = πλάγια, b = προς πόδια).
+
+    ΠΡΟΣΟΧΗ: αθροίζονται δύο ΞΕΧΩΡΙΣΤΑ στρογγυλοποιημένες τιμές, όχι η
+    στρογγυλοποίηση του αθροίσματος. Έτσι το κάνει και ο Z80 με lookup, και οι
+    δύο υλοποιήσεις πρέπει να συμφωνούν στο pixel.
+    """
+    rx, ry = RTAB[g][a + RSPAN]
+    gx, gy = GTAB[g][b + GSPAN]
+    return rx + gx, ry + gy
+
 
 class Room:
     def __init__(self, text):
@@ -125,10 +160,8 @@ class Hero:
     # --- πρωτογενείς έλεγχοι --------------------------------------
     def at(self, a, b):
         """Στερεό στο σημείο (a = πλάγια, b = προς τα πόδια) του ήρωα;"""
-        rx, ry = rvec(self.g)
-        gx, gy = gvec(self.g)
-        return self.room.solid_at(r(self.x + a * rx + b * gx),
-                                  r(self.y + a * ry + b * gy))
+        dx, dy = off(self.g, a, b)
+        return self.room.solid_at(self.x + dx, self.y + dy)
 
     def ground_depth(self, a):
         """Σε πόσα pixels κατά τη βαρύτητα βρίσκεται έδαφος στη στήλη `a`;
@@ -181,7 +214,7 @@ class Hero:
 
     def snap(self):
         """Κάθισε τα πέλματα ακριβώς πάνω στην επιφάνεια."""
-        gx, gy = gvec(self.g)
+        gx, gy = GSTEP[self.g]
         for _ in range(SCAN_MAX):
             k = self.ground_depth(0)
             if k is None:
@@ -189,8 +222,8 @@ class Hero:
             if abs(k - FEET_B) <= 1:
                 return True
             step = 1 if k > FEET_B else -1
-            self.x += r(gx) * step
-            self.y += r(gy) * step
+            self.x += gx * step
+            self.y += gy * step
         return False
 
     def update(self, walk=0):
@@ -220,10 +253,10 @@ class Hero:
 
     def do_fall(self):
         self.state = "FALL"
-        gx, gy = gvec(self.g)
+        gx, gy = GSTEP[self.g]
         if not self.at(0, FEET_B):                 # ελεύθερος -> πέφτε
-            self.x += r(gx)
-            self.y += r(gy)
+            self.x += gx
+            self.y += gy
             self.fall_dist += 1
             return
         # ακουμπάει αλλά η επιφάνεια δεν είναι κάθετη -> γλίστρα κατά μήκος της
@@ -231,8 +264,8 @@ class Hero:
         slide = 0 if t is None else (1 if t > 0 else -1)
         if slide == 0:
             slide = 1 if not self.at(FOOT_A, FEET_B) else -1
-        rx, ry = rvec(self.g)
-        nx, ny = self.x + r(rx) * slide, self.y + r(ry) * slide
+        rx, ry = RSTEP[self.g]
+        nx, ny = self.x + rx * slide, self.y + ry * slide
         if not self.room.solid_at(nx, ny):
             self.x, self.y = nx, ny
         self.snap()
@@ -257,9 +290,9 @@ class Hero:
             self.corner(-2 * d, d, ox, oy, og)   # ΚΟΙΛΗ: ανεβαίνει στον τοίχο
             return
 
-        rx, ry = rvec(self.g)
-        self.x += r(rx) * d
-        self.y += r(ry) * d
+        rx, ry = RSTEP[self.g]
+        self.x += rx * d
+        self.y += ry * d
 
         if self.ground_depth(0) is None:            # ΚΥΡΤΗ: τέλος πλατώματος
             self.x, self.y = ox, oy
@@ -283,12 +316,12 @@ class Hero:
         k = self.ground_depth(0)
         if k is None:
             return False
-        gx, gy = gvec(self.g)
-        cx, cy = self.x + k * gx, self.y + k * gy       # σημείο επαφής
-        ngx, ngy = gvec(newg)
+        gx, gy = GTAB[self.g][k + GSPAN]
+        cx, cy = self.x + gx, self.y + gy              # σημείο επαφής
+        ngx, ngy = GTAB[newg][FEET_B + GSPAN]
         self.g = newg
-        self.x = r(cx - FEET_B * ngx)               # ίδιο σημείο, νέα φορά
-        self.y = r(cy - FEET_B * ngy)
+        self.x = cx - ngx                              # ίδιο σημείο, νέα φορά
+        self.y = cy - ngy
         return self.snap()
 
     def support_type(self):
@@ -296,9 +329,9 @@ class Hero:
         k = self.ground_depth(0)
         if k is None:
             return EMPTY
-        gx, gy = gvec(self.g)                 # ΤΟ ΜΕΤΡΗΜΕΝΟ βάθος επαφής, όχι
-        px = r(self.x + k * gx)           # σταθερό: ένα pixel πιο βαθιά και
-        py = r(self.y + k * gy)           # διαβάζεις το κελί από κάτω
+        gx, gy = GTAB[self.g][k + GSPAN]      # ΤΟ ΜΕΤΡΗΜΕΝΟ βάθος επαφής, όχι σταθερό:
+        px = self.x + gx              # ένα pixel πιο βαθιά και διαβάζεις το
+        py = self.y + gy              # κελί από κάτω
         return self.room.cell(px // CELL, (py - GRID_Y0) // CELL)
 
     def align(self, d):
@@ -349,17 +382,15 @@ class Hero:
             C          = κέντρο + WALL_A*d*R_παλιό + FEET_B*G_παλιό
             νέο κέντρο = C + WALL_A*d*R_νέο - FEET_B*G_νέο
         """
-        rxo, ryo = rvec(self.g)
-        gxo, gyo = gvec(self.g)
-        cx = self.x + WALL_A * d * rxo + FEET_B * gxo
-        cy = self.y + WALL_A * d * ryo + FEET_B * gyo
+        ex, ey = off(self.g, WALL_A * d, FEET_B)
+        cx, cy = self.x + ex, self.y + ey          # η ακμή
 
         newg = (self.g + steps) % 8
-        rxn, ryn = rvec(newg)
-        gxn, gyn = gvec(newg)
+        nrx, nry = RTAB[newg][WALL_A * d + RSPAN]
+        ngx, ngy = GTAB[newg][FEET_B + GSPAN]
         self.g = newg
-        self.x = r(cx + WALL_A * d * rxn - FEET_B * gxn)
-        self.y = r(cy + WALL_A * d * ryn - FEET_B * gyn)
+        self.x = cx + nrx - ngx
+        self.y = cy + nry - ngy
 
         if self.snap() and not self.slipping():
             return True
