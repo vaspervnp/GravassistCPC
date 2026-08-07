@@ -185,7 +185,7 @@ def main():
         room = fresh(strip=(P.CRATE,))
         room.cells[10][20] = P.CRATE
         h = P.Hero(room, 60, 44, 0)
-        h.world_g = g
+        h.set_gravity(g)
         h.g = 2                              # ο ήρωας κοιτάει αλλού επίτηδες
         for _ in range(P.CRATE_TICKS):
             h.crate_step()
@@ -198,7 +198,7 @@ def main():
     room = fresh(strip=(P.CRATE,))
     room.cells[21][2] = P.CRATE              # ακριβώς πάνω από το πάτωμα
     h = P.Hero(room, 60, 44, 0)
-    h.world_g = 0
+    h.set_gravity(0)
     for _ in range(P.CRATE_TICKS * 6):
         h.crate_step()
     check("κιβώτιο σταματά σε στερεό", room.cells[22][2] == P.CRATE,
@@ -229,6 +229,20 @@ def main():
     check("τηλεμεταφορά στο ταίρι",
           h.use() and (h.x // 8, (h.y - 8) // 8) == (30, 12), f"({h.x},{h.y})")
     check("τηλεμεταφορά διατηρεί τη φορά βαρύτητας", h.g == g0)
+
+    # 12. Στο φόρτωμα τα κιβώτια ΔΕΝ κινούνται: μόνο αφού ο παίκτης αλλάξει φορά.
+    room = fresh(strip=(P.CRATE,))
+    room.cells[10][20] = P.CRATE
+    h = P.Hero(room, 60, 44, 0)
+    for _ in range(P.CRATE_TICKS * 5):
+        h.crate_step()
+    check("κιβώτια ακίνητα στο φόρτωμα", room.cells[10][20] == P.CRATE,
+          f"γραμμή 10 = {room.cells[10][20]}")
+    h.set_gravity(0)
+    for _ in range(P.CRATE_TICKS):
+        h.crate_step()
+    check("κινούνται μόλις ο παίκτης αλλάξει φορά",
+          room.cells[11][20] == P.CRATE)
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
