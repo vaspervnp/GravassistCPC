@@ -20,7 +20,38 @@ SCR_SET_BORDER  equ  #BC38      ; B=colour1, C=colour2
 MC_WAIT_FLYBACK equ  #BD19      ; αναμονή flyback (sync 50 Hz)
 KM_TEST_KEY     equ  #BB1E      ; A=key nr -> NZ αν πατημένο (ΧΑΛΑΕΙ A,C,F,HL)
 
+;--- Πλήκτρα (firmware key numbers) ----------------------------------
+; Δύο ισοδύναμα σετ των 8, το καθένα σε πλέγμα 3x3 με αχρησιμοποίητο κέντρο:
+;       Q W E          F7 F8 F9
+;       A . D          F4 F5 F6
+;       Z X C          F1 F2 F3
 K_ESC           equ  66
+K_Q             equ  67
+K_W             equ  59
+K_E             equ  58
+K_A             equ  69
+K_D             equ  61
+K_Z             equ  71
+K_X             equ  63
+K_C             equ  62
+K_F7            equ  10
+K_F8            equ  11
+K_F9            equ  3
+K_F4            equ  20
+K_F6            equ  4
+K_F1            equ  13
+K_F2            equ  14
+K_F3            equ  5
+
+;--- Φορές βαρύτητας (docs/sprites.md §2) ----------------------------
+GRAV_DOWN       equ  0
+GRAV_DOWNLEFT   equ  1
+GRAV_LEFT       equ  2
+GRAV_UPLEFT     equ  3
+GRAV_UP         equ  4
+GRAV_UPRIGHT    equ  5
+GRAV_RIGHT      equ  6
+GRAV_DOWNRIGHT  equ  7
 
 ;--- Παλέτα (docs/concept-art.md §5) ---------------------------------
 INK_BG          equ  1          ; σκούρο μπλε  - φόντο
@@ -38,13 +69,105 @@ main:
                 call SCR_SET_MODE
                 call set_palette
 
-                call demo_orients       ; προσωρινή επίδειξη περιστροφής
+                call demo_orients       ; η σειρά αναφοράς: και οι 8 φορές
+                ld   a,GRAV_DOWN
+                ld   (cur_grav),a
+                call draw_live
 
-main_wait:      call MC_WAIT_FLYBACK
-                ld   a,K_ESC
+;--- Βρόχος επίδειξης: τα πλήκτρα βαρύτητας γυρίζουν τον κάτω ήρωα ----
+main_loop:      call MC_WAIT_FLYBACK
+                call read_gravity
+                jr   c,ml_esc           ; τίποτα πατημένο
+                ld   hl,cur_grav
+                cp   (hl)
+                jr   z,ml_esc           ; ίδια φορά, μην ξαναζωγραφίζεις
+                ld   (hl),a
+                call draw_live
+ml_esc:         ld   a,K_ESC
                 call KM_TEST_KEY
-                jr   z,main_wait
+                jr   z,main_loop
                 ret                     ; επιστροφή στη BASIC
+
+cur_grav        db   0
+
+;---------------------------------------------------------------------
+; read_gravity — σαρώνει τα 16 πλήκτρα βαρύτητας
+;   OUT: NC και A = φορά 0..7 αν πατήθηκε κάποιο, CY αν κανένα
+;   ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL
+;   (το KM_TEST_KEY χαλάει A, C, F, HL — γι' αυτό τα push/pop)
+;---------------------------------------------------------------------
+read_gravity:   ld   hl,grav_keys
+                ld   b,0                ; B = φορά βαρύτητας
+rg_dir:         ld   c,2                ; δύο ισοδύναμα πλήκτρα ανά φορά
+rg_key:         ld   a,(hl)
+                push hl
+                push bc
+                call KM_TEST_KEY
+                pop  bc
+                pop  hl
+                jr   nz,rg_hit
+                inc  hl
+                dec  c
+                jr   nz,rg_key
+                inc  b
+                ld   a,b
+                cp   8
+                jr   nz,rg_dir
+                scf                     ; κανένα πατημένο
+                ret
+rg_hit:         ld   a,b
+                or   a                  ; καθαρίζει το carry
+                ret
+
+; Η σειρά ΠΡΕΠΕΙ να ακολουθεί τους κωδικούς φοράς GRAV_*
+grav_keys       db   K_X, K_F2          ; 0 DOWN
+                db   K_Z, K_F1          ; 1 DOWN-LEFT
+                db   K_A, K_F4          ; 2 LEFT
+                db   K_Q, K_F7          ; 3 UP-LEFT
+                db   K_W, K_F8          ; 4 UP
+                db   K_E, K_F9          ; 5 UP-RIGHT
+                db   K_D, K_F6          ; 6 RIGHT
+                db   K_C, K_F3          ; 7 DOWN-RIGHT
+
+;---------------------------------------------------------------------
+; draw_live — ξαναζωγραφίζει τον διαδραστικό ήρωα στη φορά (cur_grav)
+;---------------------------------------------------------------------
+LIVE_X          equ  38                 ; στήλη byte
+LIVE_Y          equ  130                ; scanline
+
+draw_live:      ld   c,LIVE_X           ; σβήσε πρώτα το προηγούμενο
+                ld   b,LIVE_Y
+                call clear_box
+                xor  a
+                ld   (spr_shift),a
+                ld   a,(cur_grav)
+                ld   b,0                ; frame IDLE0
+                call hero_transform
+                ld   c,LIVE_X
+                ld   b,LIVE_Y
+                jp   blit_spr
+
+;---------------------------------------------------------------------
+; clear_box — καθαρίζει SPR_MAXW bytes x SPR_MAXH γραμμές σε pen 0
+;   IN: C = X σε bytes, B = Y σε scanlines
+;---------------------------------------------------------------------
+clear_box:      ld   a,SPR_MAXH
+                ld   (cb_rows),a
+cb_row:         push bc
+                call scr_addr
+                ld   b,SPR_MAXW
+                xor  a
+cb_byte:        ld   (hl),a
+                inc  hl
+                djnz cb_byte
+                pop  bc
+                inc  b
+                ld   hl,cb_rows
+                dec  (hl)
+                jr   nz,cb_row
+                ret
+
+cb_rows         db   0
 
 ;---------------------------------------------------------------------
 ; set_palette — τα 4 pens του MODE 1
@@ -94,7 +217,7 @@ do_loop:        push af
                 add  a,c                ; x9 -> απόσταση 9 bytes = 36 pixels
                 add  a,4                ; X σε bytes: 4, 13, 22, ... 67
                 ld   c,a
-                ld   b,80               ; Y σε scanlines
+                ld   b,60               ; Y σε scanlines
                 call blit_spr
 
                 pop  af
