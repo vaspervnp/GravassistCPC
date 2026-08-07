@@ -80,6 +80,7 @@ BYTE_PEN2       equ  #0F        ; 4 pixels pen2 (πράσινο)
 BYTE_PEN3       equ  #FF        ; 4 pixels pen3 (πορτοκαλί)
 LOW_ENERGY      equ  3          ; κάτω από αυτό, η μπάρα κοκκινίζει
 
+LINEBUF_W         equ  24     ; πλάτος buffer γραμμής σε bytes
 SCR_BASE        equ  #C000
 SCR_WBYTES      equ  80         ; bytes ανά scanline σε MODE 1
 
@@ -400,10 +401,57 @@ prep_hero:      ld   a,(hero_g)         ; διαστάσεις sprite για α�
                 ld   a,l
                 ld   (spr_col),a
 
+                call prep_para
                 ld   a,(anim_cur)
                 ld   b,a
                 ld   a,(hero_g)
                 jp   hero_transform     ; A = φορά, B = frame
+
+;---------------------------------------------------------------------
+; prep_para — θέση του ανοιγμένου αλεξίπτωτου, ΠΑΝΩ από τον ήρωα
+;   "Πάνω" σημαίνει αντίθετα από τη βαρύτητα, όχι προς την κορυφή της οθόνης:
+;   με βαρύτητα προς τα δεξιά, το αλεξίπτωτο πρέπει να είναι αριστερά του.
+;---------------------------------------------------------------------
+PARA_DIST       equ  14                 ; απόσταση από το κέντρο του ήρωα
+
+prep_para:      ld   a,(hero_paraopen)
+                ld   (para_on),a
+                or   a
+                ret  z
+
+                ld   a,-PARA_DIST+GTAB_OFF   ; GTAB[g][-PARA_DIST]
+                ld   hl,gtab
+                call h_tabptr
+                ld   c,(hl)
+                inc  hl
+                ld   b,(hl)
+
+                ld   a,c                ; x -> στήλη byte (4 pixels ανά byte)
+                call h_sext
+                ld   hl,(hero_x)
+                add  hl,de
+                ld   de,-4              ; κεντράρισμα του 8x8
+                add  hl,de
+                srl  h
+                rr   l
+                srl  h
+                rr   l
+                ld   a,l
+                ld   (para_col),a
+
+                ld   a,b
+                call h_sext
+                ld   hl,(hero_y)
+                add  hl,de
+                ld   de,-4
+                add  hl,de
+                ld   a,l
+                ld   (para_y),a
+                ret
+
+para_on         db   0
+para_col        db   0
+para_y          db   0
 
 ; Διαστάσεις sprite ανά φορά βαρύτητας (πλάτος px, ύψος γραμμές)
 hero_dims       db   7,12, 13,13, 12,7, 13,13
@@ -421,60 +469,47 @@ spr_y           db   0
 ; Η περιοχή είναι η ΕΝΩΣΗ παλιάς και νέας θέσης, ώστε να σβήνει μαζί και το
 ; ίχνος της προηγούμενης χωρίς δεύτερο πέρασμα.
 ;---------------------------------------------------------------------
-draw_hero:      ld   a,(last_bw)
+draw_hero:      call dh_cur_rect        ; τρέχουσα περιοχή = ήρωας + αλεξίπτωτο
+                ld   a,(last_valid)
                 or   a
-                jr   nz,dh_union
-                call dh_remember        ; πρώτο frame: ένωση με τον εαυτό της
+                call z,dh_remember      ; πρώτο frame: ένωση με τον εαυτό της
 
-dh_union:       ld   a,(spr_col)        ; c0 = min(νέο, παλιό)
-                ld   hl,last_col
+                ld   a,(cur_c0)         ; --- ένωση με την περιοχή του προηγούμενου
+                ld   hl,last_c0
                 cp   (hl)
-                jr   c,dh_c0a
+                jr   c,dhu_c0
                 ld   a,(hl)
-dh_c0a:         ld   (dh_c0),a
-
-                ld   a,(spr_col)        ; c1 = max(τέλος) - 1
-                ld   hl,spr_bw
-                add  a,(hl)
-                ld   c,a
-                ld   a,(last_col)
-                ld   hl,last_bw
-                add  a,(hl)
-                cp   c
-                jr   nc,dh_c1a
-                ld   a,c
-dh_c1a:         dec  a
-                ld   (dh_c1),a
+dhu_c0:         ld   (dh_c0),a
+                ld   a,(cur_c1)
+                ld   hl,last_c1
+                cp   (hl)
+                jr   nc,dhu_c1
+                ld   a,(hl)
+dhu_c1:         ld   (dh_c1),a
                 ld   hl,dh_c0
                 sub  (hl)
-                inc  a                  ; πλάτος περιοχής σε bytes
-                cp   17                 ; ΦΡΑΓΜΑ: τα pivot γωνίας μετακινούν τον
-                jr   c,dh_wok           ; ήρωα ~12 px σε ένα frame· χωρίς αυτό η
-                ld   a,16               ; ένωση μπορεί να ξεπεράσει το linebuf
-dh_wok:         ld   (dh_w),a
+                inc  a                  ; πλάτος σε bytes
+                cp   LINEBUF_W+1          ; ΦΡΑΓΜΑ: τα pivot γωνίας μετακινούν τον
+                jr   c,dhu_w            ; ήρωα ~12 px σε ένα frame· χωρίς αυτό η
+                ld   a,LINEBUF_W          ; ένωση μπορεί να ξεπεράσει το linebuf
+dhu_w:          ld   (dh_w),a
 
-                ld   a,(spr_y)          ; y0 = min
-                ld   hl,last_y
+                ld   a,(cur_y0)
+                ld   hl,last_y0
                 cp   (hl)
-                jr   c,dh_y0a
+                jr   c,dhu_y0
                 ld   a,(hl)
-dh_y0a:         ld   (dh_yy),a
-
-                ld   a,(spr_y)          ; y1 = max(τέλος) - 1
-                ld   hl,spr_bh
-                add  a,(hl)
-                ld   c,a
-                ld   a,(last_y)
-                ld   hl,last_bh
-                add  a,(hl)
-                cp   c
-                jr   nc,dh_y1a
-                ld   a,c
-dh_y1a:         dec  a
-                ld   (dh_y1),a
+dhu_y0:         ld   (dh_yy),a
+                ld   a,(cur_y1)
+                ld   hl,last_y1
+                cp   (hl)
+                jr   nc,dhu_y1
+                ld   a,(hl)
+dhu_y1:         ld   (dh_y1),a
 
 dh_line:        call dh_bgline          ; φόντο -> linebuf
-                call dh_sprline         ; sprite από πάνω
+                call dh_sprline         ; ο ήρωας από πάνω
+                call dh_paraline        ; και το αλεξίπτωτο
                 ld   a,(dh_yy)
                 ld   b,a
                 ld   a,(dh_c0)
@@ -494,14 +529,98 @@ dh_line:        call dh_bgline          ; φόντο -> linebuf
                 jr   z,dh_line
                 jr   c,dh_line
 
-dh_remember:    ld   a,(spr_col)
-                ld   (last_col),a
+dh_remember:    ld   a,(cur_c0)
+                ld   (last_c0),a
+                ld   a,(cur_c1)
+                ld   (last_c1),a
+                ld   a,(cur_y0)
+                ld   (last_y0),a
+                ld   a,(cur_y1)
+                ld   (last_y1),a
+                ld   a,1
+                ld   (last_valid),a
+                ret
+
+;--- τρέχουσα περιοχή: ήρωας, και το αλεξίπτωτο αν είναι ανοιγμένο -----
+dh_cur_rect:    ld   a,(spr_col)
+                ld   (cur_c0),a
+                ld   hl,spr_bw
+                add  a,(hl)
+                dec  a
+                ld   (cur_c1),a
                 ld   a,(spr_y)
-                ld   (last_y),a
-                ld   a,(spr_bw)
-                ld   (last_bw),a
-                ld   a,(spr_bh)
-                ld   (last_bh),a
+                ld   (cur_y0),a
+                ld   hl,spr_bh
+                add  a,(hl)
+                dec  a
+                ld   (cur_y1),a
+
+                ld   a,(para_on)
+                or   a
+                ret  z
+                ld   a,(para_col)
+                ld   hl,cur_c0
+                cp   (hl)
+                jr   nc,dcr_c1
+                ld   (hl),a
+dcr_c1:         ld   a,(para_col)
+                add  a,1
+                ld   hl,cur_c1
+                cp   (hl)
+                jr   c,dcr_y0
+                ld   (hl),a
+dcr_y0:         ld   a,(para_y)
+                ld   hl,cur_y0
+                cp   (hl)
+                jr   nc,dcr_y1
+                ld   (hl),a
+dcr_y1:         ld   a,(para_y)
+                add  a,7
+                ld   hl,cur_y1
+                cp   (hl)
+                ret  c
+                ld   (hl),a
+                ret
+
+;--- σύνθεση του ανοιγμένου αλεξίπτωτου (8x8, ζεύγη mask/data) --------
+dh_paraline:    ld   a,(para_on)
+                or   a
+                ret  z
+                ld   a,(dh_yy)
+                ld   hl,para_y
+                sub  (hl)
+                ret  c                  ; πάνω από το αλεξίπτωτο
+                cp   8
+                ret  nc                 ; ή κάτω από αυτό
+                add  a,a                ; 4 bytes ανά γραμμή
+                add  a,a
+                ld   e,a
+                ld   d,0
+                ld   hl,para_sprite
+                add  hl,de
+
+                ld   a,(para_col)
+                ld   c,a
+                ld   a,(dh_c0)
+                ld   b,a
+                ld   a,c
+                sub  b
+                ld   e,a
+                ld   d,0
+                push hl
+                ld   hl,linebuf
+                add  hl,de
+                ex   de,hl
+                pop  hl
+                ld   b,2
+dpl_lp:         ld   a,(de)
+                and  (hl)
+                inc  hl
+                or   (hl)
+                inc  hl
+                ld   (de),a
+                inc  de
+                djnz dpl_lp
                 ret
 
 ;--- φόντο μιας γραμμής από τα δεδομένα της πίστας --------------------
@@ -626,10 +745,15 @@ dhs_lp:         ld   a,(de)
                 djnz dhs_lp
                 ret
 
-last_col        db   0
-last_y          db   0
-last_bw         db   0
-last_bh         db   0
+cur_c0          db   0
+cur_c1          db   0
+cur_y0          db   0
+cur_y1          db   0
+last_c0         db   0
+last_c1         db   0
+last_y0         db   0
+last_y1         db   0
+last_valid      db   0
 dh_c0           db   0
 dh_c1           db   0
 dh_w            db   0
@@ -637,7 +761,7 @@ dh_yy           db   0
 dh_y1           db   0
 dhb_off         db   0
 dhb_half        db   0
-linebuf         ds   16, 0
+linebuf         ds   LINEBUF_W, 0
 
 ;---------------------------------------------------------------------
 ; scr_addr — διεύθυνση οθόνης για (στήλη byte, scanline)

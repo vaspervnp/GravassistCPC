@@ -199,6 +199,31 @@ def defs_asm():
     return "\n".join(out)
 
 
+def sprite_pair(px):
+    """8x8 pixels -> ζεύγη (mask,data) ανά byte, όπως τα περιμένει το blit.
+
+    Το pen 0 είναι ΔΙΑΦΑΝΟ: η μάσκα κρατά το φόντο εκεί. Χωρίς αυτό, το
+    αλεξίπτωτο θα ζωγράφιζε ένα μαύρο τετράγωνο γύρω του.
+    """
+    out = []
+    for v in range(8):
+        for half in (0, 4):
+            mask = data = 0
+            for s in range(4):
+                pen = px[v][half + s]
+                bits = 0
+                if pen & 1:
+                    bits |= 1 << (7 - s)
+                if pen & 2:
+                    bits |= 1 << (3 - s)
+                if pen:
+                    data |= bits
+                else:
+                    mask |= (1 << (7 - s)) | (1 << (3 - s))
+            out.append((mask, data))
+    return out
+
+
 def level_asm(room):
     out = [";" + "=" * 69,
            ";  GRAVASSIST — δοκιμαστικό δωμάτιο και γραφικά tiles",
@@ -227,6 +252,13 @@ def level_asm(room):
     out.append("; Στερεό/θανάσιμο όταν η βαρύτητα δείχνει ΑΝΤΙΘΕΤΑ από αυτήν.")
     face = [P.FACING.get(i, 255) for i in range(P.NTYPES)]
     out.append("tile_facing:    db " + ",".join(str(v) for v in face))
+    out.append("")
+    out.append("; Αλεξίπτωτο ως sprite: 8 γραμμές x 2 bytes, ζεύγη (mask,data)")
+    out.append("para_sprite:")
+    pr = sprite_pair(tile_pixels(P.PARACHUTE))
+    for v in range(8):
+        a, b = pr[v * 2], pr[v * 2 + 1]
+        out.append(f"                db #{a[0]:02X},#{a[1]:02X},#{b[0]:02X},#{b[1]:02X}")
     out.append("")
     out.append(f"; Δωμάτιο: 1 byte ανά κελί, {P.COLS}x{P.ROWS} = {P.COLS*P.ROWS} bytes")
     out.append("level_data:")
