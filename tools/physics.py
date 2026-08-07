@@ -385,25 +385,31 @@ class Hero:
     def use(self):
         """Ενεργοποίηση αντικειμένου. ΜΙΑ φορά ανά πάτημα, όχι όσο κρατιέται.
 
-        Ένα πλήκτρο για όλα, με σαφή σειρά προτεραιότητας: αν κουβαλάς κιβώτιο
-        το αφήνεις (τίποτα άλλο δεν έχει νόημα με γεμάτα χέρια), αλλιώς ενεργεί
-        στο κελί που πατάς, αλλιώς σε αυτό που κοιτάς.
+        Όλα κρίνονται από το κελί που ΠΑΤΑΣ, όχι από αυτό που κοιτάς: με τον
+        ήρωα να περπατά σε τοίχους και ταβάνια, το "μπροστά" είναι δύσκολο να
+        το προβλέψει ο παίκτης ενώ το "από κάτω μου" όχι.
+
+        Σειρά: λουκέτο -> τηλεμεταφορά -> άφημα -> σήκωμα. Το λουκέτο και η
+        τηλεμεταφορά προηγούνται ώστε να μη χάνεις την ευκαιρία επειδή τυχαίνει
+        να κουβαλάς κιβώτιο.
         """
-        if self.carry:
-            return self.drop()
+        sc = self.support_cell()
+        st = self.room.cell(*sc) if sc else EMPTY
+
+        if st == LOCK and self.keys:
+            self.keys -= 1
+            self.room.cells[sc[1]][sc[0]] = EMPTY
+            return True
 
         col, row = self.x // CELL, (self.y - GRID_Y0) // CELL
         if self.room.cell(col, row) == TELEPORT:
             return self.teleport(col, row)
 
-        fc, fr = self.ahead_cell()
-        t = self.room.cell(fc, fr)
-        if t == LOCK and self.keys:
-            self.keys -= 1
-            self.room.cells[fr][fc] = EMPTY
-            return True
-        if t == CRATE:
-            self.room.cells[fr][fc] = EMPTY
+        if self.carry:
+            return self.drop()
+
+        if st == CRATE:
+            self.room.cells[sc[1]][sc[0]] = EMPTY
             self.carry = 1
             return True
         return False
@@ -625,6 +631,15 @@ class Hero:
         self.x = cx - ngx                              # ίδιο σημείο, νέα φορά
         self.y = cy - ngy
         return self.snap()
+
+    def support_cell(self):
+        """Οι συντεταγμένες του κελιού που στηρίζει τα πέλματα, ή None."""
+        k = self.ground_depth(0)
+        if k is None:
+            return None
+        gx, gy = GTAB[self.g][k + GSPAN]
+        px, py = self.x + gx, self.y + gy
+        return px // CELL, (py - GRID_Y0) // CELL
 
     def support_type(self):
         """Ο τύπος του κελιού που στηρίζει τα πέλματα."""

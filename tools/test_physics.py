@@ -205,21 +205,28 @@ def main():
           f"γραμμή 22 = {room.cells[22][2]}")
 
     # 11. Πλήκτρο ενεργοποίησης: κλειδαριά, τηλεμεταφορά, σήκωμα/άφημα κιβωτίου
-    room = fresh()
-    room.cells[21][12] = P.CRATE
-    h = P.Hero(room, 12 * 8 - 4, 8 + 21 * 8 + 4, 0)
-    h.face = 1
-    check("σήκωμα κιβωτίου", h.use() and h.carry == 1 and room.cells[21][12] == P.EMPTY)
-    check("άφημα κιβωτίου", h.use() and h.carry == 0 and room.cells[21][12] == P.CRATE)
+    # Το κιβώτιο σηκώνεται όταν το ΠΑΤΑΣ, όχι όταν το κοιτάς.
+    room = fresh(strip=(P.CRATE,))
+    room.cells[22][5] = P.CRATE          # ελεύθερο σημείο στο πάτωμα
+    h = P.Hero(room, 5 * 8 + 4, 8 + 18 * 8, 0)
+    for _ in range(80):                  # άφησέ τον να προσγειωθεί πάνω του
+        h.update(0)
+    check("στέκεται πάνω στο κιβώτιο", h.support_type() == P.CRATE,
+          P.TYPE_NAMES[h.support_type()])
+    check("σήκωμα κιβωτίου από κάτω",
+          h.use() and h.carry == 1 and room.cells[22][5] == P.EMPTY)
+    check("άφημα κιβωτίου", h.use() and h.carry == 0)
 
-    room = fresh()
-    room.cells[10][12] = P.LOCK
-    h = P.Hero(room, 12 * 8 - 4, 8 + 10 * 8 + 4, 0)
-    h.face = 1
+    # Το ίδιο για την κλειδαριά: την πατάς.
+    room = fresh(strip=(P.CRATE,))
+    room.cells[22][5] = P.LOCK
+    h = P.Hero(room, 5 * 8 + 4, 8 + 18 * 8, 0)
+    for _ in range(80):
+        h.update(0)
     check("κλειδαριά χωρίς κλειδί δεν ανοίγει", not h.use())
     h.keys = 1
     check("κλειδαριά με κλειδί ανοίγει",
-          h.use() and h.keys == 0 and room.cells[10][12] == P.EMPTY)
+          h.use() and h.keys == 0 and room.cells[22][5] == P.EMPTY)
 
     room = fresh()
     room.cells[10][5] = P.TELEPORT

@@ -146,39 +146,48 @@ ht_hset:        ld   (hero_energy),a
 ;   αφήνεις (με γεμάτα χέρια τίποτα άλλο δεν έχει νόημα), αλλιώς ενεργεί στο
 ;   κελί που ΠΑΤΑΣ, αλλιώς σε αυτό που ΚΟΙΤΑΣ.
 ;---------------------------------------------------------------------
-h_use:          ld   a,(hero_carry)
-                or   a
-                jr   nz,hu_drop
-
-                ld   bc,(hero_x)        ; το κελί που πατάει
-                ld   de,(hero_y)
-                call cell_at
-                cp   T_TELEPORT
-                jp   z,h_teleport   ; jp: ξεπερνά το εύρος του jr
-
-                call h_ahead            ; το κελί που κοιτάει
+h_use:          call h_support          ; ΟΛΑ κρίνονται από το κελί που ΠΑΤΑΣ:
+                ld   (h_cell),a         ; με τον ήρωα σε τοίχους και ταβάνια το
+                                        ; "μπροστά" δεν προβλέπεται εύκολα, το
+                                        ; "από κάτω μου" ναι.
                 cp   T_LOCK
-                jr   nz,hu_crate
+                jr   nz,hu_notlock
                 ld   a,(hero_keys)
                 or   a
-                ret  z                  ; χωρίς κλειδί δεν ανοίγει
+                jr   z,hu_notlock       ; χωρίς κλειδί: συνέχισε στα υπόλοιπα
                 dec  a
                 ld   (hero_keys),a
                 ld   a,1
                 ld   (hud_dirty),a
-                jp   hu_clear
-hu_crate:       cp   T_CRATE
+                jp   hu_clear           ; το cell_ptr δείχνει ακόμα στο κελί
+                                        ; στήριξης, από το h_support
+
+hu_notlock:     ld   bc,(hero_x)        ; τηλεμεταφορά: κρίνεται από το κελί του
+                ld   de,(hero_y)        ; ΣΩΜΑΤΟΣ, όχι των ποδιών
+                call cell_at
+                cp   T_TELEPORT
+                jp   z,h_teleport
+
+                ld   a,(hero_carry)     ; με γεμάτα χέρια, άφησε
+                or   a
+                jr   nz,hu_drop
+
+                ld   a,(h_cell)         ; αλλιώς, σήκωσε ό,τι πατάς
+                cp   T_CRATE
                 ret  nz
                 ld   a,1
                 ld   (hero_carry),a
                 ld   (hud_dirty),a
+                call h_support          ; ξανά, ώστε το cell_ptr να δείχνει στο
+                jp   hu_clear           ; κελί στήριξης (το χάλασε το cell_at)
+
 hu_clear:       ld   hl,(cell_ptr)      ; άδειασε το κελί και ξαναζωγράφισέ το
                 ld   (hl),T_EMPTY
                 jp   hu_redraw
 
-hu_drop:        call h_ahead            ; άφημα: μόνο σε κενό κελί
-                or   a
-                ret  nz
+hu_drop:        call h_ahead            ; άφημα: στο κελί μπροστά, αν είναι κενό
+                or   a                  ; (το κελί στήριξης είναι στερεό και το
+                ret  nz                 ; κελί του σώματος το πιάνει ο ήρωας)
                 ld   hl,(cell_ptr)
                 ld   (hl),T_CRATE
                 xor  a
