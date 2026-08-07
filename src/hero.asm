@@ -87,14 +87,17 @@ h_touch:        ld   bc,(hero_x)
                 ld   a,(h_cell)
                 cp   T_PARACHUTE
                 jr   nz,ht_np1
+                ld   hl,hero_para       ; ΠΛΗΘΟΣ: μπορείς να έχεις πολλά
+                inc  (hl)
                 ld   a,1
-                ld   (hero_para),a
-                ld   (hud_dirty),a      ; αλλιώς το εικονίδιο δεν εμφανιζόταν
+                ld   (hud_dirty),a
                 jr   ht_spikes
 ht_np1:         cp   T_KEY
                 jr   nz,ht_np2
                 ld   hl,hero_keys
                 inc  (hl)
+                ld   a,1
+                ld   (hud_dirty),a
                 jr   ht_spikes
 ht_np2:         ld   a,(hero_energy)    ; ενέργεια
                 add  a,ENERGY_PICK
@@ -161,6 +164,8 @@ h_use:          ld   a,(hero_carry)
                 ret  z                  ; χωρίς κλειδί δεν ανοίγει
                 dec  a
                 ld   (hero_keys),a
+                ld   a,1
+                ld   (hud_dirty),a
                 jp   hu_clear
 hu_crate:       cp   T_CRATE
                 ret  nz
@@ -274,7 +279,9 @@ tp_found:       ld   a,c                ; κέντρο του κελιού πρ�
                 ld   l,a
                 ld   h,0
                 ld   (hero_y),hl
-                ret
+                ld   a,1
+                ld   (hero_warp),a      ; η σχεδίαση πρέπει να σβήσει ΡΗΤΑ την
+                ret                     ; παλιά θέση: απέχει πολύ για την ένωση
 
 tp_col          db 0
 tp_row          db 0
@@ -534,11 +541,12 @@ h_land:         ld   a,HST_IDLE
                 ld   a,(hero_paraopen)  ; προσγείωση με αλεξίπτωτο: μία χρήση,
                 or   a                  ; καμία ζημιά
                 jr   z,hl_nopara
+                ld   hl,hero_para       ; καταναλώνεται ΕΝΑ, όχι όλα
+                dec  (hl)
                 xor  a
-                ld   (hero_para),a
                 ld   (hero_paraopen),a
                 inc  a
-                ld   (hud_dirty),a      ; σβήσε το εικονίδιο
+                ld   (hud_dirty),a
                 dec  a
                 ld   hl,0
                 ld   (hero_fall),hl
@@ -1182,6 +1190,7 @@ hero_face       db 1            ; τελευταία φορά βάδισης
 hero_carry      db 0            ; κουβαλάει κιβώτιο
 world_g         db 0            ; η φορά που ΟΡΙΣΕ ο παίκτης (τα κιβώτια)
 crates_on       db 0            ; 0 μέχρι την πρώτη αλλαγή φοράς
+hero_warp       db 0            ; έγινε τηλεμεταφορά αυτό το frame
 hero_para       db 0            ; κουβαλάει αλεξίπτωτο
 hero_paraopen   db 0            ; ανοιγμένο αυτή τη στιγμή
 hero_won        db 0

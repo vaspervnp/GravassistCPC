@@ -277,7 +277,7 @@ class Hero:
         self.fall_acc = 0
         self.energy = ENERGY_MAX
         self.keys = 0
-        self.parachute = 0      # 0 = δεν το έχει, 1 = το κουβαλάει
+        self.parachute = 0      # ΠΛΗΘΟΣ αλεξίπτωτων, όχι σημαία
         self.para_open = 0      # ανοιγμένο αυτή τη στιγμή
         self.won = False
         self.crate_tick = 0
@@ -440,7 +440,7 @@ class Hero:
             if t == ENERGY:
                 self.energy = min(ENERGY_MAX, self.energy + ENERGY_PICK)
             elif t == PARACHUTE:
-                self.parachute = 1
+                self.parachute += 1
             elif t == KEY:
                 self.keys += 1
         elif t == EXIT:
@@ -569,7 +569,7 @@ class Hero:
     def land(self):
         self.state = "IDLE"
         if self.para_open:
-            self.parachute = 0          # μία χρήση: καταναλώνεται στην προσγείωση
+            self.parachute -= 1         # καταναλώνεται ΕΝΑ, όχι όλα
             self.para_open = 0
         elif self.fall_dist > FALL_SAFE:
             self.hurt(1 + (self.fall_dist - FALL_SAFE) // 12)

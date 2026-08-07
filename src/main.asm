@@ -81,7 +81,8 @@ HUD_X           equ  2          ; στήλη byte της μπάρας
 HUD_Y           equ  2          ; πρώτη scanline
 HUD_H           equ  4          ; ύψος σε γραμμές
 HUD_SEG         equ  2          ; bytes ανά μονάδα ενέργειας
-HUD_PARA_X      equ  24         ; στήλη byte του εικονιδίου αλεξίπτωτου
+INV_X           equ  22         ; πρώτη στήλη byte του inventory
+INV_MAX         equ  10         ; πόσα εικονίδια χωράνε δίπλα στη μπάρα
 BYTE_PEN2       equ  #0F        ; 4 pixels pen2 (πράσινο)
 BYTE_PEN3       equ  #FF        ; 4 pixels pen3 (πορτοκαλί)
 LOW_ENERGY      equ  3          ; κάτω από αυτό, η μπάρα κοκκινίζει
@@ -140,16 +141,22 @@ main_loop:      call read_gravity       ; ο παίκτης ρίχνει τη β
                 jr   nc,ml_walk
 
 ml_gok:         ld   a,b
-                call h_noflip           ; ...ούτε σε ζώνη κλειδώματος
-                jr   c,ml_walk
+                ld   (ml_grav),a
+                call h_noflip
+                jr   c,ml_conly         ; ζώνη κλειδώματος: ΜΟΝΟ τα κιβώτια
+
+                ld   a,(ml_grav)        ; ο ήρωας ακολουθεί
                 ld   (hero_g),a
-                ld   (world_g),a        ; ΜΟΝΟ εδώ: τα κιβώτια ακολουθούν την
-                                        ; επιλογή του παίκτη, όχι τις αυτόματες
-                                        ; στροφές του ήρωα στις γωνίες
-                ld   a,1
-                ld   (crates_on),a      ; από εδώ και πέρα κινούνται
                 ld   a,HST_FALL         ; αλλαγή φοράς -> ξαναμετράει η πτώση
                 ld   (hero_state),a
+
+                ; Μέσα σε ζώνη κλειδώματος ο παίκτης χάνει τον έλεγχο του
+                ; ΣΩΜΑΤΟΣ του, όχι του κόσμου: η βαρύτητα του κόσμου αλλάζει
+                ; κανονικά και τα κιβώτια την ακολουθούν.
+ml_conly:       ld   a,(ml_grav)
+                ld   (world_g),a
+                ld   a,1
+                ld   (crates_on),a
                 ; Ενεργοποίηση αντικειμένου: ΑΚΜΗ πλήκτρου, όχι κράτημα.
                 ; Αλλιώς ένα πάτημα θα σήκωνε και θα άφηνε το κιβώτιο δεκάδες
                 ; φορές, ή θα τηλεμεταφερόταν πέρα-δώθε 50 φορές το δευτερόλεπτο.
@@ -190,10 +197,11 @@ ml_anim:        call anim_frame
 
                 ld   a,K_ESC
                 call KM_TEST_KEY
-                jr   z,main_loop
+                jp   z,main_loop        ; jp: ο βρόχος ξεπερνά το εύρος του jr
                 ret                     ; επιστροφή στη BASIC
 
 ml_dir          db   0
+ml_grav         db   0
 ml_run          db   0
 
 ;---------------------------------------------------------------------
@@ -391,41 +399,56 @@ dhd_line:       push bc
                 dec  (hl)
                 jr   nz,dhd_line
 
-                ; εικονίδιο αλεξίπτωτου: το tile γραφικό του, 8 γραμμές
-                ld   hl,tile_gfx+T_PARACHUTE*16
+                ; --- inventory ---------------------------------------
+                ; Ένα εικονίδιο ΑΝΑ ΜΟΝΑΔΑ, όχι εικονίδιο συν αριθμός: δεν
+                ; υπάρχει γραμματοσειρά για ψηφία στο HUD, και η επανάληψη
+                ; διαβάζεται αμέσως ("τρία κλειδιά" = τρία κλειδιά).
+                ld   hl,inv_list
+                ld   b,INV_MAX
+                ld   a,(hero_keys)
+                ld   c,T_KEY
+                call inv_add
                 ld   a,(hero_para)
-                or   a
-                jr   nz,dhd_para
-                ld   hl,tile_gfx        ; κενό tile = σβήσιμο
-dhd_para:       ld   (dhd_gfx),hl
-                ld   a,8
-                ld   (dhd_rows),a
-                ld   b,0
-dhd_pline:      push bc
-                ld   c,HUD_PARA_X
-                call scr_addr
-                ex   de,hl
-                ld   hl,(dhd_gfx)
-                ldi
-                ldi
-                ld   (dhd_gfx),hl
-                pop  bc
-                inc  b
-                ld   hl,dhd_rows
-                dec  (hl)
-                jr   nz,dhd_pline
-
-                ld   hl,tile_gfx+T_CRATE*16   ; εικονίδιο κιβωτίου όταν το κρατά
+                ld   c,T_PARACHUTE
+                call inv_add
                 ld   a,(hero_carry)
-                or   a
-                jr   nz,dhd_cr
-                ld   hl,tile_gfx
-dhd_cr:         ld   (dhd_gfx),hl
+                ld   c,T_CRATE
+                call inv_add
+inv_pad:        ld   a,b                ; οι υπόλοιπες θέσεις καθαρίζουν, ώστε
+                or   a                  ; να σβήνει ό,τι χρησιμοποιήθηκε
+                jr   z,inv_draw
+                ld   (hl),T_EMPTY
+                inc  hl
+                dec  b
+                jr   inv_pad
+
+inv_draw:       xor  a
+                ld   (inv_i),a
+inv_dlp:        ld   a,(inv_i)
+                ld   e,a
+                ld   d,0
+                ld   hl,inv_list
+                add  hl,de
+                ld   a,(hl)             ; τύπος -> γραφικό, ΣΕ 16-BIT
+                ld   l,a
+                ld   h,0
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
+                ld   de,tile_gfx
+                add  hl,de
+                ld   (dhd_gfx),hl
+                ld   a,(inv_i)
+                add  a,a
+                add  a,INV_X
+                ld   (inv_col),a
                 ld   a,8
                 ld   (dhd_rows),a
                 ld   b,0
-dhd_cline:      push bc
-                ld   c,HUD_CRATE_X
+inv_line:       push bc
+                ld   a,(inv_col)
+                ld   c,a
                 call scr_addr
                 ex   de,hl
                 ld   hl,(dhd_gfx)
@@ -436,11 +459,33 @@ dhd_cline:      push bc
                 inc  b
                 ld   hl,dhd_rows
                 dec  (hl)
-                jr   nz,dhd_cline
+                jr   nz,inv_line
+                ld   hl,inv_i
+                inc  (hl)
+                ld   a,(hl)
+                cp   INV_MAX
+                jr   nz,inv_dlp
                 ret
 
+; inv_add — προσθέτει A αντίγραφα του τύπου C, όσο υπάρχει χώρος (B)
+inv_add:        or   a
+                ret  z
+                ld   d,a
+ia_lp:          ld   a,b
+                or   a
+                ret  z
+                ld   (hl),c
+                inc  hl
+                dec  b
+                dec  d
+                jr   nz,ia_lp
+                ret
+
+inv_i           db   0
+inv_col         db   0
+inv_list        ds   INV_MAX, 0
+
 hud_dirty       db   1
-HUD_CRATE_X     equ  27
 dhd_rows        db   0
 dhd_gfx         dw   0
 hudbuf          ds   ENERGY_MAX*HUD_SEG, 0
@@ -660,7 +705,19 @@ spr_y           db   0
 ; ίχνος της προηγούμενης χωρίς δεύτερο πέρασμα.
 ;---------------------------------------------------------------------
 draw_hero:      call dh_cur_rect        ; τρέχουσα περιοχή = ήρωας + αλεξίπτωτο
-                ld   a,(last_valid)
+
+                ; Μετά από τηλεμεταφορά η παλιά θέση απέχει πολύ: η ένωση των
+                ; δύο ορθογωνίων ξεπερνά το φράγμα του linebuf και το παλιό
+                ; sprite θα έμενε ως φάντασμα. Σβήνεται ρητά.
+                ld   a,(hero_warp)
+                or   a
+                jr   z,dh_nowarp
+                xor  a
+                ld   (hero_warp),a
+                call dh_erase_last
+                call dh_remember        ; η ένωση = μόνο η νέα θέση
+
+dh_nowarp:      ld   a,(last_valid)
                 or   a
                 call z,dh_remember      ; πρώτο frame: ένωση με τον εαυτό της
 
@@ -730,6 +787,66 @@ dh_remember:    ld   a,(cur_c0)
                 ld   a,1
                 ld   (last_valid),a
                 ret
+
+;--- ρητό σβήσιμο της τελευταίας θέσης, ξαναζωγραφίζοντας τα κελιά ----
+dh_erase_last:  ld   a,(last_valid)
+                or   a
+                ret  z
+                ld   a,(last_c0)        ; στήλες byte -> στήλες κελιών
+                srl  a
+                ld   (el_col0),a
+                ld   a,(last_c1)
+                srl  a
+                ld   (el_col1),a
+
+                ld   a,(last_y0)        ; scanlines -> γραμμές κελιών
+                sub  LVL_Y0
+                jr   nc,el_r0
+                xor  a
+el_r0:          srl  a
+                srl  a
+                srl  a
+                ld   (el_row),a
+                ld   a,(last_y1)
+                sub  LVL_Y0
+                srl  a
+                srl  a
+                srl  a
+                cp   LVL_ROWS
+                jr   c,el_r1
+                ld   a,LVL_ROWS-1
+el_r1:          ld   (el_row1),a
+
+el_rowlp:       ld   a,(el_col0)
+                ld   (el_c),a
+el_collp:       ld   a,(el_c)
+                cp   LVL_COLS
+                jr   nc,el_next
+                ld   c,a
+                ld   a,(el_row)
+                ld   b,a
+                call draw_tile
+                ld   hl,el_c
+                inc  (hl)
+                ld   a,(hl)
+                ld   hl,el_col1
+                cp   (hl)
+                jr   z,el_collp
+                jr   c,el_collp
+el_next:        ld   hl,el_row
+                inc  (hl)
+                ld   a,(hl)
+                ld   hl,el_row1
+                cp   (hl)
+                jr   z,el_rowlp
+                jr   c,el_rowlp
+                ret
+
+el_col0         db   0
+el_col1         db   0
+el_row          db   0
+el_row1         db   0
+el_c            db   0
 
 ;--- τρέχουσα περιοχή: ήρωας, και το αλεξίπτωτο αν είναι ανοιγμένο -----
 dh_cur_rect:    ld   a,(spr_col)
