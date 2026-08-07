@@ -97,11 +97,11 @@ main:           ld   a,1
                 ld   a,1
                 ld   (hud_dirty),a
 
-                ld   hl,60              ; αρχική θέση: πέφτει στο πάτωμα
+                ld   hl,LVL_START_X     ; θέση και φορά από το αρχείο πίστας
                 ld   (hero_x),hl
-                ld   hl,40
+                ld   hl,LVL_START_Y
                 ld   (hero_y),hl
-                xor  a
+                ld   a,LVL_START_G
                 ld   (hero_g),a
                 ld   a,HST_FALL
                 ld   (hero_state),a

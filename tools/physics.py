@@ -19,6 +19,7 @@
 
 import math
 import os
+import re
 import sys
 
 
@@ -30,6 +31,7 @@ def r(v):
 CELL = 8
 COLS, ROWS = 40, 24
 GRID_Y0 = 8                     # η πρώτη scanline του grid (πάνω από αυτήν = HUD)
+DEFAULT_START = (7, 4)          # αν λείπει ο δείκτης '@'
 
 # --- Τύποι κελιών -----------------------------------------------------
 # Οι τιμές 0..5 (γεωμετρία) ΔΕΝ αλλάζουν ποτέ: πάνω τους στηρίζεται το
@@ -51,6 +53,7 @@ SWITCH = 22
 PLATE = 23              # πλάκα πίεσης
 TELEPORT = 24
 CRATE = 25
+START = 26              # δείκτης εκκίνησης· δεν υπάρχει στο παιχνίδι
 
 CHARS = {
     ".": EMPTY, "#": SOLID,
@@ -59,15 +62,16 @@ CHARS = {
     "-": ONEWAY_U, "[": ONEWAY_L, "_": ONEWAY_D, "]": ONEWAY_R,
     ":": GRAVLOCK, "%": CRUMBLE, "X": EXIT, "+": ENERGY, "P": PARACHUTE,
     "k": KEY, "K": LOCK, "G": GATE, "S": SWITCH, "p": PLATE,
-    "T": TELEPORT, "B": CRATE,
+    "T": TELEPORT, "B": CRATE, "@": START,
 }
 NAMES = {v: k for k, v in CHARS.items()}
 TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
               "SPIKE_U", "SPIKE_L", "SPIKE_D", "SPIKE_R",
               "ONEWAY_U", "ONEWAY_L", "ONEWAY_D", "ONEWAY_R",
               "GRAVLOCK", "CRUMBLE", "EXIT", "ENERGY", "PARACHUTE",
-              "KEY", "LOCK", "GATE", "SWITCH", "PLATE", "TELEPORT", "CRATE"]
-NTYPES = 26
+              "KEY", "LOCK", "GATE", "SWITCH", "PLATE", "TELEPORT", "CRATE",
+              "START"]
+NTYPES = 27
 
 # --- Ιδιότητες ανά τύπο (bit flags) ----------------------------------
 # Ένας πίνακας αντί για σκόρπια if: ο ίδιος εξάγεται στο src/tables.asm και
@@ -168,6 +172,31 @@ class Room:
         self.cells = [[CHARS[c] for c in ln] for ln in rows]
         self.probe_g = 0        # φορά βαρύτητας του ελέγχου (για τις μονόδρομες)
         self.gate_open = False
+
+        # Ο δείκτης '@' δηλώνει πού ξεκινά ο παίκτης. Δεν είναι αντικείμενο του
+        # παιχνιδιού: διαβάζεται και το κελί γίνεται κενό.
+        self.start_col, self.start_row = DEFAULT_START
+        for r, row in enumerate(self.cells):
+            for c, v in enumerate(row):
+                if v == START:
+                    self.start_col, self.start_row = c, r
+                    row[c] = EMPTY
+
+        # Ρυθμίσεις δωματίου, ΜΕΤΑ το πλέγμα: "gravity N"
+        self.start_g = 0
+        for ln in text.splitlines():
+            m = re.match(r"\s*gravity\s+([0-7])\s*$", ln, re.I)
+            if m:
+                self.start_g = int(m.group(1))
+
+    @property
+    def start_x(self):
+        """Κέντρο του κελιού εκκίνησης σε pixels."""
+        return self.start_col * CELL + CELL // 2
+
+    @property
+    def start_y(self):
+        return GRID_Y0 + self.start_row * CELL + CELL // 2
 
     def cell(self, col, row):
         if col < 0 or row < 0 or col >= COLS or row >= ROWS:

@@ -116,7 +116,7 @@ def rot90(g, times):
 def tile_pixels(t):
     """8x8 pixels (pen ανά θέση) για κάθε τύπο κελιού."""
     g = [[0] * 8 for _ in range(8)]
-    if t == P.EMPTY:
+    if t in (P.EMPTY, P.START):     # ο δείκτης εκκίνησης δεν ζωγραφίζεται ποτέ
         return g
     if t in PLACEHOLDER:
         import placeholders
@@ -254,6 +254,11 @@ def level_asm(room):
     out.append("; Στερεό/θανάσιμο όταν η βαρύτητα δείχνει ΑΝΤΙΘΕΤΑ από αυτήν.")
     face = [P.FACING.get(i, 255) for i in range(P.NTYPES)]
     out.append("tile_facing:    db " + ",".join(str(v) for v in face))
+    out.append("")
+    out.append("; Θέση εκκίνησης και αρχική φορά βαρύτητας, από το αρχείο πίστας")
+    out.append(f"LVL_START_X     equ {room.start_x}")
+    out.append(f"LVL_START_Y     equ {room.start_y}")
+    out.append(f"LVL_START_G     equ {room.start_g}")
     out.append("")
     out.append(f"; Δωμάτιο: 1 byte ανά κελί, {P.COLS}x{P.ROWS} = {P.COLS*P.ROWS} bytes")
     out.append("level_data:")

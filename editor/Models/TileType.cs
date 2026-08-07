@@ -292,6 +292,19 @@ public static class TileCatalog
                   stroke="var(--edge)" stroke-width="0.6"/>
             """),
 
+        // Δεν είναι αντικείμενο του παιχνιδιού: ο φορτωτής το διαβάζει, το κελί
+        // γίνεται κενό και ο παίκτης ξεκινά εκεί. Ένας μόνο ανά δωμάτιο.
+        new TileType('@', "start", MechGroup, "Θέση εκκίνησης",
+            "Πού ξεκινά ο παίκτης. Το κελί μένει κενό στο παιχνίδι.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <circle cx="4" cy="4" r="3" fill="none"
+                    stroke="var(--edge)" stroke-width="0.8"/>
+            <circle cx="4" cy="2.6" r="0.9" fill="var(--fill)"/>
+            <path d="M4,3.6 L4,5.6 M2.8,6.6 L4,5.6 L5.2,6.6 M2.6,4.4 L5.4,4.4"
+                  stroke="var(--fill)" stroke-width="0.7" fill="none"/>
+            """),
+
         // ================= Μηχανισμοί =================
         new TileType('K', "lock", MechGroup, "Κλειδαριά",
             "Στερεό μέχρι να μαζέψεις το κλειδί (k).",
