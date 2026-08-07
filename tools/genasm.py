@@ -183,6 +183,7 @@ def defs_asm():
             f"ENERGY_MAX      equ {P.ENERGY_MAX}",
             f"ENERGY_PICK     equ {P.ENERGY_PICK}",
             f"SPIKE_DMG       equ {P.SPIKE_DMG}",
+            f"CRATE_TICKS     equ {P.CRATE_TICKS}",
             f"FALL_SAFE       equ {P.FALL_SAFE}",
             f"FALL_V0         equ {P.FALL_V0}",
             f"FALL_ACCEL      equ {P.FALL_ACCEL}",

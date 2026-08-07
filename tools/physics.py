@@ -230,6 +230,7 @@ SCAN_MAX = 14       # πόσο βαθιά ψάχνουμε έδαφος
 ENERGY_MAX = 8
 SPIKE_DMG  = 2
 ENERGY_PICK = 2
+CRATE_TICKS = 4     # frames ανά κελί πτώσης κιβωτίου (8 px / 4 = 2 px/frame)
 FALL_SAFE = 36      # 3 x ύψος ήρωα
 TILT_45  = 3        # διαφορά ύψους (σε 2*FOOT_A pixels) που μετράει για 45 μοίρες
 
@@ -279,6 +280,13 @@ class Hero:
         self.parachute = 0      # 0 = δεν το έχει, 1 = το κουβαλάει
         self.para_open = 0      # ανοιγμένο αυτή τη στιγμή
         self.won = False
+        self.crate_tick = 0
+        self.moved_cells = []       # κελιά που πρέπει να ξαναζωγραφιστούν
+        # Η φορά που ΟΡΙΣΕ Ο ΠΑΙΚΤΗΣ, όχι η τρέχουσα του ήρωα: η δική του
+        # γυρίζει αυτόματα σε κάθε γωνία που περπατάει, ενώ η βαρύτητα του
+        # κόσμου αλλάζει μόνο όταν το ζητήσει ο παίκτης. Τα κιβώτια ακολουθούν
+        # τον κόσμο — αλλιώς θα άλλαζαν φορά κάθε φορά που ο ήρωας στρίβει.
+        self.world_g = g
 
     # --- πρωτογενείς έλεγχοι --------------------------------------
     def at(self, a, b):
@@ -321,6 +329,37 @@ class Hero:
     def body_cell(self):
         """Το κελί στο κέντρο του σώματος — εκεί μαζεύονται τα αντικείμενα."""
         return self.room.cell(self.x // CELL, (self.y - GRID_Y0) // CELL)
+
+    def crate_step(self):
+        """Τα κιβώτια πέφτουν προς την ΤΡΕΧΟΥΣΑ φορά βαρύτητας του παίκτη.
+
+        Κίνηση ανά ΚΕΛΙ, όχι ανά pixel: το κιβώτιο γεμίζει ακριβώς ένα κελί, και
+        η κατά κελί κίνηση κρατά τα puzzles καθαρά (τύπου Sokoban) αντί να
+        απαιτεί δεύτερο σώμα με δική του φυσική pixel.
+
+        Η σειρά έχει σημασία: πρώτα κινούνται τα κιβώτια που είναι ΠΙΟ ΜΑΚΡΙΑ
+        κατά τη βαρύτητα, αλλιώς μια στοίβα δεν θα ξεκολλούσε ποτέ — το από
+        πάνω θα έβρισκε πάντα κατειλημμένο το κελί του από κάτω.
+        """
+        self.crate_tick += 1
+        if self.crate_tick < CRATE_TICKS:
+            return
+        self.crate_tick = 0
+
+        dx, dy = GSTEP[self.world_g]
+        cells = [(c, r) for r in range(ROWS) for c in range(COLS)
+                 if self.room.cells[r][c] == CRATE]
+        cells.sort(key=lambda p: -(p[0] * dx + p[1] * dy))
+
+        for c, r in cells:
+            nc, nr = c + dx, r + dy
+            if not (0 <= nc < COLS and 0 <= nr < ROWS):
+                continue
+            if self.room.cells[nr][nc] != EMPTY:
+                continue
+            self.room.cells[r][c] = EMPTY
+            self.room.cells[nr][nc] = CRATE
+            self.moved_cells += [(c, r), (nc, nr)]
 
     def touch_objects(self):
         """Αντιδράσεις σε ό,τι ακουμπάει το σώμα. Καλείται μία φορά ανά frame."""
@@ -398,6 +437,8 @@ class Hero:
         δεν "ισιώνει" μόνη της — ο ήρωας γλιστράει. Αν το κάναμε ανάποδα, το
         γλίστρημα δεν θα συνέβαινε ποτέ.
         """
+        self.moved_cells = []
+        self.crate_step()
         self.touch_objects()        # και στον αέρα: μαζεύεις πέφτοντας
         k = self.ground_depth(0)
         if k is None or k > FEET_B + 2:

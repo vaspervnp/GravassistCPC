@@ -41,6 +41,7 @@ NTYPES          equ 27
 ENERGY_MAX      equ 8
 ENERGY_PICK     equ 2
 SPIKE_DMG       equ 2
+CRATE_TICKS     equ 4
 FALL_SAFE       equ 36
 FALL_V0         equ 256
 FALL_ACCEL      equ 26

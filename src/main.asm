@@ -811,28 +811,29 @@ dhb_in:         ld   c,a
                 ld   a,(dh_w)
                 ld   b,a
 
-dhb_lp:         ld   a,(hl)             ; τύπος*16 + offset + μισό  (<= 95)
-                add  a,a
-                add  a,a
-                add  a,a
-                add  a,a
-                ld   c,a
+dhb_lp:         ld   a,(hl)             ; τύπος*16 + offset γραμμής + μισό
+                push hl
+                push bc                 ; το B είναι ο μετρητής της γραμμής
+                ld   l,a                ; ΣΕ 16-BIT: το τύπος*16 ξεπερνά το byte
+                ld   h,0                ; από τον τύπο 16 και πάνω
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
                 ld   a,(dhb_off)
-                add  a,c
                 ld   c,a
                 ld   a,(dhb_half)
                 add  a,c
-                push hl
-                ld   l,a
-                ld   h,0
-                push de
-                ld   de,tile_gfx
-                add  hl,de
+                ld   c,a
+                ld   b,0
+                add  hl,bc
+                ld   bc,tile_gfx
+                add  hl,bc
                 ld   a,(hl)
-                pop  de
+                pop  bc
+                pop  hl
                 ld   (de),a
                 inc  de
-                pop  hl
                 ld   a,(dhb_half)       ; κάθε 2 bytes -> επόμενο κελί
                 xor  1
                 ld   (dhb_half),a

@@ -197,33 +197,40 @@ rr_collp:
 
 
 ;---------------------------------------------------------------------
-; draw_tile — ζωγραφίζει ένα κελί
-;   IN: C = στήλη (0..39), B = γραμμή (0..23)
-;   Χρησιμοποιείται και για την επαναφορά φόντου κάτω από τον ήρωα.
+; cell_addr — δείκτης στο κελί (C = στήλη, B = γραμμή)
+;   OUT: HL = level_data + row*40 + col     ΑΛΛΟΙΩΝΕΙ: AF, DE
 ;---------------------------------------------------------------------
-draw_tile:      push bc
-                ld   l,b                ; HL = row*40 + col
+cell_addr:      ld   l,b
                 ld   h,0
-                add  hl,hl
-                add  hl,hl
-                add  hl,hl
+                add  hl,hl              ; x2
+                add  hl,hl              ; x4
+                add  hl,hl              ; x8
                 ld   d,h
                 ld   e,l
-                add  hl,hl
-                add  hl,hl
-                add  hl,de
+                add  hl,hl              ; x16
+                add  hl,hl              ; x32
+                add  hl,de              ; x32 + x8 = x40
                 ld   e,c
                 ld   d,0
                 add  hl,de
                 ld   de,level_data
                 add  hl,de
+                ret
+
+;---------------------------------------------------------------------
+; draw_tile — ζωγραφίζει ένα κελί
+;   IN: C = στήλη (0..39), B = γραμμή (0..23)
+;   Χρησιμοποιείται και για την επαναφορά φόντου κάτω από τον ήρωα.
+;---------------------------------------------------------------------
+draw_tile:      push bc
+                call cell_addr
                 ld   a,(hl)             ; τύπος -> γραφικό (16 bytes ανά tile)
-                add  a,a
-                add  a,a
-                add  a,a
-                add  a,a
-                ld   l,a
-                ld   h,0
+                ld   l,a                ; ΣΕ 16-BIT: με 27 τύπους το τύπος*16
+                ld   h,0                ; ξεπερνά το byte από τον τύπο 16 και πάνω
+                add  hl,hl              ; (το κιβώτιο ζωγραφιζόταν ως αγκάθι)
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
                 ld   de,tile_gfx
                 add  hl,de
                 ld   (dt_gfx),hl

@@ -34,6 +34,7 @@ hero_update:    ld   (h_d),a
                 jr   nz,hu_td           ; όταν στέκεται, χρησιμοποιούμε +1
                 ld   a,1
 hu_td:          ld   (h_td),a
+                call crate_step         ; τα κιβώτια πέφτουν κι αυτά
                 call h_touch            ; και στον αέρα: μαζεύεις πέφτοντας
 
                 xor  a
@@ -145,6 +146,139 @@ ht_hset:        ld   (hero_energy),a
                 ld   (hud_dirty),a
                 ret
 
+; crate_step — τα κιβώτια πέφτουν προς την ΤΡΕΧΟΥΣΑ φορά βαρύτητας
+;
+;   Κίνηση ανά ΚΕΛΙ, όχι ανά pixel: το κιβώτιο γεμίζει ακριβώς ένα κελί και η
+;   κατά κελί κίνηση κρατά τα puzzles καθαρά, χωρίς δεύτερο σώμα με δική του
+;   φυσική pixel.
+;
+;   Η ΦΟΡΑ ΣΑΡΩΣΗΣ είναι κρίσιμη. Το κιβώτιο μετακινείται κατά
+;   delta = dy*40 + dx θέσεις στον πίνακα. Αν σαρώναμε προς την ίδια φορά, ένα
+;   κιβώτιο που μόλις μετακινήθηκε θα το ξανασυναντούσαμε και θα κινούνταν
+;   δεύτερη φορά στο ίδιο πέρασμα. Σαρώνουμε αντίθετα από το πρόσημο του delta,
+;   οπότε προσγειώνεται πάντα σε κελί που έχουμε ήδη προσπεράσει.
+;---------------------------------------------------------------------
+crate_step:     ld   hl,crate_tick
+                inc  (hl)
+                ld   a,(hl)
+                cp   CRATE_TICKS
+                ret  c
+                ld   (hl),0
+
+                ld   a,(hero_g)         ; βήμα ενός κελιού κατά τη βαρύτητα
+                add  a,a
+                ld   e,a
+                ld   d,0
+                ld   hl,gstep
+                add  hl,de
+                ld   a,(hl)
+                ld   (cs_dx),a
+                inc  hl
+                ld   a,(hl)
+                ld   (cs_dy),a
+
+                ld   a,(cs_dy)          ; πρόσημο του delta -> φορά σάρωσης
+                bit  7,a
+                jr   nz,cs_asc
+                or   a
+                jr   nz,cs_desc
+                ld   a,(cs_dx)
+                bit  7,a
+                jr   nz,cs_asc
+cs_desc:        ld   a,-1
+                ld   (cs_step),a
+                ld   a,LVL_ROWS-1
+                jr   cs_go
+cs_asc:         ld   a,1
+                ld   (cs_step),a
+                xor  a
+cs_go:          ld   (cs_row),a
+                ld   a,LVL_ROWS
+                ld   (cs_rn),a
+
+cs_rowlp:       ld   a,(cs_step)
+                bit  7,a
+                jr   z,cs_c0
+                ld   a,LVL_COLS-1
+                jr   cs_c0set
+cs_c0:          xor  a
+cs_c0set:       ld   (cs_col),a
+                ld   a,LVL_COLS
+                ld   (cs_cn),a
+
+cs_collp:       ld   a,(cs_row)
+                ld   b,a
+                ld   a,(cs_col)
+                ld   c,a
+                call cell_addr
+                ld   a,(hl)
+                cp   T_CRATE
+                jr   nz,cs_next
+
+                ld   a,(cs_col)         ; προορισμός, με έλεγχο ορίων
+                ld   e,a
+                ld   a,(cs_dx)
+                add  a,e
+                cp   LVL_COLS           ; αρνητικό -> >=128 -> πιάνεται κι αυτό
+                jr   nc,cs_next
+                ld   c,a
+                ld   a,(cs_row)
+                ld   e,a
+                ld   a,(cs_dy)
+                add  a,e
+                cp   LVL_ROWS
+                jr   nc,cs_next
+                ld   b,a
+
+                push hl                 ; HL = δείκτης παλιού κελιού
+                push bc
+                call cell_addr
+                ld   a,(hl)
+                or   a
+                jr   nz,cs_blocked      ; ο δρόμος κλειστός
+                ld   (hl),T_CRATE
+                pop  bc
+                push bc
+                call draw_tile
+                pop  bc
+                pop  hl
+                ld   (hl),T_EMPTY
+                ld   a,(cs_row)
+                ld   b,a
+                ld   a,(cs_col)
+                ld   c,a
+                call draw_tile
+                jr   cs_next
+cs_blocked:     pop  bc
+                pop  hl
+
+cs_next:        ld   a,(cs_col)
+                ld   hl,cs_step
+                add  a,(hl)
+                ld   (cs_col),a
+                ld   hl,cs_cn
+                dec  (hl)
+                jr   nz,cs_collp
+
+                ld   a,(cs_row)
+                ld   hl,cs_step
+                add  a,(hl)
+                ld   (cs_row),a
+                ld   hl,cs_rn
+                dec  (hl)
+                jp   nz,cs_rowlp        ; jp: ο βρόχος ξεπερνά το εύρος του jr
+                ret
+
+crate_tick      db 0
+cs_dx           db 0
+cs_dy           db 0
+cs_step         db 0
+cs_row          db 0
+cs_col          db 0
+cs_rn           db 0
+cs_cn           db 0
+
+;---------------------------------------------------------------------
 ; h_track — καταγράφει τη θέση σε κυκλικό buffer STUCK_FRAMES θέσεων
 ;   Μία φορά ανά frame, στο τέλος του hero_update.
 ;---------------------------------------------------------------------

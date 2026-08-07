@@ -12,6 +12,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import physics as P
 
+# Τα τεστ ΔΕΝ τρέχουν στο levels/test.txt: εκείνο ανήκει στον σχεδιαστή και
+# αλλάζει. Ένα σταθερό δωμάτιο κρατά τα τεστ ουσιαστικά.
+REGRESS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "levels", "regress.txt")
+
 FAILS = []
 
 
@@ -21,17 +26,34 @@ def check(name, cond, detail=""):
         FAILS.append(name)
 
 
-def fresh():
-    """Καθαρό δωμάτιο: τα pickups ΣΒΗΝΟΝΤΑΙ όταν μαζευτούν, οπότε τα τεστ
-    δεν μπορούν να μοιράζονται το ίδιο αντικείμενο Room."""
-    return P.load_room()
+def fresh(strip=()):
+    """Καθαρό δωμάτιο: τα pickups ΣΒΗΝΟΝΤΑΙ όταν μαζευτούν και τα κιβώτια
+    μετακινούνται, οπότε τα τεστ δεν μπορούν να μοιράζονται το ίδιο Room.
+
+    Το `strip` βγάζει τύπους από το δωμάτιο: τα τεστ γεωμετρίας ελέγχουν
+    περπάτημα, γωνίες και ράμπες, και δεν πρέπει να αποτυγχάνουν επειδή ένα
+    κιβώτιο έπεσε στον διάδρομο — αυτό είναι σωστή συμπεριφορά, όχι σφάλμα.
+    """
+    r = P.load_room(REGRESS)
+    for row in r.cells:
+        for i, v in enumerate(row):
+            if v in strip:
+                row[i] = P.EMPTY
+    return r
 
 
 def run(room, x, y, g=0, walk=1, frames=4000):
+    """Τρέχει τον ήρωα και επιστρέφει (ήρωας, φορές που είδε, μέγιστο κόλλημα).
+
+    Το φτάσιμο στην έξοδο ΔΕΝ είναι κόλλημα: εκεί το παιχνίδι τελειώνει, οπότε
+    σταματάμε αντί να μετράμε τα ακίνητα frames που ακολουθούν.
+    """
     h = P.Hero(room, x, y, g)
     seen_g, stuck, last = set(), 0, None
     for _ in range(frames):
         h.update(walk)
+        if h.won:
+            break
         seen_g.add(h.g)
         pos = (h.x, h.y, h.g)
         stuck = stuck + 1 if pos == last else 0
@@ -46,7 +68,7 @@ def main():
     # 1. Περιδιάβαση: με ένα μόνο πλήκτρο πρέπει να γυρίσει όλο το δωμάτιο και
     #    να περάσει από ΚΑΘΕ φορά βαρύτητας — πάτωμα, τοίχους, ταβάνι, ράμπες.
     for d, label in ((1, "μπροστά"), (-1, "πίσω")):
-        h, seen, stuck = run(fresh(), 60, 40, walk=d)
+        h, seen, stuck = run(fresh(strip=(P.CRATE,)), 60, 40, walk=d)
         check(f"περιδιάβαση {label}: δεν κολλάει", stuck < 50, f"stuck={stuck}")
         check(f"περιδιάβαση {label}: όλες οι ορθές φορές",
               {0, 2, 4, 6} <= seen, f"είδε {sorted(seen)}")
@@ -54,7 +76,7 @@ def main():
               bool(seen & {1, 3, 5, 7}), f"είδε {sorted(seen)}")
 
     # 2. Ράμπα ανόδου -> η βαρύτητα γίνεται DOWN-RIGHT, όχι κάτι άλλο.
-    h, seen, _ = run(fresh(), 60, 40, walk=1, frames=200)
+    h, seen, _ = run(fresh(strip=(P.CRATE,)), 60, 40, walk=1, frames=200)
     check("ανηφόρα 45 μοιρών -> βαρύτητα 7", 7 in seen, f"είδε {sorted(seen)}")
 
     # 3. Ο κανόνας που ζήτησε ο χρήστης: διαγώνια βαρύτητα σε ΕΠΙΠΕΔΟ πάτωμα
@@ -156,6 +178,31 @@ def main():
     h = P.Hero(fresh(), 176, 132, 0)       # μέσα στη ζώνη (στήλες 20-24, γραμμές 15-17)
     check("ζώνη κλειδώματος: εντοπίζεται", h.noflip(),
           f"cell={h.body_cell()}")
+
+    # 10. Κιβώτια: πέφτουν προς τη φορά που ΟΡΙΣΕ Ο ΠΑΙΚΤΗΣ, όχι προς την
+    #     τρέχουσα φορά του ήρωα (που γυρίζει μόνη της στις γωνίες).
+    for g, (dx, dy) in ((0, (0, 1)), (6, (1, 0)), (4, (0, -1)), (1, (-1, 1))):
+        room = fresh(strip=(P.CRATE,))
+        room.cells[10][20] = P.CRATE
+        h = P.Hero(room, 60, 44, 0)
+        h.world_g = g
+        h.g = 2                              # ο ήρωας κοιτάει αλλού επίτηδες
+        for _ in range(P.CRATE_TICKS):
+            h.crate_step()
+        found = [(c, r) for r in range(P.ROWS) for c in range(P.COLS)
+                 if room.cells[r][c] == P.CRATE]
+        check(f"κιβώτιο πέφτει προς τη φορά {g}", found == [(20 + dx, 10 + dy)],
+              f"{found}")
+
+    # Σταματά όταν βρει στερεό.
+    room = fresh(strip=(P.CRATE,))
+    room.cells[21][2] = P.CRATE              # ακριβώς πάνω από το πάτωμα
+    h = P.Hero(room, 60, 44, 0)
+    h.world_g = 0
+    for _ in range(P.CRATE_TICKS * 6):
+        h.crate_step()
+    check("κιβώτιο σταματά σε στερεό", room.cells[22][2] == P.CRATE,
+          f"γραμμή 22 = {room.cells[22][2]}")
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
