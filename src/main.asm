@@ -96,19 +96,8 @@ main:           ld   a,1
                 call SCR_SET_MODE
                 call set_palette
                 call init_linetab
-                call render_room
-                ld   a,1
-                ld   (hud_dirty),a
-
-                ld   hl,LVL_START_X     ; θέση και φορά από το αρχείο πίστας
-                ld   (hero_x),hl
-                ld   hl,LVL_START_Y
-                ld   (hero_y),hl
-                ld   a,LVL_START_G
-                ld   (hero_g),a
-                ld   (world_g),a
-                ld   a,HST_FALL
-                ld   (hero_state),a
+                ld   a,(room_numbers)   ; ξεκίνα από την πρώτη αίθουσα
+                call room_load
                 call prep_hero
                 call draw_hero
 
@@ -194,6 +183,20 @@ ml_anim:        call anim_frame
                 call MC_WAIT_FLYBACK
                 call draw_hero          ; μόνο εγγραφές στην οθόνη
                 call draw_hud
+
+                ; Η αλλαγή αίθουσας γίνεται στο ΤΕΛΟΣ του frame, όχι μέσα στην
+                ; ενημέρωση: το render_room ξαναζωγραφίζει όλη την οθόνη και δεν
+                ; πρέπει να συμβεί ενώ μισοϋπολογισμένη κατάσταση δείχνει ακόμα
+                ; στην παλιά αίθουσα.
+                ld   a,(pending_room)
+                or   a
+                jr   z,ml_esc
+                push af
+                xor  a
+                ld   (pending_room),a
+                pop  af
+                call room_load
+ml_esc:
 
                 ld   a,K_ESC
                 call KM_TEST_KEY
@@ -974,7 +977,7 @@ dhb_in:         ld   c,a
                 add  hl,hl
                 add  hl,hl
                 add  hl,de
-                ld   de,level_data
+                ld   de,(level_ptr)
                 add  hl,de
                 ld   a,(dh_c0)
                 srl  a
@@ -1166,7 +1169,7 @@ linetab         ds   400, 0
                 include "gfx_para.asm"
                 include "gfx_para45.asm"
                 include "gfx_objects.asm"
-                include "level_test.asm"
+                include "rooms.asm"
 
 prog_end
                 save 'build/main.bin', #4000, prog_end-#4000

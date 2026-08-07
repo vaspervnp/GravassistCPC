@@ -259,6 +259,28 @@ def main():
     check("κινούνται μόλις ο παίκτης αλλάξει φορά",
           room.cells[11][20] == P.CRATE)
 
+    # 13. Αίθουσες και έξοδοι
+    rooms = P.all_rooms()
+    check("βρέθηκαν αίθουσες", len(rooms) >= 2, f"{[r.number for r in rooms]}")
+    for r in rooms:
+        for cell, dest, cells in r.exit_groups():
+            check(f"room_{r.number}: η έξοδος {cell} έχει προορισμό", dest != 0)
+            check(f"room_{r.number}: ο προορισμός {dest} υπάρχει",
+                  any(o.number == dest for o in rooms))
+            # ΟΛΑ τα κελιά της ομάδας δείχνουν στο ίδιο σημείο
+            check(f"room_{r.number}: η ομάδα {cell} είναι ενιαία",
+                  all(r.exits[c] == dest for c in cells), f"{len(cells)} κελιά")
+
+    # Γειτονικές έξοδοι με ΔΙΑΦΟΡΕΤΙΚΟΥΣ προορισμούς πρέπει να απορρίπτονται.
+    bad = ";\n" + "\n".join(
+        "#" * 40 if i in (0, 23) else "#" + ("X" * 2 if i == 5 else ".." ) + "." * 36 + "#"
+        for i in range(24)) + "\nexit 1 5 1\nexit 2 5 2\n"
+    try:
+        P.Room(bad)
+        check("γειτονικές έξοδοι με διαφορετικό προορισμό απορρίπτονται", False)
+    except ValueError:
+        check("γειτονικές έξοδοι με διαφορετικό προορισμό απορρίπτονται", True)
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

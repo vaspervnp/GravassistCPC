@@ -112,8 +112,10 @@ ht_esave:       ld   (hero_energy),a
 ht_nopick:      ld   a,(h_cell)
                 cp   T_EXIT
                 jr   nz,ht_spikes
-                ld   a,1
-                ld   (hero_won),a
+                call exit_dest          ; ποια αίθουσα; 0 = καμία
+                or   a
+                jr   z,ht_spikes
+                ld   (pending_room),a
 
 ht_spikes:      call h_support          ; αγκάθια: μόνο από τη μύτη
                 ld   e,a
@@ -140,6 +142,102 @@ ht_hset:        ld   (hero_energy),a
                 ld   (hud_dirty),a
                 ret
 
+; exit_dest — προορισμός της εξόδου στο κελί (cell_col, cell_row)
+;   OUT: A = αριθμός αίθουσας, 0 αν δεν δηλώθηκε
+;
+;   Ο πίνακας έχει ΟΛΑ τα κελιά κάθε ομάδας, όχι μόνο το πρώτο: γειτονικές
+;   έξοδοι είναι μία πόρτα και η ομαδοποίηση έγινε ήδη στην παραγωγή, οπότε
+;   εδώ αρκεί γραμμική αναζήτηση χωρίς λογική γειτνίασης.
+;---------------------------------------------------------------------
+exit_dest:      ld   hl,(room_exits)
+ed_lp:          ld   a,(hl)
+                cp   #FF
+                jr   z,ed_none
+                ld   b,a                ; col
+                inc  hl
+                ld   c,(hl)             ; row
+                inc  hl
+                ld   a,(cell_col)
+                cp   b
+                jr   nz,ed_next
+                ld   a,(cell_row)
+                cp   c
+                jr   nz,ed_next
+                ld   a,(hl)
+                ret
+ed_next:        inc  hl
+                jr   ed_lp
+ed_none:        xor  a
+                ret
+
+;---------------------------------------------------------------------
+; room_load — φορτώνει την αίθουσα με αριθμό A
+;   Οι αίθουσες είναι ήδη στη μνήμη: "φόρτωση" σημαίνει αλλαγή δείκτη,
+;   ξαναζωγράφισμα και τοποθέτηση του ήρωα στο σημείο εκκίνησής της.
+;---------------------------------------------------------------------
+room_load:      ld   b,a
+                ld   hl,room_numbers
+                ld   c,0
+rl_find:        ld   a,c
+                cp   ROOM_COUNT
+                ret  nc                 ; άγνωστη αίθουσα: μην κάνεις τίποτα
+                ld   a,(hl)
+                cp   b
+                jr   z,rl_got
+                inc  hl
+                inc  c
+                jr   rl_find
+
+rl_got:         ld   a,c
+                add  a,a
+                ld   e,a
+                ld   d,0
+                ld   hl,room_index
+                add  hl,de
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                ex   de,hl              ; HL = εγγραφή αίθουσας
+
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                inc  hl
+                ld   (hero_x),de
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                inc  hl
+                ld   (hero_y),de
+                ld   a,(hl)
+                inc  hl
+                ld   (hero_g),a
+                ld   (world_g),a
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                inc  hl
+                ld   (level_ptr),de
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                ld   (room_exits),de
+
+                xor  a                  ; καθαρή αρχή στη νέα αίθουσα
+                ld   (crates_on),a
+                ld   (hero_paraopen),a
+                ld   (last_valid),a     ; μην ενώσεις με ορθογώνιο άλλης αίθουσας
+                ld   (hero_carry),a
+                ld   a,HST_FALL
+                ld   (hero_state),a
+                ld   a,1
+                ld   (hud_dirty),a
+                jp   render_room
+
+room_exits      dw 0
+pending_room    db 0
+
+;---------------------------------------------------------------------
 ; h_use — ενεργοποίηση αντικειμένου (πλήκτρο ΚΑΤΩ ή SPACE)
 ;
 ;   Ένα πλήκτρο για όλα, με σαφή σειρά προτεραιότητας: αν κουβαλάς κιβώτιο το
@@ -250,7 +348,7 @@ h_teleport:     ld   a,(cell_col)       ; θυμήσου από πού φεύγ�
                 ld   (tp_col),a
                 ld   a,(cell_row)
                 ld   (tp_row),a
-                ld   hl,level_data
+                ld   hl,(level_ptr)
                 ld   bc,0               ; B = γραμμή, C = στήλη
 tp_lp:          ld   a,(hl)
                 cp   T_TELEPORT

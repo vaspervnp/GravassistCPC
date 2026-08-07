@@ -14,6 +14,9 @@ namespace GravassistEditor.Models;
 /// Ό,τι δεν είναι γραμμή πίστας διατηρείται αυτούσιο: οι γραμμές πριν από την πρώτη
 /// γραμμή πίστας στο <see cref="Header"/>, οι μετά την τελευταία στο <see cref="Footer"/>.
 /// Έτσι τα σχόλια κεφαλής επιβιώνουν σε κάθε αποθήκευση.
+///
+/// Στην ουρά ζουν και οι ρυθμίσεις («gravity N») και οι συνδέσεις εξόδων
+/// («exit &lt;col&gt; &lt;row&gt; &lt;room&gt;» — βλ. <see cref="ExitGraph"/>).
 /// </summary>
 public sealed class LevelDocument
 {
@@ -58,6 +61,25 @@ public sealed class LevelDocument
             }
         }
 
+        return doc;
+    }
+
+    /// <summary>
+    /// Νέα ΑΙΘΟΥΣΑ: άδειο δωμάτιο με περίγραμμα από στερεό, έναν δείκτη εκκίνησης
+    /// '@' μέσα και ουρά «gravity 0». Ό,τι χρειάζεται για να τρέξει αμέσως.
+    /// </summary>
+    public static LevelDocument CreateRoom(int number)
+    {
+        var doc = CreateEmpty($"Αίθουσα {number}");
+        doc.Header.Insert(1, $"; Αρχείο: {RoomNaming.FileName(number)} — ο αριθμός αίθουσας είναι στο όνομα.");
+        doc.Header.Add("; Συνδέσεις εξόδων στην ουρά: exit <col> <row> <room>.");
+
+        // Ο δείκτης εκκίνησης πάει πάνω στο πάτωμα, μέσα από το περίγραμμα.
+        var startRow = new StringBuilder(doc.Rows[TileCatalog.Rows - 2]);
+        startRow[2] = TileCatalog.StartSymbol;
+        doc.Rows[TileCatalog.Rows - 2] = startRow.ToString();
+
+        doc.Footer.Add("gravity 0");
         return doc;
     }
 
@@ -133,6 +155,84 @@ public sealed class LevelDocument
         return null;
     }
 
+    // ================= Έξοδοι & αίθουσες =================
+
+    /// <summary>Οι ομάδες γειτονικών κελιών εξόδου, σε σειρά σάρωσης κατά γραμμές.</summary>
+    public List<ExitGroup> ExitGroups() => ExitGraph.FindGroups(Rows);
+
+    /// <summary>Οι δηλωμένοι προορισμοί («exit …») της ουράς.</summary>
+    public List<ExitLink> ExitLinks() => ExitGraph.ParseLines(Footer);
+
+    /// <summary>Πόσοι δείκτες εκκίνησης '@' υπάρχουν στο πλέγμα.</summary>
+    public int StartMarkerCount =>
+        Rows.Sum(line => line.Count(c => c == TileCatalog.StartSymbol));
+
+    /// <summary>
+    /// Ξαναγράφει τις γραμμές «exit» της ουράς: πετάει τις παλιές και βάζει τις
+    /// νέες στο τέλος, μία ανά ομάδα. Ό,τι άλλο υπάρχει στην ουρά (σχόλια,
+    /// «gravity N») μένει αυτούσιο και στη σειρά του.
+    /// </summary>
+    public void SetExitLinks(IEnumerable<ExitLink> links)
+    {
+        Footer.RemoveAll(ExitGraph.IsExitLine);
+        foreach (var link in links) Footer.Add(ExitGraph.FormatLine(link));
+    }
+
+    /// <summary>
+    /// Επικύρωση περιεχομένου (πέρα από τη μορφή): δείκτες εκκίνησης και έξοδοι.
+    ///
+    /// <paramref name="roomExists"/> απαντά αν υπάρχει αρχείο για μια αίθουσα.
+    /// Ο ανύπαρκτος προορισμός είναι ΠΡΟΕΙΔΟΠΟΙΗΣΗ, όχι σφάλμα: ο χρήστης
+    /// μπορεί κάλλιστα να φτιάξει την αίθουσα αργότερα.
+    /// </summary>
+    public ValidationReport ValidateContent(Func<int, bool> roomExists)
+    {
+        var errors = new List<string>();
+        var warnings = new List<string>();
+
+        var starts = StartMarkerCount;
+        if (starts > 1)
+        {
+            errors.Add($"Υπάρχουν {starts} δείκτες εκκίνησης '@' — επιτρέπεται το πολύ ένας.");
+        }
+        else if (starts == 0)
+        {
+            warnings.Add("Δεν υπάρχει δείκτης εκκίνησης '@' — ο παίκτης θα ξεκινήσει στην προεπιλεγμένη θέση.");
+        }
+
+        var groups = ExitGroups();
+        var byAnchor = ExitLinks()
+            .GroupBy(l => (l.Col, l.Row))
+            .ToDictionary(g => g.Key, g => g.Last().Room);
+
+        foreach (var group in groups)
+        {
+            var where = $"στήλη {group.Col}, γραμμή {group.Row}";
+            if (!byAnchor.TryGetValue((group.Col, group.Row), out var room))
+            {
+                errors.Add($"Η έξοδος στη θέση {where} ({group.Cells.Count} κελιά) " +
+                           "δεν έχει δηλωμένο προορισμό.");
+                continue;
+            }
+
+            if (!roomExists(room))
+            {
+                warnings.Add($"Η έξοδος στη θέση {where} οδηγεί στην αίθουσα {room}, " +
+                             $"που δεν υπάρχει ακόμα ως αρχείο {RoomNaming.FileName(room)}.");
+            }
+        }
+
+        // Δηλώσεις που δείχνουν σε θέση χωρίς ομάδα εξόδου: ορφανές, θα χαθούν.
+        var anchors = groups.Select(g => (g.Col, g.Row)).ToHashSet();
+        foreach (var link in ExitLinks().Where(l => !anchors.Contains((l.Col, l.Row))))
+        {
+            warnings.Add($"Η δήλωση «{ExitGraph.FormatLine(link)}» δεν αντιστοιχεί σε " +
+                         "ομάδα εξόδου του πλέγματος και αγνοήθηκε.");
+        }
+
+        return new ValidationReport(errors, warnings);
+    }
+
     /// <summary>Παράγει το κείμενο του αρχείου (κεφαλή + 24 γραμμές + ουρά, LF, τελικό newline).</summary>
     public string Serialize()
     {
@@ -146,3 +246,14 @@ public sealed class LevelDocument
 
 /// <summary>Σφάλμα μορφής αρχείου πίστας.</summary>
 public sealed class LevelFormatException(string message) : Exception(message);
+
+/// <summary>
+/// Αποτέλεσμα επικύρωσης: τα σφάλματα εμποδίζουν την αποθήκευση, οι
+/// προειδοποιήσεις απλώς εμφανίζονται στον χρήστη.
+/// </summary>
+public sealed record ValidationReport(
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<string> Warnings)
+{
+    public bool Ok => Errors.Count == 0;
+}

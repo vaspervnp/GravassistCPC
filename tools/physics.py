@@ -32,6 +32,7 @@ CELL = 8
 COLS, ROWS = 40, 24
 GRID_Y0 = 8                     # η πρώτη scanline του grid (πάνω από αυτήν = HUD)
 DEFAULT_START = (7, 4)          # αν λείπει ο δείκτης '@'
+ROOM_RE = re.compile(r"room_(\d+)\.txt$", re.I)
 
 # --- Τύποι κελιών -----------------------------------------------------
 # Οι τιμές 0..5 (γεωμετρία) ΔΕΝ αλλάζουν ποτέ: πάνω τους στηρίζεται το
@@ -183,12 +184,68 @@ class Room:
                     self.start_col, self.start_row = c, r
                     row[c] = EMPTY
 
-        # Ρυθμίσεις δωματίου, ΜΕΤΑ το πλέγμα: "gravity N"
+        # Ρυθμίσεις δωματίου, ΜΕΤΑ το πλέγμα
         self.start_g = 0
+        decl = {}                       # (col,row) -> αίθουσα προορισμού
         for ln in text.splitlines():
             m = re.match(r"\s*gravity\s+([0-7])\s*$", ln, re.I)
             if m:
                 self.start_g = int(m.group(1))
+            m = re.match(r"\s*exit\s+(\d+)\s+(\d+)\s+(\d+)\s*$", ln, re.I)
+            if m:
+                decl[(int(m.group(1)), int(m.group(2)))] = int(m.group(3))
+        self.exits = self._link_exits(decl)
+
+    def _link_exits(self, decl):
+        """Ομαδοποιεί γειτονικά κελιά εξόδου και δίνει σε όλα τον ίδιο προορισμό.
+
+        Γειτονικές έξοδοι είναι ΜΙΑ πόρτα: δεν έχει νόημα δύο κελιά που
+        ακουμπάνε να βγάζουν αλλού. Ο κανόνας επιβάλλεται εδώ, ώστε ούτε ο
+        editor ούτε ο σχεδιαστής να μπορούν να τον παραβιάσουν κατά λάθος.
+
+        Η ομάδα ταυτοποιείται από το πάνω-αριστερό κελί της (σάρωση κατά
+        γραμμές), που είναι σταθερό ανεξάρτητα από τη σειρά σχεδίασης.
+        """
+        seen, out = set(), {}
+        for r in range(ROWS):
+            for c in range(COLS):
+                if self.cells[r][c] != EXIT or (c, r) in seen:
+                    continue
+                group, stack = [], [(c, r)]
+                seen.add((c, r))
+                while stack:                    # γειτνίαση 4
+                    cc, rr = stack.pop()
+                    group.append((cc, rr))
+                    for nc, nr in ((cc+1, rr), (cc-1, rr), (cc, rr+1), (cc, rr-1)):
+                        if (0 <= nc < COLS and 0 <= nr < ROWS
+                                and (nc, nr) not in seen
+                                and self.cells[nr][nc] == EXIT):
+                            seen.add((nc, nr))
+                            stack.append((nc, nr))
+                found = {decl[g] for g in group if g in decl}
+                if len(found) > 1:
+                    raise ValueError(
+                        f"γειτονικές έξοδοι στο {sorted(group)} δηλώνουν "
+                        f"διαφορετικές αίθουσες {sorted(found)}")
+                dest = found.pop() if found else 0
+                for g in group:
+                    out[g] = dest
+        return out
+
+    def exit_groups(self):
+        """[(πάνω-αριστερό κελί, προορισμός, [κελιά])] ανά ομάδα εξόδου."""
+        groups = {}
+        for (c, r), dest in sorted(self.exits.items(), key=lambda kv: (kv[0][1], kv[0][0])):
+            key = None
+            for k, (d, cells) in groups.items():
+                if any(abs(c-cc) + abs(r-rr) == 1 for cc, rr in cells):
+                    key = k
+                    break
+            if key is None:
+                groups[(c, r)] = (dest, [(c, r)])
+            else:
+                groups[key][1].append((c, r))
+        return [(k, v[0], v[1]) for k, v in groups.items()]
 
     @property
     def start_x(self):
@@ -739,10 +796,26 @@ def render(room, hero, w=40, h=24):
 
 
 def load_room(path=None):
-    path = path or os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "levels", "test.txt")
+    path = path or os.path.join(LEVELS, "regress.txt")
     with open(path) as f:
-        return Room(f.read())
+        r = Room(f.read())
+    m = ROOM_RE.search(os.path.basename(path))
+    r.number = int(m.group(1)) if m else 0      # ο αριθμός είναι στο ΟΝΟΜΑ
+    r.path = path
+    return r
+
+
+LEVELS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                      "levels")
+
+
+def all_rooms():
+    """Όλες οι αίθουσες levels/room_<N>.txt, ταξινομημένες ΑΡΙΘΜΗΤΙΚΑ."""
+    out = []
+    for fn in os.listdir(LEVELS):
+        if ROOM_RE.search(fn):
+            out.append(load_room(os.path.join(LEVELS, fn)))
+    return sorted(out, key=lambda r: r.number)
 
 
 if __name__ == "__main__":

@@ -12,11 +12,11 @@ namespace GravassistEditor.Controllers;
 [Route("api/levels")]
 public sealed class LevelsController(LevelStore store) : ControllerBase
 {
-    /// <summary>GET /api/levels — τα ονόματα των αρχείων στον φάκελο levels/.</summary>
+    /// <summary>GET /api/levels — τα αρχεία στον φάκελο levels/ (αίθουσες πρώτα, αριθμητικά).</summary>
     [HttpGet]
     public IActionResult Index() => Ok(new { path = store.RootPath, files = store.List() });
 
-    /// <summary>GET /api/levels/{name} — φόρτωση πίστας.</summary>
+    /// <summary>GET /api/levels/{name} — φόρτωση πίστας μαζί με τις ομάδες εξόδου.</summary>
     [HttpGet("{name}")]
     public IActionResult Load(string name)
     {
@@ -24,7 +24,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
         {
             if (!store.Exists(name)) return NotFound(new ErrorDto($"Δεν βρέθηκε η πίστα «{name}»."));
             var doc = store.Load(name);
-            return Ok(new LevelDto(name, doc.Rows, doc.Header, doc.Footer));
+            return Ok(ToDto(Path.GetFileName(store.ResolvePath(name)), doc));
         }
         catch (LevelFormatException ex)
         {
@@ -36,7 +36,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
         }
     }
 
-    /// <summary>POST /api/levels — αποθήκευση πίστας.</summary>
+    /// <summary>POST /api/levels — αποθήκευση πίστας (και των συνδέσεων εξόδων).</summary>
     [HttpPost]
     public IActionResult Save([FromBody] SaveLevelRequest request)
     {
@@ -48,8 +48,19 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
                 Footer = request.Footer,
                 Rows = request.Rows,
             };
-            store.Save(request.Name, doc);
-            return Ok(new { saved = Path.GetFileName(store.ResolvePath(request.Name)) });
+
+            // Οι δηλώσεις εξόδου ξαναγράφονται ΟΛΕΣ από την κατάσταση του editor:
+            // ό,τι δεν έχει προορισμό μένει έξω και το πιάνει η επικύρωση.
+            doc.SetExitLinks(request.Exits
+                .Where(e => e.Room is not null)
+                .Select(e => new ExitLink(e.Col, e.Row, e.Room!.Value)));
+
+            var warnings = store.Save(request.Name, doc);
+            return Ok(new
+            {
+                saved = Path.GetFileName(store.ResolvePath(request.Name)),
+                warnings,
+            });
         }
         catch (LevelFormatException ex)
         {
@@ -66,6 +77,49 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
     public IActionResult Blank()
     {
         var doc = LevelDocument.CreateEmpty();
-        return Ok(new LevelDto("", doc.Rows, doc.Header, doc.Footer));
+        return Ok(ToDto("", doc));
+    }
+
+    /// <summary>
+    /// POST /api/levels/room — νέα ΑΙΘΟΥΣΑ με τον επόμενο ελεύθερο αριθμό.
+    /// Το αρχείο γράφεται αμέσως, ώστε να μπορούν άλλες αίθουσες να δείχνουν σ' αυτό.
+    /// </summary>
+    [HttpPost("room")]
+    public IActionResult NewRoom()
+    {
+        try
+        {
+            var (_, name, doc) = store.CreateRoom();
+            return Ok(ToDto(name, doc));
+        }
+        catch (LevelFormatException ex)
+        {
+            return BadRequest(new ErrorDto(ex.Message));
+        }
+        catch (IOException ex)
+        {
+            return BadRequest(new ErrorDto($"Σφάλμα εγγραφής: {ex.Message}"));
+        }
+    }
+
+    /// <summary>
+    /// Ενώνει τις ομάδες εξόδου του πλέγματος με τους προορισμούς της ουράς.
+    /// Η αυθεντία για το ΠΟΙΕΣ είναι οι έξοδοι είναι πάντα το πλέγμα· η ουρά δίνει
+    /// μόνο προορισμούς και όποια δήλωση δεν ταιριάζει σε ομάδα αγνοείται.
+    /// </summary>
+    private static LevelDto ToDto(string name, LevelDocument doc)
+    {
+        var byAnchor = doc.ExitLinks()
+            .GroupBy(l => (l.Col, l.Row))
+            .ToDictionary(g => g.Key, g => g.Last().Room);
+
+        var exits = doc.ExitGroups()
+            .Select(g => new ExitDto(
+                g.Col, g.Row,
+                byAnchor.TryGetValue((g.Col, g.Row), out var room) ? room : null,
+                g.Cells.Count))
+            .ToList();
+
+        return new LevelDto(name, doc.Rows, doc.Header, doc.Footer, exits, RoomNaming.NumberOf(name));
     }
 }

@@ -18,6 +18,8 @@
         rows = Model.Rows,
         empty = Model.EmptySymbol.ToString(),
         solid = Model.SolidSymbol.ToString(),
+        exit = Model.ExitSymbol.ToString(),
+        start = Model.StartSymbol.ToString(),
         tiles = Model.Tiles.Select(t => new
         {
             id = t.Id,
@@ -26,6 +28,10 @@
             hint = t.Hint,
         }),
     });
+
+    // Ετικέτα αρχείου στη λίστα: οι αίθουσες δείχνουν τον αριθμό τους.
+    Func<LevelFileInfo, string> fileLabel = f =>
+        f.Room is null ? f.Name : $"Αίθουσα {f.Room} — {f.Name}";
 }
 
 <style>
@@ -163,6 +169,49 @@
         color: #8a8ac0;
         margin-top: 8px;
     }
+
+    /* --- Πίνακας εξόδων --- */
+    .exit-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 11px;
+    }
+
+    .exit-row:last-child { border-bottom: none; }
+
+    .exit-tag {
+        flex: 0 0 auto;
+        min-width: 20px;
+        text-align: center;
+        padding: 1px 4px;
+        border: 1px solid var(--edge);
+        color: var(--edge);
+    }
+
+    .exit-pos { flex: 1 1 auto; color: #8a8ac0; }
+
+    .exit-row input[type=number] {
+        flex: 0 0 62px;
+        font: inherit;
+        font-size: 12px;
+        color: var(--ink);
+        background: var(--chrome-2);
+        border: 1px solid var(--line);
+        padding: 3px 4px;
+    }
+
+    .exit-row.missing input[type=number] { border-color: #ff5050; }
+    .exit-row.unknown input[type=number] { border-color: #ffd000; }
+
+    .exit-note { font-size: 11px; margin-top: 6px; }
+    .exit-note.err { color: #ff5050; }
+    .exit-note.warn { color: #ffd000; }
+
+    /* Οι ετικέτες προορισμού πάνω στο πλέγμα δεν πρέπει να πιάνουν το ποντίκι. */
+    #exit-labels { pointer-events: none; }
 </style>
 
 <script id="editor-data" type="application/json">@Html.Raw(tileJson)</script>
@@ -175,15 +224,31 @@
                 <select id="file-list" title="Πίστες στον φάκελο levels/">
                     @foreach (var f in Model.Files)
                     {
-                        <option value="@f">@f</option>
+                        <option value="@f.Name">@fileLabel(f)</option>
                     }
                 </select>
                 <button id="btn-open" type="button">Άνοιγμα</button>
                 <button id="btn-new" type="button">Νέα</button>
+                <button id="btn-new-room" type="button"
+                        title="Δημιουργεί levels/room_&lt;N&gt;.txt με τον επόμενο ελεύθερο αριθμό">
+                    Νέα αίθουσα
+                </button>
                 <input type="text" id="file-name" placeholder="όνομα.txt" />
                 <button id="btn-save" type="button">Αποθήκευση</button>
             </div>
-            <div class="hintline">Ο φάκελος πιστών είναι το <code>levels/</code> του repo.</div>
+            <div class="hintline">Ο φάκελος πιστών είναι το <code>levels/</code> του repo.
+                Οι αίθουσες είναι αρχεία <code>room_&lt;N&gt;.txt</code>.</div>
+        </div>
+
+        <div class="panel">
+            <h2>Έξοδοι</h2>
+            <div id="exit-list"></div>
+            <div class="exit-note" id="exit-note"></div>
+            <div class="hintline">
+                Γειτονικά κελιά <code>X</code> (πάνω/κάτω/αριστερά/δεξιά) μετράνε ως ΜΙΑ
+                έξοδος και οδηγούν στην ίδια αίθουσα. Κάθε ομάδα γράφει μία γραμμή
+                <code>exit &lt;col&gt; &lt;row&gt; &lt;room&gt;</code> στην ουρά του αρχείου.
+            </div>
         </div>
 
         <div class="panel">
@@ -242,6 +307,10 @@
             </defs>
             <g id="cells"></g>
             <g id="gridlines" stroke="#ffffff" stroke-opacity="0.22" stroke-width="0.12"></g>
+            @* Ο αριθμός αίθουσας προορισμού, γραμμένος πάνω σε κάθε κελί της ομάδας. *@
+            <g id="exit-labels" font-size="5" font-family="monospace" font-weight="bold"
+               text-anchor="middle" stroke="#000000" stroke-width="1.2"
+               paint-order="stroke" stroke-linejoin="round"></g>
             <rect id="cursor" width="8" height="8" fill="none"
                   stroke="#ffffff" stroke-width="0.4" pointer-events="none" visibility="hidden"></rect>
         </svg>
@@ -263,18 +332,22 @@
         const DATA = JSON.parse(document.getElementById("editor-data").textContent);
         const COLS = DATA.cols, ROWS = DATA.rows;
         const EMPTY = DATA.empty, SOLID = DATA.solid;
+        const EXIT = DATA.exit, START = DATA.start;
         const CELL = 8;                       // μονάδες SVG ανά κελί (= 8x8 pixel του CPC)
         const TILE_BY_SYMBOL = new Map(DATA.tiles.map(t => [t.symbol, t]));
 
         const svg = document.getElementById("grid");
         const cellsGroup = document.getElementById("cells");
         const gridlines = document.getElementById("gridlines");
+        const exitLabels = document.getElementById("exit-labels");
         const cursor = document.getElementById("cursor");
         const statusEl = document.getElementById("status");
         const readoutEl = document.getElementById("readout");
         const sourceView = document.getElementById("source-view");
         const fileList = document.getElementById("file-list");
         const fileName = document.getElementById("file-name");
+        const exitListEl = document.getElementById("exit-list");
+        const exitNoteEl = document.getElementById("exit-note");
 
         // --- Κατάσταση -------------------------------------------------
         let grid = [];             // grid[row][col] = χαρακτήρας
@@ -286,6 +359,16 @@
         let paintSymbol = EMPTY;
         let dirty = false;
         const undoStack = [], redoStack = [];
+
+        // Προορισμοί εξόδων. Κλειδί = "col,row" ΚΑΘΕ κελιού εξόδου, τιμή = αριθμός
+        // αίθουσας (ή null). Κρατάμε την τιμή σε όλα τα κελιά της ομάδας, όχι μόνο
+        // στο αναγνωριστικό της: έτσι ο προορισμός επιβιώνει όταν ο χρήστης
+        // μεγαλώσει την ομάδα προς τα πάνω/αριστερά και το αναγνωριστικό μετακινηθεί.
+        let exitRooms = new Map();
+        let exitGroups = [];              // [{col,row,cells:[[c,r],…],room}]
+        let knownRooms = new Set();       // αριθμοί αιθουσών που υπάρχουν ως αρχεία
+
+        function cellKey(c, r) { return c + "," + r; }
 
         // Ένα <use> ανά κελί· η αλλαγή τύπου είναι απλή αλλαγή του href.
         const cellNodes = [];

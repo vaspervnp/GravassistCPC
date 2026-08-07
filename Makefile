@@ -4,7 +4,7 @@ DISK  = iDSK
 PY    = python3
 
 SRC   = src/main.asm
-DEPS  = src/rotate.asm src/level.asm src/hero.asm src/tables.asm src/level_test.asm src/gamedefs.asm
+DEPS  = src/rotate.asm src/level.asm src/hero.asm src/tables.asm src/rooms.asm src/gamedefs.asm
 GFX   = src/gfx_hero.asm src/gfx_objects.asm
 PNG   = assets/hero.png assets/objects.png
 BAS   = src/loader.bas
@@ -20,7 +20,7 @@ $(GFX): $(PNG) tools/sprites.py tools/cpcgfx.py tools/stickman.py tools/placehol
 
 # Πίνακες γεωμετρίας + δωμάτιο: παράγονται από το ΙΔΙΟ μοντέλο με την
 # προσομοίωση, ώστε Z80 και Python να μην μπορούν να αποκλίνουν αριθμητικά.
-src/gamedefs.asm src/tables.asm src/level_test.asm: tools/genasm.py tools/physics.py levels/test.txt
+src/gamedefs.asm src/tables.asm src/rooms.asm: tools/genasm.py tools/physics.py levels/test.txt
 	$(PY) tools/genasm.py
 
 # Το rasm βγάζει το build/main.bin μέσω του `save` directive στο main.asm

@@ -75,7 +75,7 @@ ca_col:         ld   c,a
                 ld   e,c
                 ld   d,0
                 add  hl,de
-                ld   de,level_data
+                ld   de,(level_ptr)
                 add  hl,de
                 ld   (cell_ptr),hl      ; για σβήσιμο pickup / αλλαγή κελιού
                 ld   a,(hl)
@@ -170,7 +170,7 @@ cell_row        db 0
 ;---------------------------------------------------------------------
 ; render_room — ζωγραφίζει όλα τα 40x24 κελιά. Τρέχει μία φορά.
 ;---------------------------------------------------------------------
-render_room:    ld   hl,level_data
+render_room:    ld   hl,(level_ptr)
                 ld   (rr_ptr),hl
                 xor  a
                 ld   (rr_row),a
@@ -213,7 +213,7 @@ cell_addr:      ld   l,b
                 ld   e,c
                 ld   d,0
                 add  hl,de
-                ld   de,level_data
+                ld   de,(level_ptr)
                 add  hl,de
                 ret
 
@@ -263,6 +263,7 @@ dt_lp:          push bc
 
 dt_gfx          dw 0
 dt_line         db 0
+level_ptr       dw 0            ; κελιά της ΤΡΕΧΟΥΣΑΣ αίθουσας
 rr_ptr          dw 0
 rr_gfx          dw 0
 rr_row          db 0

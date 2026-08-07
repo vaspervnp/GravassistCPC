@@ -66,6 +66,12 @@ public static class TileCatalog
     /// <summary>Ο χαρακτήρας για το εργαλείο «πλαίσιο περιγράμματος».</summary>
     public const char SolidSymbol = '#';
 
+    /// <summary>Ο δείκτης εκκίνησης του παίκτη — το πολύ ΕΝΑΣ ανά δωμάτιο.</summary>
+    public const char StartSymbol = '@';
+
+    /// <summary>Ο χαρακτήρας της εξόδου (βλ. <see cref="ExitGraph"/> για την ομαδοποίηση).</summary>
+    public const char ExitSymbol = ExitGraph.ExitSymbol;
+
     private const string GeoGroup = "Γεωμετρία";
     private const string SurfaceGroup = "Επιφάνειες & ζώνες";
     private const string HazardGroup = "Κίνδυνοι";

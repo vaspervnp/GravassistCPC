@@ -230,54 +230,74 @@ def sprite_pair(px):
     return out
 
 
-def level_asm(room):
+def rooms_asm(rooms):
+    """Όλες οι αίθουσες σε ένα αρχείο, με πίνακα ευρετηρίου.
+
+    Οι αίθουσες μεταγλωττίζονται ΜΕΣΑ στο δυαδικό αντί να φορτώνονται από
+    δισκέτα: 960 bytes η καθεμία, οπότε για λίγες αίθουσες η μνήμη είναι
+    φθηνότερη από τη ρουτίνα φόρτωσης και τον χρόνο αναμονής.
+    """
     out = [";" + "=" * 69,
-           ";  GRAVASSIST — δοκιμαστικό δωμάτιο και γραφικά tiles",
-           ";  ΠΑΡΑΓΕΤΑΙ ΑΥΤΟΜΑΤΑ από tools/genasm.py (πηγή: levels/test.txt)",
+           ";  GRAVASSIST — αίθουσες, γραφικά tiles και ιδιότητες",
+           ";  ΠΑΡΑΓΕΤΑΙ ΑΥΤΟΜΑΤΑ από tools/genasm.py (πηγή: levels/room_*.txt)",
            ";" + "=" * 69,
            "",
            f"LVL_COLS        equ {P.COLS}",
            f"LVL_ROWS        equ {P.ROWS}",
            f"LVL_CELL        equ {P.CELL}",
            f"LVL_Y0          equ {P.GRID_Y0}",
+           f"ROOM_COUNT      equ {len(rooms)}",
            "",
            f"; Γραφικά: {P.NTYPES} τύποι x 8 γραμμές x 2 bytes (MODE 1)",
            "tile_gfx:"]
     for t in range(P.NTYPES):
         px = tile_pixels(t)
-        name = P.NAMES.get(t, "?")
-        out.append(f"                ; {t} {name}")
+        out.append(f"                ; {t} {P.TYPE_NAMES[t]}")
         for v in range(8):
             a, b = pack_mode1(px[v])
             out.append(f"                db #{a:02X},#{b:02X}")
 
-    out.append("")
-    out.append("tile_props:     db " + ",".join(f"#{v:02X}" for v in P.PROPS))
-    out.append("")
-    out.append("; Η φορά που 'κοιτάει' κάθε κατευθυντικός τύπος· #FF = άσχετο.")
-    out.append("; Στερεό/θανάσιμο όταν η βαρύτητα δείχνει ΑΝΤΙΘΕΤΑ από αυτήν.")
-    face = [P.FACING.get(i, 255) for i in range(P.NTYPES)]
-    out.append("tile_facing:    db " + ",".join(str(v) for v in face))
-    out.append("")
-    out.append("; Θέση εκκίνησης και αρχική φορά βαρύτητας, από το αρχείο πίστας")
-    out.append(f"LVL_START_X     equ {room.start_x}")
-    out.append(f"LVL_START_Y     equ {room.start_y}")
-    out.append(f"LVL_START_G     equ {room.start_g}")
-    out.append("")
-    out.append(f"; Δωμάτιο: 1 byte ανά κελί, {P.COLS}x{P.ROWS} = {P.COLS*P.ROWS} bytes")
-    out.append("level_data:")
-    for r in range(P.ROWS):
-        row = room.cells[r]
-        out.append("                db " + ",".join(str(v) for v in row))
-    out.append("")
+    out += ["",
+            "; Ιδιότητες ανά τύπο κελιού — ένα AND αντί για σκόρπιες συγκρίσεις",
+            "tile_props:     db " + ",".join(f"#{v:02X}" for v in P.PROPS),
+            "",
+            "; Η φορά που 'κοιτάει' κάθε κατευθυντικός τύπος· #FF = άσχετο.",
+            "tile_facing:    db " + ",".join(
+                str(P.FACING.get(i, 255)) for i in range(P.NTYPES)),
+            "",
+            "; --- Ευρετήριο αιθουσών (ταξινομημένο αριθμητικά) ---------------",
+            "room_numbers:   db " + ",".join(str(r.number) for r in rooms),
+            "room_index:     dw " + ",".join(f"room_{r.number}_rec" for r in rooms),
+            ""]
+
+    for r in rooms:
+        out += [f"; --- αίθουσα {r.number} " + "-" * 45,
+                f"room_{r.number}_rec:",
+                f"                dw {r.start_x}          ; αρχικό X",
+                f"                dw {r.start_y}          ; αρχικό Y",
+                f"                db {r.start_g}           ; αρχική φορά βαρύτητας",
+                f"                dw room_{r.number}_cells",
+                f"                dw room_{r.number}_exits",
+                "",
+                f"room_{r.number}_exits:   ; col, row, αίθουσα ... #FF = τέλος"]
+        for (c, rr), dest, cells in r.exit_groups():
+            for cc, cr in sorted(cells, key=lambda p: (p[1], p[0])):
+                out.append(f"                db {cc},{cr},{dest}")
+        out += ["                db #FF", "",
+                f"room_{r.number}_cells:"]
+        for row in r.cells:
+            out.append("                db " + ",".join(str(v) for v in row))
+        out.append("")
     return "\n".join(out)
 
 
 if __name__ == "__main__":
-    room = P.load_room()
+    rooms = P.all_rooms()
+    if not rooms:
+        sys.exit("δεν βρέθηκε καμία levels/room_<N>.txt")
     for name, text in (("src/gamedefs.asm", defs_asm()),
                        ("src/tables.asm", tables_asm()),
-                       ("src/level_test.asm", level_asm(room))):
+                       ("src/rooms.asm", rooms_asm(rooms))):
         path = os.path.join(ROOT, name)
         with open(path, "w") as f:
             f.write(text)
