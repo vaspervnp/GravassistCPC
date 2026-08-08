@@ -236,12 +236,18 @@ def main():
         h.update(0)
     check("περνάς από μέσα της", h.y > y0, f"y {y0} -> {h.y}")
 
+    # Ο προορισμός δηλώνεται ΡΗΤΑ· αδήλωτος teleporter δεν κάνει τίποτα.
     room = fresh()
     room.cells[10][5] = P.TELEPORT
     room.cells[12][30] = P.TELEPORT
+    room.teleports = {(5, 10): None, (30, 12): None}
+    h = P.Hero(room, 5 * 8 + 4, 8 + 10 * 8 + 4, 3)
+    check("αδήλωτη τηλεμεταφορά δεν κάνει τίποτα", not h.use())
+
+    room.teleports = {(5, 10): (30, 12), (30, 12): (5, 10)}
     h = P.Hero(room, 5 * 8 + 4, 8 + 10 * 8 + 4, 3)
     g0 = h.g
-    check("τηλεμεταφορά στο ταίρι",
+    check("τηλεμεταφορά στο δηλωμένο κελί",
           h.use() and (h.x // 8, (h.y - 8) // 8) == (30, 12), f"({h.x},{h.y})")
     check("τηλεμεταφορά διατηρεί τη φορά βαρύτητας", h.g == g0)
 
@@ -270,6 +276,11 @@ def main():
             # ΟΛΑ τα κελιά της ομάδας δείχνουν στο ίδιο σημείο
             check(f"room_{r.number}: η ομάδα {cell} είναι ενιαία",
                   all(r.exits[c] == dest for c in cells), f"{len(cells)} κελιά")
+
+    for r in rooms:
+        for cell, dest, cells in r.teleport_groups():
+            check(f"room_{r.number}: η τηλεμεταφορά {cell} έχει προορισμό",
+                  dest is not None, f"{dest}")
 
     # Γειτονικές έξοδοι με ΔΙΑΦΟΡΕΤΙΚΟΥΣ προορισμούς πρέπει να απορρίπτονται.
     bad = ";\n" + "\n".join(

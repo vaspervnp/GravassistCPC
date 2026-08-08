@@ -39,7 +39,7 @@
 
   function start(name, cells, startPos) {
     curName = name;
-    room = new G.Room(cells);
+    room = new G.Room(cells, (rooms[name] || {}).teleports);
     hero = new G.Hero(room, startPos[0], startPos[1], startPos[2]);
     tick = 0; hist = []; paraFrame = 0; paraTick = 0;
     note.textContent = "";
@@ -137,12 +137,16 @@
           start = [c * D.CELL + D.CELL / 2, D.GRID_Y0 + r * D.CELL + D.CELL / 2, g];
         }
       }));
-      const exits = {};
-      for (const m of (doc.footer || []).join("\n").matchAll(/exit\s+(\d+)\s+(\d+)\s+(\d+)/gi))
+      const foot = (doc.footer || []).join("\n");
+      const exits = {}, teleports = {};
+      for (const m of foot.matchAll(/exit\s+(\d+)\s+(\d+)\s+(\d+)/gi))
         exits[m[1] + "," + m[2]] = +m[3];
-      // Γειτονικές έξοδοι είναι μία πόρτα: δώσε τον προορισμό σε ΟΛΑ τα κελιά.
-      spread(cells, exits);
-      rooms[name] = { cells, start, exits };
+      for (const m of foot.matchAll(/tp\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/gi))
+        teleports[m[1] + "," + m[2]] = [+m[3], +m[4]];
+      // Γειτονικά κελιά είναι ΕΝΑ αντικείμενο: ο προορισμός σε ΟΛΑ τα κελιά.
+      spread(cells, exits, D.TYPE_NAMES.indexOf("EXIT"));
+      spread(cells, teleports, D.TYPE_NAMES.indexOf("TELEPORT"));
+      rooms[name] = { cells, start, exits, teleports };
       const o = document.createElement("option");
       o.value = name; o.textContent = name;
       sel.appendChild(o);
@@ -155,8 +159,7 @@
     requestAnimationFrame(frame);
   }
 
-  function spread(cells, exits) {
-    const EX = D.TYPE_NAMES.indexOf("EXIT");
+  function spread(cells, exits, EX) {
     const seen = new Set();
     for (let r = 0; r < D.ROWS; r++)
       for (let c = 0; c < D.COLS; c++) {

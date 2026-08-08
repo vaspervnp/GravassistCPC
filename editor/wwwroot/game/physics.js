@@ -26,10 +26,11 @@
   }
 
   class Room {
-    constructor(cells) {
+    constructor(cells, teleports) {
       this.cells = cells.map(r => r.slice());
       this.probeG = 0;
       this.gateOpen = false;
+      this.teleports = teleports || {};   // "c,r" -> [dc, dr]
     }
     cell(c, r) {
       if (c < 0 || r < 0 || c >= D.COLS || r >= D.ROWS) return T.SOLID;
@@ -272,16 +273,15 @@
       if (this.room.cells[r][c] !== T.EMPTY) return false;
       this.room.cells[r][c] = T.CRATE; this.carry = 0; return true;
     }
+    // Στο ΔΗΛΩΜΕΝΟ κελί. Αδήλωτη τηλεμεταφορά δεν κάνει τίποτα — παλιά έψαχνε
+    // "τον άλλον στο δωμάτιο", που δούλευε μόνο με ακριβώς δύο.
     teleport(col, row) {
-      for (let r = 0; r < D.ROWS; r++)
-        for (let c = 0; c < D.COLS; c++)
-          if ((c !== col || r !== row) && this.room.cells[r][c] === T.TELEPORT) {
-            this.x = c * D.CELL + D.CELL / 2;
-            this.y = D.GRID_Y0 + r * D.CELL + D.CELL / 2;
-            this.warp = true;
-            return true;
-          }
-      return false;
+      const d = this.room.teleports[col + "," + row];
+      if (!d) return false;
+      this.x = d[0] * D.CELL + D.CELL / 2;
+      this.y = D.GRID_Y0 + d[1] * D.CELL + D.CELL / 2;
+      this.warp = true;
+      return true;
     }
     setGravity(g) { this.worldG = g; this.g = g; this.cratesOn = true; }
 

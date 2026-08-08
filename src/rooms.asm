@@ -281,10 +281,16 @@ room_1_rec:
                 db 6           ; αρχική φορά βαρύτητας
                 dw room_1_cells
                 dw room_1_exits
+                dw room_1_tps
 
 room_1_exits:   ; col, row, αίθουσα ... #FF = τέλος
                 db 39,21,2
                 db 39,22,2
+                db #FF
+
+room_1_tps:     ; col, row, dcol, drow ... #FF = τέλος
+                db 26,22,38,22
+                db 38,22,26,22
                 db #FF
 
 room_1_cells:
@@ -320,10 +326,14 @@ room_2_rec:
                 db 0           ; αρχική φορά βαρύτητας
                 dw room_2_cells
                 dw room_2_exits
+                dw room_2_tps
 
 room_2_exits:   ; col, row, αίθουσα ... #FF = τέλος
                 db 0,21,1
                 db 0,22,1
+                db #FF
+
+room_2_tps:     ; col, row, dcol, drow ... #FF = τέλος
                 db #FF
 
 room_2_cells:

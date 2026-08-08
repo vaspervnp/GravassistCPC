@@ -221,7 +221,12 @@ rl_got:         ld   a,c
                 ld   e,(hl)
                 inc  hl
                 ld   d,(hl)
+                inc  hl
                 ld   (room_exits),de
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                ld   (room_tps),de
 
                 xor  a                  ; καθαρή αρχή στη νέα αίθουσα
                 ld   (crates_on),a
@@ -235,6 +240,7 @@ rl_got:         ld   a,c
                 jp   render_room
 
 room_exits      dw 0
+room_tps        dw 0
 pending_room    db 0
 
 ;---------------------------------------------------------------------
@@ -344,55 +350,45 @@ ha_y:           add  a,a
 ; h_teleport — στο ταίρι του. Η φορά βαρύτητας ΔΙΑΤΗΡΕΙΤΑΙ: αλλιώς η
 ;   τηλεμεταφορά θα ήταν και κρυφό flip, απρόβλεπτο για τον παίκτη.
 ;---------------------------------------------------------------------
-h_teleport:     ld   a,(cell_col)       ; θυμήσου από πού φεύγουμε
-                ld   (tp_col),a
-                ld   a,(cell_row)
-                ld   (tp_row),a
-                ld   hl,(level_ptr)
-                ld   bc,0               ; B = γραμμή, C = στήλη
+h_teleport:     ld   hl,(room_tps)
 tp_lp:          ld   a,(hl)
-                cp   T_TELEPORT
-                jr   nz,tp_next
-                ld   a,(tp_col)         ; όχι αυτό που ήδη πατάμε
-                cp   c
-                jr   nz,tp_found
-                ld   a,(tp_row)
+                cp   #FF
+                ret  z                  ; αδήλωτη: δεν κάνει τίποτα
+                ld   b,a                ; col
+                inc  hl
+                ld   c,(hl)             ; row
+                inc  hl
+                ld   a,(cell_col)
                 cp   b
-                jr   nz,tp_found
-tp_next:        inc  hl
-                inc  c
-                ld   a,c
-                cp   LVL_COLS
-                jr   nz,tp_lp
-                ld   c,0
-                inc  b
-                ld   a,b
-                cp   LVL_ROWS
-                jr   nz,tp_lp
-                ret                     ; μονήρης τηλεμεταφορά: τίποτα
+                jr   nz,tp_next
+                ld   a,(cell_row)
+                cp   c
+                jr   z,tp_found
+tp_next:        inc  hl                 ; προσπέρασε dcol, drow
+                inc  hl
+                jr   tp_lp
 
-tp_found:       ld   a,c                ; κέντρο του κελιού προορισμού
+tp_found:       ld   a,(hl)             ; dcol -> κέντρο κελιού
                 add  a,a
                 add  a,a
                 add  a,a
                 add  a,LVL_CELL/2
-                ld   l,a
-                ld   h,0
-                ld   (hero_x),hl
-                ld   a,b
+                ld   e,a
+                ld   d,0
+                ld   (hero_x),de
+                inc  hl
+                ld   a,(hl)             ; drow
                 add  a,a
                 add  a,a
                 add  a,a
                 add  a,LVL_Y0+LVL_CELL/2
-                ld   l,a
-                ld   h,0
-                ld   (hero_y),hl
+                ld   e,a
+                ld   d,0
+                ld   (hero_y),de
                 ld   a,1
-                ld   (hero_warp),a      ; η σχεδίαση πρέπει να σβήσει ΡΗΤΑ την
-                ret                     ; παλιά θέση: απέχει πολύ για την ένωση
+                ld   (hero_warp),a      ; η σχεδίαση σβήνει ΡΗΤΑ την παλιά θέση
+                ret
 
-tp_col          db 0
-tp_row          db 0
 
 ;---------------------------------------------------------------------
 ; crate_step — τα κιβώτια πέφτουν προς την ΤΡΕΧΟΥΣΑ φορά βαρύτητας

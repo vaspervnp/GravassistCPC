@@ -187,6 +187,7 @@ class Room:
         # Ρυθμίσεις δωματίου, ΜΕΤΑ το πλέγμα
         self.start_g = 0
         decl = {}                       # (col,row) -> αίθουσα προορισμού
+        tpd = {}                        # (col,row) -> κελί προορισμού
         for ln in text.splitlines():
             m = re.match(r"\s*gravity\s+([0-7])\s*$", ln, re.I)
             if m:
@@ -194,58 +195,66 @@ class Room:
             m = re.match(r"\s*exit\s+(\d+)\s+(\d+)\s+(\d+)\s*$", ln, re.I)
             if m:
                 decl[(int(m.group(1)), int(m.group(2)))] = int(m.group(3))
-        self.exits = self._link_exits(decl)
+            m = re.match(r"\s*tp\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", ln, re.I)
+            if m:
+                a, b, c, d = (int(x) for x in m.groups())
+                tpd[(a, b)] = (c, d)
+        self.exits = {k: (v or 0) for k, v in
+                      self._link(EXIT, decl, "εξόδου").items()}
+        self.teleports = self._link(TELEPORT, tpd, "τηλεμεταφοράς")
 
-    def _link_exits(self, decl):
-        """Ομαδοποιεί γειτονικά κελιά εξόδου και δίνει σε όλα τον ίδιο προορισμό.
+    def _groups_of(self, kind):
+        """Συνιστώσες γειτονικών κελιών τύπου `kind` (γειτνίαση 4).
 
-        Γειτονικές έξοδοι είναι ΜΙΑ πόρτα: δεν έχει νόημα δύο κελιά που
-        ακουμπάνε να βγάζουν αλλού. Ο κανόνας επιβάλλεται εδώ, ώστε ούτε ο
-        editor ούτε ο σχεδιαστής να μπορούν να τον παραβιάσουν κατά λάθος.
-
-        Η ομάδα ταυτοποιείται από το πάνω-αριστερό κελί της (σάρωση κατά
-        γραμμές), που είναι σταθερό ανεξάρτητα από τη σειρά σχεδίασης.
+        Επιστρέφει λίστα από λίστες κελιών, με πρώτο κάθε φορά το πάνω-αριστερό
+        (σάρωση κατά γραμμές) — σταθερό αναγνωριστικό, ανεξάρτητο από τη σειρά
+        σχεδίασης.
         """
-        seen, out = set(), {}
+        seen, out = set(), []
         for r in range(ROWS):
             for c in range(COLS):
-                if self.cells[r][c] != EXIT or (c, r) in seen:
+                if self.cells[r][c] != kind or (c, r) in seen:
                     continue
                 group, stack = [], [(c, r)]
                 seen.add((c, r))
-                while stack:                    # γειτνίαση 4
+                while stack:
                     cc, rr = stack.pop()
                     group.append((cc, rr))
                     for nc, nr in ((cc+1, rr), (cc-1, rr), (cc, rr+1), (cc, rr-1)):
                         if (0 <= nc < COLS and 0 <= nr < ROWS
                                 and (nc, nr) not in seen
-                                and self.cells[nr][nc] == EXIT):
+                                and self.cells[nr][nc] == kind):
                             seen.add((nc, nr))
                             stack.append((nc, nr))
-                found = {decl[g] for g in group if g in decl}
-                if len(found) > 1:
-                    raise ValueError(
-                        f"γειτονικές έξοδοι στο {sorted(group)} δηλώνουν "
-                        f"διαφορετικές αίθουσες {sorted(found)}")
-                dest = found.pop() if found else 0
-                for g in group:
-                    out[g] = dest
+                out.append(sorted(group, key=lambda p: (p[1], p[0])))
+        return out
+
+    def _link(self, kind, decl, what):
+        """Δίνει σε ΟΛΑ τα κελιά κάθε ομάδας τον ίδιο προορισμό.
+
+        Γειτονικά κελιά είναι ΕΝΑ αντικείμενο: δεν έχει νόημα δύο που ακουμπάνε
+        να βγάζουν αλλού. Ο κανόνας επιβάλλεται εδώ, ώστε ούτε ο editor ούτε ο
+        σχεδιαστής να μπορούν να τον παραβιάσουν κατά λάθος.
+        """
+        out = {}
+        for group in self._groups_of(kind):
+            found = {decl[g] for g in group if g in decl}
+            if len(found) > 1:
+                raise ValueError(
+                    f"γειτονικά κελιά {what} στο {group} δηλώνουν "
+                    f"διαφορετικούς προορισμούς {sorted(found)}")
+            dest = found.pop() if found else None
+            for g in group:
+                out[g] = dest
         return out
 
     def exit_groups(self):
-        """[(πάνω-αριστερό κελί, προορισμός, [κελιά])] ανά ομάδα εξόδου."""
-        groups = {}
-        for (c, r), dest in sorted(self.exits.items(), key=lambda kv: (kv[0][1], kv[0][0])):
-            key = None
-            for k, (d, cells) in groups.items():
-                if any(abs(c-cc) + abs(r-rr) == 1 for cc, rr in cells):
-                    key = k
-                    break
-            if key is None:
-                groups[(c, r)] = (dest, [(c, r)])
-            else:
-                groups[key][1].append((c, r))
-        return [(k, v[0], v[1]) for k, v in groups.items()]
+        """[(πάνω-αριστερό κελί, αίθουσα, [κελιά])] ανά ομάδα εξόδου."""
+        return [(g[0], self.exits[g[0]], g) for g in self._groups_of(EXIT)]
+
+    def teleport_groups(self):
+        """[(πάνω-αριστερό κελί, κελί προορισμού ή None, [κελιά])] ανά ομάδα."""
+        return [(g[0], self.teleports[g[0]], g) for g in self._groups_of(TELEPORT)]
 
     @property
     def start_x(self):
@@ -485,15 +494,23 @@ class Hero:
         return True
 
     def teleport(self, col, row):
-        """Στο ταίρι του. Η φορά βαρύτητας ΔΙΑΤΗΡΕΙΤΑΙ — αλλιώς η τηλεμεταφορά
-        θα ήταν και κρυφό flip, και ο παίκτης δεν θα μπορούσε να το προβλέψει."""
-        for r in range(ROWS):
-            for c in range(COLS):
-                if (c, r) != (col, row) and self.room.cells[r][c] == TELEPORT:
-                    self.x = c * CELL + CELL // 2
-                    self.y = GRID_Y0 + r * CELL + CELL // 2
-                    return True
-        return False
+        """Στο ΔΗΛΩΜΕΝΟ κελί προορισμού.
+
+        Παλιά έψαχνε "τον άλλον teleporter στο δωμάτιο": δούλευε μόνο με
+        ακριβώς δύο, και ο σχεδιαστής δεν είχε κανέναν έλεγχο. Τώρα ο
+        προορισμός δηλώνεται ρητά· αδήλωτος teleporter δεν κάνει τίποτα.
+
+        Η φορά βαρύτητας ΔΙΑΤΗΡΕΙΤΑΙ — αλλιώς η τηλεμεταφορά θα ήταν και κρυφό
+        flip, και ο παίκτης δεν θα μπορούσε να προβλέψει πού θα βρεθεί.
+        """
+        dest = self.room.teleports.get((col, row))
+        if dest is None:
+            return False
+        c, r = dest
+        self.x = c * CELL + CELL // 2
+        self.y = GRID_Y0 + r * CELL + CELL // 2
+        self.warp = True
+        return True
 
     def touch_objects(self):
         """Αντιδράσεις σε ό,τι ακουμπάει το σώμα. Καλείται μία φορά ανά frame."""
