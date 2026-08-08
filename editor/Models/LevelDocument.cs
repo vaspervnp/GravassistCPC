@@ -15,8 +15,10 @@ namespace GravassistEditor.Models;
 /// γραμμή πίστας στο <see cref="Header"/>, οι μετά την τελευταία στο <see cref="Footer"/>.
 /// Έτσι τα σχόλια κεφαλής επιβιώνουν σε κάθε αποθήκευση.
 ///
-/// Στην ουρά ζουν και οι ρυθμίσεις («gravity N») και οι συνδέσεις εξόδων
-/// («exit &lt;col&gt; &lt;row&gt; &lt;room&gt;» — βλ. <see cref="ExitGraph"/>).
+/// Στην ουρά ζουν και οι ρυθμίσεις («gravity N»), οι συνδέσεις εξόδων
+/// («exit &lt;col&gt; &lt;row&gt; &lt;room&gt;» — βλ. <see cref="ExitGraph"/>) και οι
+/// τηλεμεταφορές («tp &lt;col&gt; &lt;row&gt; &lt;dcol&gt; &lt;drow&gt;» — βλ.
+/// <see cref="TeleportGraph"/>).
 /// </summary>
 public sealed class LevelDocument
 {
@@ -73,6 +75,7 @@ public sealed class LevelDocument
         var doc = CreateEmpty($"Αίθουσα {number}");
         doc.Header.Insert(1, $"; Αρχείο: {RoomNaming.FileName(number)} — ο αριθμός αίθουσας είναι στο όνομα.");
         doc.Header.Add("; Συνδέσεις εξόδων στην ουρά: exit <col> <row> <room>.");
+        doc.Header.Add("; Τηλεμεταφορές στην ουρά: tp <col> <row> <dcol> <drow> (ίδια αίθουσα).");
 
         // Ο δείκτης εκκίνησης πάει πάνω στο πάτωμα, μέσα από το περίγραμμα.
         var startRow = new StringBuilder(doc.Rows[TileCatalog.Rows - 2]);
@@ -158,10 +161,16 @@ public sealed class LevelDocument
     // ================= Έξοδοι & αίθουσες =================
 
     /// <summary>Οι ομάδες γειτονικών κελιών εξόδου, σε σειρά σάρωσης κατά γραμμές.</summary>
-    public List<ExitGroup> ExitGroups() => ExitGraph.FindGroups(Rows);
+    public List<CellGroup> ExitGroups() => ExitGraph.FindGroups(Rows);
 
     /// <summary>Οι δηλωμένοι προορισμοί («exit …») της ουράς.</summary>
     public List<ExitLink> ExitLinks() => ExitGraph.ParseLines(Footer);
+
+    /// <summary>Οι ομάδες γειτονικών κελιών τηλεμεταφοράς, σε σειρά σάρωσης.</summary>
+    public List<CellGroup> TeleportGroups() => TeleportGraph.FindGroups(Rows);
+
+    /// <summary>Οι δηλωμένοι προορισμοί («tp …») της ουράς.</summary>
+    public List<TeleportLink> TeleportLinks() => TeleportGraph.ParseLines(Footer);
 
     /// <summary>Πόσοι δείκτες εκκίνησης '@' υπάρχουν στο πλέγμα.</summary>
     public int StartMarkerCount =>
@@ -176,6 +185,22 @@ public sealed class LevelDocument
     {
         Footer.RemoveAll(ExitGraph.IsExitLine);
         foreach (var link in links) Footer.Add(ExitGraph.FormatLine(link));
+    }
+
+    /// <summary>
+    /// Ξαναγράφει τις γραμμές «tp» της ουράς, ακριβώς όπως το
+    /// <see cref="SetExitLinks"/> κάνει με τις «exit»: πετάει τις παλιές και
+    /// βάζει τις νέες στο τέλος, μία ανά ομάδα τηλεμεταφοράς. Σχόλια, «gravity N»
+    /// και «exit …» μένουν αυτούσια και στη σειρά τους.
+    ///
+    /// ΣΕΙΡΑ ΚΛΗΣΗΣ: πρώτα το <see cref="SetExitLinks"/> και μετά αυτό, ώστε η
+    /// ουρά να καταλήγει «… exit … / tp …» — η ίδια σειρά με τα υπάρχοντα αρχεία,
+    /// άρα η αποθήκευση χωρίς αλλαγές αφήνει το αρχείο ταυτόσημο.
+    /// </summary>
+    public void SetTeleportLinks(IEnumerable<TeleportLink> links)
+    {
+        Footer.RemoveAll(TeleportGraph.IsTeleportLine);
+        foreach (var link in links) Footer.Add(TeleportGraph.FormatLine(link));
     }
 
     /// <summary>
@@ -230,7 +255,53 @@ public sealed class LevelDocument
                          "ομάδα εξόδου του πλέγματος και αγνοήθηκε.");
         }
 
+        ValidateTeleports(errors, warnings);
         return new ValidationReport(errors, warnings);
+    }
+
+    /// <summary>
+    /// Επικύρωση των τηλεμεταφορών.
+    ///
+    /// Ομάδα χωρίς προορισμό = ΠΡΟΕΙΔΟΠΟΙΗΣΗ: στο physics.py ο προορισμός μένει
+    /// None και η τηλεμεταφορά απλώς δεν κάνει τίποτα — ο χρήστης μπορεί να τη
+    /// συμπληρώσει αργότερα. Προορισμός εκτός πλέγματος = ΣΦΑΛΜΑ: θα έστελνε τον
+    /// παίκτη έξω από το δωμάτιο.
+    /// </summary>
+    private void ValidateTeleports(List<string> errors, List<string> warnings)
+    {
+        var groups = TeleportGroups();
+        var links = TeleportLinks();
+        var byAnchor = links
+            .GroupBy(l => (l.Col, l.Row))
+            .ToDictionary(g => g.Key, g => g.Last());
+
+        foreach (var group in groups)
+        {
+            var where = $"στήλη {group.Col}, γραμμή {group.Row}";
+            var size = group.Cells.Count == 1 ? "1 κελί" : $"{group.Cells.Count} κελιά";
+            if (!byAnchor.TryGetValue((group.Col, group.Row), out var link))
+            {
+                warnings.Add($"Η τηλεμεταφορά στη θέση {where} ({size}) δεν έχει " +
+                             "δηλωμένο προορισμό και δεν θα κάνει τίποτα στο παιχνίδι.");
+                continue;
+            }
+
+            if (link.DestCol < 0 || link.DestCol >= TileCatalog.Cols ||
+                link.DestRow < 0 || link.DestRow >= TileCatalog.Rows)
+            {
+                errors.Add($"Η τηλεμεταφορά στη θέση {where} δείχνει στο κελί " +
+                           $"({link.DestCol},{link.DestRow}), εκτός πλέγματος " +
+                           $"0..{TileCatalog.Cols - 1} x 0..{TileCatalog.Rows - 1}.");
+            }
+        }
+
+        // Δηλώσεις που δείχνουν σε θέση χωρίς ομάδα τηλεμεταφοράς: ορφανές.
+        var anchors = groups.Select(g => (g.Col, g.Row)).ToHashSet();
+        foreach (var link in links.Where(l => !anchors.Contains((l.Col, l.Row))))
+        {
+            warnings.Add($"Η δήλωση «{TeleportGraph.FormatLine(link)}» δεν αντιστοιχεί σε " +
+                         "ομάδα τηλεμεταφοράς του πλέγματος και αγνοήθηκε.");
+        }
     }
 
     /// <summary>Παράγει το κείμενο του αρχείου (κεφαλή + 24 γραμμές + ουρά, LF, τελικό newline).</summary>

@@ -72,6 +72,9 @@ public static class TileCatalog
     /// <summary>Ο χαρακτήρας της εξόδου (βλ. <see cref="ExitGraph"/> για την ομαδοποίηση).</summary>
     public const char ExitSymbol = ExitGraph.ExitSymbol;
 
+    /// <summary>Ο χαρακτήρας της τηλεμεταφοράς (βλ. <see cref="TeleportGraph"/>).</summary>
+    public const char TeleportSymbol = TeleportGraph.TeleportSymbol;
+
     private const string GeoGroup = "Γεωμετρία";
     private const string SurfaceGroup = "Επιφάνειες & ζώνες";
     private const string HazardGroup = "Κίνδυνοι";
@@ -276,7 +279,7 @@ public static class TileCatalog
             """),
 
         new TileType('T', "teleport", ItemGroup, "Τηλεμεταφορά",
-            "Σε στέλνει στο ταίρι του. Βάλε τα ΔΥΟ άκρα του ζεύγους.",
+            "Σε στέλνει σε άλλο κελί της ΙΔΙΑΣ αίθουσας. Όρισε τον προορισμό στον πίνακα «Τηλεμεταφορές».",
             Palette.Ink, Palette.EdgeColor,
             """
             <ellipse cx="4" cy="6.3" rx="3" ry="1.2" fill="none"

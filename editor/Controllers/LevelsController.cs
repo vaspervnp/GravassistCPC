@@ -55,6 +55,14 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
                 .Where(e => e.Room is not null)
                 .Select(e => new ExitLink(e.Col, e.Row, e.Room!.Value)));
 
+            // ΜΕΤΑ τις εξόδους, ώστε η ουρά να μένει «… exit … / tp …» — η ίδια
+            // σειρά με τα υπάρχοντα αρχεία (round-trip χωρίς αλλαγές).
+            // Ομάδα χωρίς προορισμό δεν γράφει γραμμή· την πιάνει η επικύρωση ως
+            // προειδοποίηση, γιατί απλώς δεν κάνει τίποτα στο παιχνίδι.
+            doc.SetTeleportLinks(request.Teleports
+                .Where(t => t.DestCol is not null && t.DestRow is not null)
+                .Select(t => new TeleportLink(t.Col, t.Row, t.DestCol!.Value, t.DestRow!.Value)));
+
             var warnings = store.Save(request.Name, doc);
             return Ok(new
             {
@@ -103,9 +111,10 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
     }
 
     /// <summary>
-    /// Ενώνει τις ομάδες εξόδου του πλέγματος με τους προορισμούς της ουράς.
-    /// Η αυθεντία για το ΠΟΙΕΣ είναι οι έξοδοι είναι πάντα το πλέγμα· η ουρά δίνει
-    /// μόνο προορισμούς και όποια δήλωση δεν ταιριάζει σε ομάδα αγνοείται.
+    /// Ενώνει τις ομάδες εξόδου και τηλεμεταφοράς του πλέγματος με τους
+    /// προορισμούς της ουράς. Η αυθεντία για το ΠΟΙΕΣ είναι οι ομάδες είναι πάντα
+    /// το πλέγμα· η ουρά δίνει μόνο προορισμούς και όποια δήλωση δεν ταιριάζει σε
+    /// ομάδα αγνοείται.
     /// </summary>
     private static LevelDto ToDto(string name, LevelDocument doc)
     {
@@ -120,6 +129,17 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
                 g.Cells.Count))
             .ToList();
 
-        return new LevelDto(name, doc.Rows, doc.Header, doc.Footer, exits, RoomNaming.NumberOf(name));
+        var tpByAnchor = doc.TeleportLinks()
+            .GroupBy(l => (l.Col, l.Row))
+            .ToDictionary(g => g.Key, g => g.Last());
+
+        var teleports = doc.TeleportGroups()
+            .Select(g => tpByAnchor.TryGetValue((g.Col, g.Row), out var link)
+                ? new TeleportDto(g.Col, g.Row, link.DestCol, link.DestRow, g.Cells.Count)
+                : new TeleportDto(g.Col, g.Row, null, null, g.Cells.Count))
+            .ToList();
+
+        return new LevelDto(name, doc.Rows, doc.Header, doc.Footer,
+            exits, teleports, RoomNaming.NumberOf(name));
     }
 }

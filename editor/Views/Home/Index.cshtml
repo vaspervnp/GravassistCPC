@@ -19,6 +19,7 @@
         empty = Model.EmptySymbol.ToString(),
         solid = Model.SolidSymbol.ToString(),
         exit = Model.ExitSymbol.ToString(),
+        teleport = Model.TeleportSymbol.ToString(),
         start = Model.StartSymbol.ToString(),
         tiles = Model.Tiles.Select(t => new
         {
@@ -171,8 +172,8 @@
         margin-top: 8px;
     }
 
-    /* --- Πίνακας εξόδων --- */
-    .exit-row {
+    /* --- Πίνακες συνδέσεων (έξοδοι & τηλεμεταφορές) --- */
+    .link-row {
         display: flex;
         align-items: center;
         gap: 6px;
@@ -181,9 +182,9 @@
         font-size: 11px;
     }
 
-    .exit-row:last-child { border-bottom: none; }
+    .link-row:last-child { border-bottom: none; }
 
-    .exit-tag {
+    .link-tag {
         flex: 0 0 auto;
         min-width: 20px;
         text-align: center;
@@ -192,9 +193,9 @@
         color: var(--edge);
     }
 
-    .exit-pos { flex: 1 1 auto; color: #8a8ac0; }
+    .link-pos { flex: 1 1 auto; color: #8a8ac0; }
 
-    .exit-row input[type=number] {
+    .link-row input[type=number] {
         flex: 0 0 62px;
         font: inherit;
         font-size: 12px;
@@ -204,15 +205,35 @@
         padding: 3px 4px;
     }
 
-    .exit-row.missing input[type=number] { border-color: #ff5050; }
-    .exit-row.unknown input[type=number] { border-color: #ffd000; }
+    /* Στις τηλεμεταφορές χωράνε δύο πεδία (στήλη + γραμμή) και ένα κουμπί. */
+    .link-row input.coord { flex: 0 0 44px; }
 
-    .exit-note { font-size: 11px; margin-top: 6px; }
-    .exit-note.err { color: #ff5050; }
-    .exit-note.warn { color: #ffd000; }
+    .link-row button.pick {
+        flex: 0 0 auto;
+        padding: 2px 5px;
+        font-size: 11px;
+    }
 
-    /* Οι ετικέτες προορισμού πάνω στο πλέγμα δεν πρέπει να πιάνουν το ποντίκι. */
-    #exit-labels { pointer-events: none; }
+    .link-row.missing input[type=number] { border-color: #ff5050; }
+    .link-row.unknown input[type=number] { border-color: #ffd000; }
+
+    /* Ομάδα τηλεμεταφοράς χωρίς προορισμό: προειδοποίηση, όχι σφάλμα. */
+    .link-row.pending input[type=number] { border-color: #ffd000; }
+
+    .link-row.picking {
+        background: rgba(255, 128, 0, 0.18);
+        outline: 1px solid var(--edge);
+    }
+
+    .link-note { font-size: 11px; margin-top: 6px; }
+    .link-note.err { color: #ff5050; }
+    .link-note.warn { color: #ffd000; }
+
+    /* Οι ετικέτες/βέλη πάνω στο πλέγμα δεν πρέπει να πιάνουν το ποντίκι. */
+    #exit-labels, #tp-labels, #tp-links { pointer-events: none; }
+
+    /* Κατάσταση «διάλεξε κελί προορισμού»: αλλάζει ο δείκτης πάνω από το πλέγμα. */
+    #grid.picking { cursor: cell; }
 </style>
 
 <script id="editor-data" type="application/json">@Html.Raw(tileJson)</script>
@@ -252,11 +273,25 @@
         <div class="panel">
             <h2>Έξοδοι</h2>
             <div id="exit-list"></div>
-            <div class="exit-note" id="exit-note"></div>
+            <div class="link-note" id="exit-note"></div>
             <div class="hintline">
                 Γειτονικά κελιά <code>X</code> (πάνω/κάτω/αριστερά/δεξιά) μετράνε ως ΜΙΑ
                 έξοδος και οδηγούν στην ίδια αίθουσα. Κάθε ομάδα γράφει μία γραμμή
                 <code>exit &lt;col&gt; &lt;row&gt; &lt;room&gt;</code> στην ουρά του αρχείου.
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Τηλεμεταφορές</h2>
+            <div id="tp-list"></div>
+            <div class="link-note" id="tp-note"></div>
+            <div class="hintline">
+                Γειτονικά κελιά <code>T</code> μετράνε ως ΜΙΑ τηλεμεταφορά και βγάζουν
+                στο ίδιο κελί της ΙΔΙΑΣ αίθουσας. «Ορισμός» = διάλεξε το κελί προορισμού
+                με κλικ στο πλέγμα (<kbd>Esc</kbd> ακυρώνει)· τα πεδία στ./γρ. δέχονται
+                και πληκτρολόγηση. Κάθε ομάδα γράφει μία γραμμή
+                <code>tp &lt;col&gt; &lt;row&gt; &lt;dcol&gt; &lt;drow&gt;</code>.
+                Τηλεμεταφορά χωρίς προορισμό δεν κάνει τίποτα στο παιχνίδι.
             </div>
         </div>
 
@@ -313,11 +348,22 @@
                 {
                     <symbol id="t-@t.Id" viewBox="0 0 8 8">@Html.Raw(bake(t))</symbol>
                 }
+                @* Μύτη του βέλους τηλεμεταφοράς — δείχνει προς το κελί προορισμού. *@
+                <marker id="tp-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                        markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                    <path d="M0,1 L10,5 L0,9 z" fill="#ff8000"></path>
+                </marker>
             </defs>
             <g id="cells"></g>
             <g id="gridlines" stroke="#ffffff" stroke-opacity="0.22" stroke-width="0.12"></g>
+            @* Βέλος από την επιλεγμένη τηλεμεταφορά προς το κελί προορισμού της. *@
+            <g id="tp-links"></g>
             @* Ο αριθμός αίθουσας προορισμού, γραμμένος πάνω σε κάθε κελί της ομάδας. *@
             <g id="exit-labels" font-size="5" font-family="monospace" font-weight="bold"
+               text-anchor="middle" stroke="#000000" stroke-width="1.2"
+               paint-order="stroke" stroke-linejoin="round"></g>
+            @* Ο αύξων αριθμός κάθε τηλεμεταφοράς, πάνω σε κάθε κελί της ομάδας. *@
+            <g id="tp-labels" font-size="5" font-family="monospace" font-weight="bold"
                text-anchor="middle" stroke="#000000" stroke-width="1.2"
                paint-order="stroke" stroke-linejoin="round"></g>
             <rect id="cursor" width="8" height="8" fill="none"
@@ -341,14 +387,17 @@
         const DATA = JSON.parse(document.getElementById("editor-data").textContent);
         const COLS = DATA.cols, ROWS = DATA.rows;
         const EMPTY = DATA.empty, SOLID = DATA.solid;
-        const EXIT = DATA.exit, START = DATA.start;
+        const EXIT = DATA.exit, START = DATA.start, TELE = DATA.teleport;
         const CELL = 8;                       // μονάδες SVG ανά κελί (= 8x8 pixel του CPC)
+        const SVGNS = "http://www.w3.org/2000/svg";
         const TILE_BY_SYMBOL = new Map(DATA.tiles.map(t => [t.symbol, t]));
 
         const svg = document.getElementById("grid");
         const cellsGroup = document.getElementById("cells");
         const gridlines = document.getElementById("gridlines");
         const exitLabels = document.getElementById("exit-labels");
+        const teleLabels = document.getElementById("tp-labels");
+        const teleLinks = document.getElementById("tp-links");
         const cursor = document.getElementById("cursor");
         const statusEl = document.getElementById("status");
         const readoutEl = document.getElementById("readout");
@@ -357,6 +406,8 @@
         const fileName = document.getElementById("file-name");
         const exitListEl = document.getElementById("exit-list");
         const exitNoteEl = document.getElementById("exit-note");
+        const teleListEl = document.getElementById("tp-list");
+        const teleNoteEl = document.getElementById("tp-note");
 
         // --- Κατάσταση -------------------------------------------------
         let grid = [];             // grid[row][col] = χαρακτήρας
@@ -376,6 +427,18 @@
         let exitRooms = new Map();
         let exitGroups = [];              // [{col,row,cells:[[c,r],…],room}]
         let knownRooms = new Set();       // αριθμοί αιθουσών που υπάρχουν ως αρχεία
+
+        // Προορισμοί τηλεμεταφορών, με την ΙΔΙΑ λογική: κλειδί = "col,row" κάθε
+        // κελιού 'T' της ομάδας, τιμή = [dcol,drow] ή null. Ο προορισμός επιβιώνει
+        // όταν η ομάδα μεγαλώσει και μετακινηθεί το αναγνωριστικό της.
+        let teleDests = new Map();
+        let teleGroups = [];              // [{col,row,cells:[[c,r],…],dest:[c,r]|null}]
+
+        // Κατάσταση «διάλεξε κελί προορισμού»: δείκτης της σειράς τηλεμεταφοράς
+        // που περιμένει κλικ στο πλέγμα, ή null.
+        let pickIndex = null;
+        // Ποια σειρά τηλεμεταφοράς δείχνει βέλος στο πλέγμα (hover ή επιλογή).
+        let teleHighlight = null;
 
         function cellKey(c, r) { return c + "," + r; }
 
@@ -434,19 +497,20 @@
 
         function refreshSource() {
             sourceView.textContent = grid.map(row => row.join("")).join("\n");
-            syncExits();
+            syncLinks();
         }
 
-        // --- Έξοδοι & αίθουσες ------------------------------------------
-        // Ίδιος κανόνας με το Models/RoomLinks.cs: γειτονικά κελιά 'X' σε γειτνίαση 4
-        // αποτελούν ΜΙΑ έξοδο· η σάρωση κατά γραμμές βρίσκει πρώτο το πάνω-αριστερό
-        // κελί της, που γίνεται το αναγνωριστικό της ομάδας.
-        function findExitGroups() {
+        // --- Ομάδες κελιών ----------------------------------------------
+        // Ίδιος κανόνας με το CellGroups.Find του Models/RoomLinks.cs και το
+        // Room._groups_of του tools/physics.py: γειτονικά κελιά του ίδιου χαρακτήρα
+        // σε γειτνίαση 4 αποτελούν ΕΝΑ αντικείμενο· η σάρωση κατά γραμμές βρίσκει
+        // πρώτο το πάνω-αριστερό κελί, που γίνεται το αναγνωριστικό της ομάδας.
+        function findGroups(symbol) {
             const seen = new Set();
             const groups = [];
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
-                    if (grid[r][c] !== EXIT || seen.has(cellKey(c, r))) continue;
+                    if (grid[r][c] !== symbol || seen.has(cellKey(c, r))) continue;
                     seen.add(cellKey(c, r));
                     const cells = [];
                     const stack = [[c, r]];
@@ -457,22 +521,30 @@
                                     [cur[0] - 1, cur[1]], [cur[0] + 1, cur[1]]];
                         for (const n of nb) {
                             if (n[0] < 0 || n[1] < 0 || n[0] >= COLS || n[1] >= ROWS) continue;
-                            if (grid[n[1]][n[0]] !== EXIT) continue;
+                            if (grid[n[1]][n[0]] !== symbol) continue;
                             if (seen.has(cellKey(n[0], n[1]))) continue;
                             seen.add(cellKey(n[0], n[1]));
                             stack.push(n);
                         }
                     }
                     cells.sort((a, b) => a[1] !== b[1] ? a[1] - b[1] : a[0] - b[0]);
-                    groups.push({ col: c, row: r, cells: cells, room: null });
+                    groups.push({ col: c, row: r, cells: cells });
                 }
             }
             return groups;
         }
 
-        function syncExits() {
+        /// Ξαναϋπολογίζει ομάδες εξόδων ΚΑΙ τηλεμεταφορών και ξαναζωγραφίζει
+        /// ετικέτες και πίνακες. Καλείται μετά από κάθε αλλαγή του πλέγματος.
+        function syncLinks() {
             if (!grid.length) return;
-            exitGroups = findExitGroups();
+            syncExits();
+            syncTeleports();
+        }
+
+        // --- Έξοδοι & αίθουσες ------------------------------------------
+        function syncExits() {
+            exitGroups = findGroups(EXIT);
 
             const next = new Map();
             exitGroups.forEach(function (g) {
@@ -524,16 +596,16 @@
 
             exitGroups.forEach(function (g, i) {
                 const row = document.createElement("div");
-                row.className = "exit-row";
+                row.className = "link-row";
                 if (g.room === null) row.classList.add("missing");
                 else if (!knownRooms.has(g.room)) row.classList.add("unknown");
 
                 const tag = document.createElement("span");
-                tag.className = "exit-tag";
+                tag.className = "link-tag";
                 tag.textContent = "#" + (i + 1);
 
                 const pos = document.createElement("span");
-                pos.className = "exit-pos";
+                pos.className = "link-pos";
                 pos.textContent = "στ." + g.col + " γρ." + g.row + " · " + g.cells.length + " κελ.";
 
                 const input = document.createElement("input");
@@ -566,18 +638,34 @@
             renderExitNote();
         }
 
-        function renderExitNote() {
-            const p = problems();
+        /// Γράφει στο σημείωμα ενός πίνακα το πρώτο σφάλμα, αλλιώς την πρώτη
+        /// προειδοποίηση που αφορά αυτόν τον πίνακα.
+        function renderNote(el, p) {
             if (p.errors.length) {
-                exitNoteEl.className = "exit-note err";
-                exitNoteEl.textContent = p.errors[0];
+                el.className = "link-note err";
+                el.textContent = p.errors[0];
             } else if (p.warnings.length) {
-                exitNoteEl.className = "exit-note warn";
-                exitNoteEl.textContent = p.warnings[0];
+                el.className = "link-note warn";
+                el.textContent = p.warnings[0];
             } else {
-                exitNoteEl.className = "exit-note";
-                exitNoteEl.textContent = "";
+                el.className = "link-note";
+                el.textContent = "";
             }
+        }
+
+        // Ο πίνακας εξόδων κρατάει και το σημείωμα για τον δείκτη εκκίνησης —
+        // δεν έχει δικό του πίνακα και είναι λάθος «σε επίπεδο δωματίου», όπως οι έξοδοι.
+        function renderExitNote() {
+            renderNote(exitNoteEl, merge(exitProblems(), startProblems()));
+        }
+
+        function merge() {
+            const errors = [], warnings = [];
+            for (const p of arguments) {
+                errors.push(...p.errors);
+                warnings.push(...p.warnings);
+            }
+            return { errors: errors, warnings: warnings };
         }
 
         function setGroupRoom(index, room) {
@@ -590,11 +678,239 @@
             renderExitPanel();
         }
 
-        /// Επικύρωση πριν την αποθήκευση. Σφάλμα = δεν αποθηκεύουμε·
-        /// προειδοποίηση = αποθηκεύουμε αλλά το λέμε.
-        function problems() {
-            const errors = [], warnings = [];
+        // --- Τηλεμεταφορές -----------------------------------------------
+        // Η τηλεμεταφορά βγάζει σε ΚΕΛΙ της ίδιας αίθουσας — δεν υπάρχει ζεύγος
+        // και δεν χρειάζεται η άλλη άκρη να είναι κι αυτή 'T'. Η ουρά του αρχείου
+        // παίρνει μία γραμμή «tp <col> <row> <dcol> <drow>» ανά ομάδα.
+        function syncTeleports() {
+            teleGroups = findGroups(TELE);
 
+            const next = new Map();
+            teleGroups.forEach(function (g) {
+                // Προορισμός της ομάδας = η πρώτη γνωστή τιμή σε σειρά σάρωσης,
+                // ώστε αν ενωθούν δύο ομάδες να κερδίζει η πάνω-αριστερή.
+                let dest = null;
+                for (const cell of g.cells) {
+                    const v = teleDests.get(cellKey(cell[0], cell[1]));
+                    if (v !== undefined && v !== null) { dest = v; break; }
+                }
+                g.dest = dest;
+                g.cells.forEach(cell => next.set(cellKey(cell[0], cell[1]), dest));
+            });
+            teleDests = next;
+
+            // Αν χάθηκε η ομάδα που περίμενε κλικ (π.χ. σβήστηκε), βγες από την
+            // κατάσταση επιλογής αντί να ορίσεις προορισμό σε λάθος σειρά.
+            if (pickIndex !== null && pickIndex >= teleGroups.length) pickIndex = null;
+            if (teleHighlight !== null && teleHighlight >= teleGroups.length) teleHighlight = null;
+
+            renderTeleLabels();
+            renderTelePanel();
+            renderTeleArrow();
+        }
+
+        function renderTeleLabels() {
+            teleLabels.textContent = "";
+            const frag = document.createDocumentFragment();
+            teleGroups.forEach(function (g, i) {
+                const label = g.dest === null ? "?" : String(i + 1);
+                g.cells.forEach(function (cell) {
+                    const t = document.createElementNS(SVGNS, "text");
+                    t.setAttribute("x", cell[0] * CELL + CELL / 2);
+                    t.setAttribute("y", cell[1] * CELL + CELL / 2 + 1.8);
+                    t.setAttribute("fill", g.dest === null ? "#ffd000" : "#ffffff");
+                    t.textContent = label;
+                    frag.appendChild(t);
+                });
+            });
+            teleLabels.appendChild(frag);
+        }
+
+        /// Το βέλος από την ομάδα προς το κελί προορισμού, για τη σειρά που είναι
+        /// σε hover ή σε κατάσταση επιλογής. Χωρίς επισήμανση δεν ζωγραφίζεται τίποτα.
+        function renderTeleArrow() {
+            teleLinks.textContent = "";
+            const i = pickIndex !== null ? pickIndex : teleHighlight;
+            if (i === null) return;
+            const g = teleGroups[i];
+            if (!g) return;
+
+            const frag = document.createDocumentFragment();
+
+            // Πλαίσιο γύρω από κάθε κελί της ομάδας — δείχνει ΠΟΙΑ είναι η ομάδα.
+            g.cells.forEach(function (cell) {
+                const box = document.createElementNS(SVGNS, "rect");
+                box.setAttribute("x", cell[0] * CELL);
+                box.setAttribute("y", cell[1] * CELL);
+                box.setAttribute("width", CELL);
+                box.setAttribute("height", CELL);
+                box.setAttribute("fill", "none");
+                box.setAttribute("stroke", "#ff8000");
+                box.setAttribute("stroke-width", "0.6");
+                frag.appendChild(box);
+            });
+
+            if (g.dest !== null) {
+                // Αφετηρία = το κέντρο του περιβάλλοντος ορθογωνίου της ομάδας.
+                const cs = g.cells.map(p => p[0]), rs = g.cells.map(p => p[1]);
+                const x1 = (Math.min(...cs) + Math.max(...cs) + 1) / 2 * CELL;
+                const y1 = (Math.min(...rs) + Math.max(...rs) + 1) / 2 * CELL;
+                const x2 = g.dest[0] * CELL + CELL / 2;
+                const y2 = g.dest[1] * CELL + CELL / 2;
+
+                const line = document.createElementNS(SVGNS, "line");
+                line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+                line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+                line.setAttribute("stroke", "#ff8000");
+                line.setAttribute("stroke-width", "0.8");
+                line.setAttribute("stroke-dasharray", "2 1.5");
+                line.setAttribute("marker-end", "url(#tp-arrow)");
+                frag.appendChild(line);
+
+                const box = document.createElementNS(SVGNS, "rect");
+                box.setAttribute("x", g.dest[0] * CELL + 0.5);
+                box.setAttribute("y", g.dest[1] * CELL + 0.5);
+                box.setAttribute("width", CELL - 1);
+                box.setAttribute("height", CELL - 1);
+                box.setAttribute("fill", "#ff8000");
+                box.setAttribute("fill-opacity", "0.25");
+                box.setAttribute("stroke", "#ff8000");
+                box.setAttribute("stroke-width", "0.7");
+                frag.appendChild(box);
+            }
+
+            teleLinks.appendChild(frag);
+        }
+
+        function renderTelePanel() {
+            teleListEl.textContent = "";
+            if (!teleGroups.length) {
+                const p = document.createElement("div");
+                p.className = "hintline";
+                p.style.marginTop = "0";
+                p.textContent = "Καμία τηλεμεταφορά. Ζωγράφισε κελιά «Τηλεμεταφορά» (T) στο πλέγμα.";
+                teleListEl.appendChild(p);
+                renderTeleNote();
+                return;
+            }
+
+            teleGroups.forEach(function (g, i) {
+                const row = document.createElement("div");
+                row.className = "link-row";
+                if (g.dest === null) row.classList.add("pending");
+                else if (!inGrid(g.dest[0], g.dest[1])) row.classList.add("missing");
+                if (pickIndex === i) row.classList.add("picking");
+
+                const tag = document.createElement("span");
+                tag.className = "link-tag";
+                tag.textContent = "#" + (i + 1);
+
+                const pos = document.createElement("span");
+                pos.className = "link-pos";
+                pos.textContent = "στ." + g.col + " γρ." + g.row + " · " + g.cells.length + " κελ.";
+
+                // Χειροκίνητη πληκτρολόγηση για ακρίβεια — αλλάζοντας το ένα πεδίο
+                // κρατάμε την τιμή του άλλου (ή 0 αν δεν υπάρχει ακόμα προορισμός).
+                const dcol = coordInput("στήλη προορισμού (0.." + (COLS - 1) + ")",
+                    g.dest === null ? "" : String(g.dest[0]), COLS - 1);
+                const drow = coordInput("γραμμή προορισμού (0.." + (ROWS - 1) + ")",
+                    g.dest === null ? "" : String(g.dest[1]), ROWS - 1);
+
+                function commit() {
+                    const c = parseCoord(dcol.value), r = parseCoord(drow.value);
+                    if (c === null && r === null) { setGroupDest(i, null); return; }
+                    setGroupDest(i, [c === null ? 0 : c, r === null ? 0 : r]);
+                }
+                dcol.addEventListener("change", commit);
+                drow.addEventListener("change", commit);
+
+                const pick = document.createElement("button");
+                pick.type = "button";
+                pick.className = "pick";
+                pick.textContent = pickIndex === i ? "Άκυρο" : "Ορισμός";
+                pick.title = "Διάλεξε το κελί προορισμού με κλικ στο πλέγμα (Esc ακυρώνει)";
+                pick.addEventListener("click", function () {
+                    if (pickIndex === i) cancelPick(); else startPick(i);
+                });
+
+                // Το πέρασμα του ποντικιού πάνω από τη σειρά δείχνει τη σύνδεση.
+                row.addEventListener("mouseenter", function () {
+                    teleHighlight = i;
+                    renderTeleArrow();
+                });
+                row.addEventListener("mouseleave", function () {
+                    if (teleHighlight === i) teleHighlight = null;
+                    renderTeleArrow();
+                });
+
+                row.append(tag, pos, dcol, drow, pick);
+                teleListEl.appendChild(row);
+            });
+
+            renderTeleNote();
+        }
+
+        function coordInput(title, value, max) {
+            const el = document.createElement("input");
+            el.type = "number";
+            el.className = "coord";
+            el.min = "0";
+            el.max = String(max);
+            el.step = "1";
+            el.title = title;
+            el.value = value;
+            return el;
+        }
+
+        function parseCoord(raw) {
+            const s = String(raw).trim();
+            if (s === "") return null;
+            const n = parseInt(s, 10);
+            return isNaN(n) ? null : n;
+        }
+
+        function inGrid(c, r) { return c >= 0 && r >= 0 && c < COLS && r < ROWS; }
+
+        function renderTeleNote() { renderNote(teleNoteEl, teleProblems()); }
+
+        function setGroupDest(index, dest) {
+            const g = teleGroups[index];
+            if (!g) return;
+            g.dest = dest;
+            g.cells.forEach(cell => teleDests.set(cellKey(cell[0], cell[1]), dest));
+            dirty = true;
+            renderTeleLabels();
+            renderTelePanel();
+            renderTeleArrow();
+        }
+
+        /// Μπαίνει σε κατάσταση «το επόμενο κλικ στο πλέγμα ορίζει τον προορισμό».
+        function startPick(index) {
+            pickIndex = index;
+            teleHighlight = index;
+            svg.classList.add("picking");
+            const g = teleGroups[index];
+            setStatus("Διάλεξε το κελί προορισμού για την τηλεμεταφορά #" + (index + 1) +
+                " (στ." + g.col + " γρ." + g.row + "). Esc για ακύρωση.", "warn");
+            renderTelePanel();
+            renderTeleArrow();
+        }
+
+        function cancelPick(quiet) {
+            if (pickIndex === null) return;
+            pickIndex = null;
+            teleHighlight = null;
+            svg.classList.remove("picking");
+            if (!quiet) setStatus("Η επιλογή προορισμού ακυρώθηκε.", "info");
+            renderTelePanel();
+            renderTeleArrow();
+        }
+
+        // --- Επικύρωση ----------------------------------------------------
+        /// Έξοδοι: αδήλωτος προορισμός = σφάλμα (η έξοδος δεν οδηγεί πουθενά),
+        /// άγνωστη αίθουσα = προειδοποίηση.
+        function exitProblems() {
+            const errors = [], warnings = [];
             exitGroups.forEach(function (g, i) {
                 const where = "#" + (i + 1) + " (στήλη " + g.col + ", γραμμή " + g.row + ")";
                 if (g.room === null) {
@@ -604,7 +920,31 @@
                         ", που δεν υπάρχει ακόμα ως αρχείο room_" + g.room + ".txt.");
                 }
             });
+            return { errors: errors, warnings: warnings };
+        }
 
+        /// Τηλεμεταφορές: χωρίς προορισμό = ΠΡΟΕΙΔΟΠΟΙΗΣΗ (δεν κάνει τίποτα στο
+        /// παιχνίδι, ο χρήστης μπορεί να τη συμπληρώσει μετά)· προορισμός εκτός
+        /// πλέγματος = ΣΦΑΛΜΑ.
+        function teleProblems() {
+            const errors = [], warnings = [];
+            teleGroups.forEach(function (g, i) {
+                const where = "#" + (i + 1) + " (στήλη " + g.col + ", γραμμή " + g.row + ")";
+                if (g.dest === null) {
+                    warnings.push("Η τηλεμεταφορά " + where + " δεν έχει προορισμό " +
+                        "και δεν θα κάνει τίποτα στο παιχνίδι.");
+                } else if (!inGrid(g.dest[0], g.dest[1])) {
+                    errors.push("Η τηλεμεταφορά " + where + " δείχνει στο κελί (" +
+                        g.dest[0] + "," + g.dest[1] + "), εκτός πλέγματος 0.." +
+                        (COLS - 1) + " x 0.." + (ROWS - 1) + ".");
+                }
+            });
+            return { errors: errors, warnings: warnings };
+        }
+
+        /// Δείκτης εκκίνησης: πάνω από έναν = σφάλμα, κανένας = προειδοποίηση.
+        function startProblems() {
+            const errors = [], warnings = [];
             let starts = 0;
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) if (grid[r][c] === START) starts++;
@@ -615,8 +955,13 @@
             } else if (starts === 0) {
                 warnings.push("Δεν υπάρχει δείκτης εκκίνησης '@@' στο δωμάτιο.");
             }
-
             return { errors: errors, warnings: warnings };
+        }
+
+        /// Επικύρωση πριν την αποθήκευση. Σφάλμα = δεν αποθηκεύουμε·
+        /// προειδοποίηση = αποθηκεύουμε αλλά το λέμε.
+        function problems() {
+            return merge(exitProblems(), teleProblems(), startProblems());
         }
 
         // --- Αναίρεση --------------------------------------------------
@@ -653,11 +998,11 @@
         // Ξαναϋπολογισμός ομάδων το πολύ μία φορά ανά καρέ, ώστε το σύρσιμο του
         // πινέλου πάνω σε εξόδους να ενημερώνει τις ετικέτες χωρίς να τρέχει η
         // πλημμύρα σε κάθε κελί.
-        let exitSyncPending = false;
-        function scheduleExitSync() {
-            if (exitSyncPending) return;
-            exitSyncPending = true;
-            requestAnimationFrame(function () { exitSyncPending = false; syncExits(); });
+        let linkSyncPending = false;
+        function scheduleLinkSync() {
+            if (linkSyncPending) return;
+            linkSyncPending = true;
+            requestAnimationFrame(function () { linkSyncPending = false; syncLinks(); });
         }
 
         function setCell(r, c, symbol) {
@@ -667,7 +1012,8 @@
             grid[r][c] = symbol;
             drawCell(r, c);
             dirty = true;
-            if (previous === EXIT || symbol === EXIT) scheduleExitSync();
+            if (previous === EXIT || symbol === EXIT ||
+                previous === TELE || symbol === TELE) scheduleLinkSync();
             return true;
         }
 
@@ -719,6 +1065,22 @@
             const p = cellFromEvent(ev);
             if (!p) return;
             ev.preventDefault();
+
+            // ΚΑΤΑΣΤΑΣΗ ΕΠΙΛΟΓΗΣ ΠΡΟΟΡΙΣΜΟΥ: το κλικ ορίζει το κελί και ΔΕΝ ζωγραφίζει.
+            // Το δεξί κλικ ακυρώνει, όπως και το Esc.
+            if (pickIndex !== null) {
+                if (ev.button === 2) { cancelPick(); return; }
+                const i = pickIndex;
+                cancelPick(true);
+                setGroupDest(i, [p.c, p.r]);
+                // Κράτα το βέλος ορατό αμέσως μετά, ως επιβεβαίωση της σύνδεσης.
+                teleHighlight = i;
+                renderTeleArrow();
+                setStatus("Η τηλεμεταφορά #" + (i + 1) + " βγάζει στο κελί στ." +
+                    p.c + " γρ." + p.r + ".", "ok");
+                return;
+            }
+
             // Δεξί κλικ σβήνει, ανεξάρτητα από το επιλεγμένο εργαλείο.
             const erase = ev.button === 2 || currentTool === "eraser";
             paintSymbol = erase ? EMPTY : currentSymbol;
@@ -750,7 +1112,10 @@
             cursor.setAttribute("visibility", "visible");
             const tile = TILE_BY_SYMBOL.get(grid[p.r][p.c]);
             readoutEl.textContent = "στήλη " + p.c + ", γραμμή " + p.r +
-                "  ·  " + (tile ? tile.name : "?") + " '" + grid[p.r][p.c] + "'";
+                "  ·  " + (tile ? tile.name : "?") + " '" + grid[p.r][p.c] + "'" +
+                (pickIndex !== null
+                    ? "  ·  κλικ = προορισμός τηλεμεταφοράς #" + (pickIndex + 1)
+                    : "");
             if (painting) setCell(p.r, p.c, paintSymbol);
         });
 
@@ -810,6 +1175,9 @@
         }
 
         document.addEventListener("keydown", function (ev) {
+            // Το Esc ακυρώνει την επιλογή προορισμού ακόμα κι αν ο δρομέας είναι
+            // μέσα σε πεδίο — γι' αυτό ελέγχεται ΠΡΙΝ από όλα τα άλλα.
+            if (ev.key === "Escape" && pickIndex !== null) { ev.preventDefault(); cancelPick(); return; }
             if (ev.target.tagName === "INPUT" || ev.target.tagName === "SELECT") return;
             if (ev.ctrlKey && (ev.key === "z" || ev.key === "Z")) { ev.preventDefault(); undo(); return; }
             if (ev.ctrlKey && (ev.key === "y" || ev.key === "Y")) { ev.preventDefault(); redo(); return; }
@@ -825,11 +1193,20 @@
             header = dto.header || [];
             footer = dto.footer || [];
             // Ο server δίνει τους προορισμούς στο αναγνωριστικό κάθε ομάδας· το
-            // syncExits() (μέσω του drawAll) τους απλώνει σε όλα τα κελιά της.
+            // syncLinks() (μέσω του drawAll) τους απλώνει σε όλα τα κελιά της.
             exitRooms = new Map();
             (dto.exits || []).forEach(function (e) {
                 exitRooms.set(cellKey(e.col, e.row), (e.room === undefined) ? null : e.room);
             });
+            teleDests = new Map();
+            (dto.teleports || []).forEach(function (t) {
+                const dest = (t.destCol === null || t.destCol === undefined ||
+                              t.destRow === null || t.destRow === undefined)
+                    ? null : [t.destCol, t.destRow];
+                teleDests.set(cellKey(t.col, t.row), dest);
+            });
+            cancelPick(true);
+            teleHighlight = null;
             undoStack.length = 0;
             redoStack.length = 0;
             dirty = false;
@@ -896,6 +1273,7 @@
         }
 
         async function saveLevel() {
+            cancelPick(true);
             const name = fileName.value.trim();
             if (!name) { setStatus("Δώσε όνομα αρχείου.", "err"); return; }
 
@@ -915,6 +1293,14 @@
                 footer: footer,
                 exits: exitGroups.map(g => ({
                     col: g.col, row: g.row, room: g.room, cells: g.cells.length,
+                })),
+                // Μία εγγραφή ανά ΟΜΑΔΑ — ο server γράφει μία γραμμή «tp …» για
+                // όσες έχουν προορισμό και παραλείπει τις υπόλοιπες.
+                teleports: teleGroups.map(g => ({
+                    col: g.col, row: g.row,
+                    destCol: g.dest === null ? null : g.dest[0],
+                    destRow: g.dest === null ? null : g.dest[1],
+                    cells: g.cells.length,
                 })),
             };
             const res = await fetch("/api/levels", {

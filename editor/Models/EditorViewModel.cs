@@ -17,5 +17,6 @@ public sealed class EditorViewModel
     public char EmptySymbol => TileCatalog.EmptySymbol;
     public char SolidSymbol => TileCatalog.SolidSymbol;
     public char ExitSymbol => TileCatalog.ExitSymbol;
+    public char TeleportSymbol => TileCatalog.TeleportSymbol;
     public char StartSymbol => TileCatalog.StartSymbol;
 }

@@ -17,6 +17,8 @@ import physics as P
 REGRESS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        "levels", "regress.txt")
 
+PROPS_SOLID = P.F_SOLID
+
 FAILS = []
 
 
@@ -281,6 +283,14 @@ def main():
         for cell, dest, cells in r.teleport_groups():
             check(f"room_{r.number}: η τηλεμεταφορά {cell} έχει προορισμό",
                   dest is not None, f"{dest}")
+            if dest is None:
+                continue
+            # Προορισμός μέσα σε στερεό = ο παίκτης κολλάει ή πεθαίνει μόλις
+            # πατήσει το πλήκτρο. Ελέγχεται εδώ ώστε να πιάνεται και όταν η
+            # πίστα γράφεται με το χέρι, όχι μόνο από τον editor.
+            dt = r.cell(*dest)
+            check(f"room_{r.number}: ο προορισμός {dest} δεν είναι στερεός",
+                  not (PROPS_SOLID & P.PROPS[dt]), P.TYPE_NAMES[dt])
 
     # Γειτονικές έξοδοι με ΔΙΑΦΟΡΕΤΙΚΟΥΣ προορισμούς πρέπει να απορρίπτονται.
     bad = ";\n" + "\n".join(
