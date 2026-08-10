@@ -181,23 +181,42 @@ ra_lp:          ld   a,(hl)
                 jr   ra_lp
 
 ra_found:       inc  hl
-                ld   a,(hl)             ; col -> κέντρο κελιού
-                add  a,a
-                add  a,a
-                add  a,a
-                add  a,LVL_CELL/2
-                ld   e,a
-                ld   d,0
-                ld   (hero_x),de
+                jp   hero_to_cell       ; HL -> col, row
+
+
+;---------------------------------------------------------------------
+; hero_to_cell — βάζει τον ήρωα στο ΚΕΝΤΡΟ του κελιού (HL)=col, (HL+1)=row
+;
+;   Ο πολλαπλασιασμός col*8 ΔΕΝ γίνεται σε 8 bits: η στήλη φτάνει το 39 και
+;   39*8 = 312 > 255. Με 'add a,a' το αποτέλεσμα τύλιγε στο 56 και ο ήρωας
+;   προσγειωνόταν στην αριστερή άκρη της οθόνης αντί για τον προορισμό του.
+;   Η γραμμή χωράει (23*8+12 = 196) αλλά γίνεται κι αυτή σε 16 bits, ώστε να
+;   μην ξαναγεννηθεί το ίδιο σφάλμα αν μεγαλώσει το πλέγμα.
+;
+; IN:  HL=δείκτης σε δύο bytes (col, row)
+; OUT: hero_x, hero_y στο κέντρο του κελιού
+; ΑΛΛΟΙΩΝΕΙ: AF, C, DE, HL   (η γραμμή φυλάγεται στο C — ΟΧΙ στο D, που το
+;            χαλάει το 'ld de,...' λίγο πιο κάτω)
+;---------------------------------------------------------------------
+hero_to_cell:   ld   a,(hl)             ; col -> κέντρο κελιού
                 inc  hl
-                ld   a,(hl)             ; row
-                add  a,a
-                add  a,a
-                add  a,a
-                add  a,LVL_Y0+LVL_CELL/2
-                ld   e,a
-                ld   d,0
-                ld   (hero_y),de
+                ld   c,(hl)             ; row (κράτα το πριν χαλάσει το HL)
+                ld   l,a
+                ld   h,0
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl              ; col*8, σε 16 bits
+                ld   de,LVL_CELL/2
+                add  hl,de
+                ld   (hero_x),hl
+                ld   l,c
+                ld   h,0
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl              ; row*8
+                ld   de,LVL_Y0+LVL_CELL/2
+                add  hl,de
+                ld   (hero_y),hl
                 ret
 
 ;---------------------------------------------------------------------
@@ -302,10 +321,11 @@ rl_got:         ld   a,c
                 ld   d,(hl)
                 ld   (room_arr),de
 
-                ; Πόρτα διπλής κατεύθυνσης: ο ήρωας εμφανίζεται ΔΙΠΛΑ στην
-                ; πόρτα που γυρίζει πίσω, όχι στο σημείο εκκίνησης της αίθουσας
-                ; και ΟΧΙ πάνω στην πόρτα — εκεί θα την ξαναπερνούσε αμέσως και
-                ; θα πηγαινοερχόταν ατέρμονα.
+                ; Πόρτα διπλής κατεύθυνσης: ο ήρωας εμφανίζεται στο σημείο
+                ; άφιξης της πόρτας που γυρίζει πίσω, όχι στο σημείο εκκίνησης
+                ; της αίθουσας. Το σημείο το ορίζει ο σχεδιαστής στη γραμμή
+                ; 'exit' — το αυτόματο «διπλανό κελί» δεν ξέρει προς τα πού
+                ; τραβάει η βαρύτητα και γλιστρούσε πίσω μέσα στην πόρτα.
                 ld   a,(exit_two)
                 or   a
                 call nz,rl_arrival
@@ -453,23 +473,7 @@ tp_next:        inc  hl                 ; προσπέρασε dcol, drow
                 inc  hl
                 jr   tp_lp
 
-tp_found:       ld   a,(hl)             ; dcol -> κέντρο κελιού
-                add  a,a
-                add  a,a
-                add  a,a
-                add  a,LVL_CELL/2
-                ld   e,a
-                ld   d,0
-                ld   (hero_x),de
-                inc  hl
-                ld   a,(hl)             ; drow
-                add  a,a
-                add  a,a
-                add  a,a
-                add  a,LVL_Y0+LVL_CELL/2
-                ld   e,a
-                ld   d,0
-                ld   (hero_y),de
+tp_found:       call hero_to_cell       ; HL -> dcol, drow
                 ld   a,1
                 ld   (hero_warp),a      ; η σχεδίαση σβήνει ΡΗΤΑ την παλιά θέση
                 ret
