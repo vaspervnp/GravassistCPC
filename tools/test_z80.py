@@ -201,16 +201,40 @@ def main():
     #    ένα λάθος εδώ ζωγραφίζει μέσα στην πίστα αντί για το HUD.
     import genasm as GA
     t.call("INIT_LINETAB")
-    for g in range(8):
+
+    def hud_bytes(col):
+        return [(t.m.memory[0xC000 + (y % 8) * 0x800 + col],
+                 t.m.memory[0xC000 + (y % 8) * 0x800 + col + 1]) for y in range(8)]
+
+    # Μέσα από το ΙΔΙΟ το draw_hud, όχι καλώντας το draw_garrow απευθείας.
+    #
+    # ΓΙΑΤΙ ΕΧΕΙ ΣΗΜΑΣΙΑ: τα βελάκια ήταν γραμμένα σε σημείο του draw_hud όπου
+    # δεν φτάνει ποτέ η ροή, οπότε ΔΕΝ ζωγραφίζονταν καθόλου στον πραγματικό
+    # Amstrad. Το προηγούμενο τεστ καλούσε το draw_garrow μόνο του και έλεγε
+    # «σωστό»: επαλήθευε τη ρουτίνα, όχι ότι κάποιος τη φωνάζει.
+    for gw, gh in ((0, 6), (3, 5), (7, 1)):
         for a in range(0xC000, 0x10000):
             t.m.memory[a] = 0
-        t.call("DRAW_GARROW", a=g, hl=t.sym("GRAV_GFX_WORLD"), bc=68)
-        got, want = [], []
-        for y in range(8):
-            base = 0xC000 + (y % 8) * 0x800 + (y // 8) * 80 + 68
-            got.append((t.m.memory[base], t.m.memory[base + 1]))
-            want.append(tuple(GA.pack_mode1(GA.arrow_pixels(g, 3)[y])))
-        check(f"βέλος βαρύτητας φοράς {g} στο HUD", got == want)
+        t.poke(t.sym("WORLD_G"), bytes((gw,)))
+        t.poke(t.sym("HERO_G"), bytes((gh,)))
+        t.poke(t.sym("HUD_DIRTY"), b"\x01")
+        t.call("DRAW_HUD")
+        want_w = [tuple(GA.pack_mode1(GA.arrow_pixels(gw, 3)[y])) for y in range(8)]
+        want_h = [tuple(GA.pack_mode1(GA.arrow_pixels(gh, 2)[y])) for y in range(8)]
+        check(f"το draw_hud ζωγραφίζει το βέλος κόσμου (φορά {gw})",
+              hud_bytes(t.sym("GRAV_WX") if False else 68) == want_w)
+        check(f"το draw_hud ζωγραφίζει το βέλος ήρωα (φορά {gh})",
+              hud_bytes(72) == want_h)
+
+    # …και ΧΩΡΙΣ hud_dirty, όταν αλλάξει μόνο η βαρύτητα. Ο ήρωας γυρίζει σε
+    # κάθε γωνία που περπατάει χωρίς να πειράζει ενέργεια ή inventory: με
+    # κριτήριο το hud_dirty τα βελάκια θα έμεναν παγωμένα.
+    t.poke(t.sym("HUD_DIRTY"), b"\x00")
+    t.poke(t.sym("HERO_G"), b"\x02")
+    t.call("DRAW_HUD")
+    check("το βέλος ήρωα ενημερώνεται χωρίς hud_dirty",
+          hud_bytes(72) == [tuple(GA.pack_mode1(GA.arrow_pixels(2, 2)[y]))
+                            for y in range(8)])
 
     # 7. Η πόρτα ανοίγει ΜΟΝΟ με ενεργοποίηση. Το h_touch δεν την κοιτάει
     #    πια· το h_use την κρίνει από το κελί του ΣΩΜΑΤΟΣ.
@@ -288,6 +312,46 @@ def main():
         check(f"διαδρομή {a}->{b}",
               rooms == ref.rooms and sealed == sorted(ref.sealed),
               f"Z80 {rooms}/{sealed} vs {ref.rooms}/{sorted(ref.sealed)}")
+
+    # 10. Μήνυμα πόρτας: εμφανίζεται μόνο όσο πατάς πόρτα, σε γραμμή ΜΑΚΡΙΑ
+    #     από τον ήρωα (για να μη σκεπάζει την πόρτα), και σβήνει μόλις φύγεις.
+    t.call("INIT_LINETAB")
+    # ΚΑΘΑΡΗ ΔΙΑΔΡΟΜΗ: το τεστ 9 άφησε σφραγισμένα δωμάτια, οπότε το
+    # seal_doors θα μετέτρεπε την πόρτα σε τοίχο και δεν θα υπήρχε τίποτα να
+    # δείξει το μήνυμα. (Σωστή συμπεριφορά — λάθος αφετηρία για ΑΥΤΟ το τεστ.)
+    t.poke(t.sym("SEALED"), bytes(32))
+    t.poke(t.sym("TRAIL_N"), b"\x00")
+    door = next((r for r in P.all_rooms() if r.exit_groups()), None)
+    if door is not None:
+        index = RF.set_of(door.number)
+        t.poke(set_buf, dict((i, d) for i, _, d in RF.all_sets())[index])
+        t.poke(t.sym("SET_CUR"), bytes((index,)))
+        t.poke(t.sym("JR_COUNT"), b"\x00")
+        t.call("ROOM_LOAD", a=door.number)
+        (col, row), _dest, _tw, _cs = door.exit_groups()[0]
+
+        def msg_row():
+            return t.peek(t.sym("MSG_ROW"))[0]
+
+        def stand(c, r):
+            t.poke16(t.sym("HERO_X"), c * P.CELL + P.CELL // 2)
+            t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + r * P.CELL + P.CELL // 2)
+            t.call("DOOR_MSG")
+
+        stand(20, 5)
+        check("χωρίς πόρτα δεν υπάρχει μήνυμα", msg_row() == 0xFF, str(msg_row()))
+        stand(col, row)
+        want = 7 if row >= 12 else 16
+        check("πάνω στην πόρτα εμφανίζεται, στο άλλο μισό της οθόνης",
+              msg_row() == want, f"{msg_row()} vs {want}")
+        check("η γραμμή του μηνύματος απέχει από τον ήρωα",
+              abs(msg_row() - row) >= 4, f"μήνυμα {msg_row()}, ήρωας {row}")
+        before = msg_row()
+        t.call("DOOR_MSG")
+        check("δεν ξαναγράφεται σε κάθε frame", msg_row() == before)
+        stand(20, 5)
+        check("σβήνει μόλις φύγεις από την πόρτα", msg_row() == 0xFF,
+              str(msg_row()))
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0

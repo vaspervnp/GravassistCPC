@@ -22,6 +22,9 @@ SCR_SET_INK     equ  #BC32      ; A=pen, B=colour1, C=colour2
 SCR_SET_BORDER  equ  #BC38      ; B=colour1, C=colour2
 MC_WAIT_FLYBACK equ  #BD19      ; αναμονή flyback (sync 50 Hz)
 KM_TEST_KEY     equ  #BB1E      ; A=key nr -> NZ αν πατημένο (ΧΑΛΑΕΙ A,C,F,HL)
+TXT_SET_CURSOR  equ  #BB75      ; H = στήλη, L = γραμμή (και οι δύο από 1)
+TXT_SET_PEN     equ  #BB90      ; A = pen
+TXT_OUTPUT      equ  #BB5A      ; A = χαρακτήρας
 
 ;--- Πλήκτρα (firmware key numbers) ----------------------------------
 ; Βαρύτητα: δύο ισοδύναμα σετ των 8, το καθένα σε πλέγμα 3x3 όπου η ΘΕΣΗ
@@ -73,6 +76,7 @@ GRAV_DOWNRIGHT  equ  7
 ;--- Παλέτα (docs/concept-art.md §5) ---------------------------------
 INK_BG          equ  1          ; σκούρο μπλε  - φόντο
 INK_HERO        equ  26         ; λευκό        - ήρωας, HUD
+INK_HERO_PEN    equ  1          ; ο pen που δείχνει αυτό το χρώμα
 INK_BODY        equ  18         ; πράσινο      - σώμα υλικού
 INK_EDGE        equ  16         ; πορτοκαλί    - ακμές, κίνδυνος
 
@@ -93,6 +97,19 @@ INV_MAX         equ  10         ; πόσα εικονίδια χωράνε δί�
 BYTE_PEN2       equ  #0F        ; 4 pixels pen2 (πράσινο)
 BYTE_PEN3       equ  #FF        ; 4 pixels pen3 (πορτοκαλί)
 LOW_ENERGY      equ  3          ; κάτω από αυτό, η μπάρα κοκκινίζει
+
+; --- Μήνυμα πόρτας ----------------------------------------------------
+; Το κείμενο το τυπώνει το firmware με τη δική του γραμματοσειρά: δεν έχουμε
+; δική μας και δεν αξίζει 768 bytes για μία φράση.
+;
+; Η ΘΕΣΗ ΑΠΟΦΕΥΓΕΙ ΤΗΝ ΠΟΡΤΑ: αν ο ήρωας είναι στο πάνω μισό, το μήνυμα πάει
+; χαμηλά, αλλιώς ψηλά. Έτσι δεν σκεπάζει ποτέ αυτό που περιγράφει, όπου κι αν
+; έχει βάλει την πόρτα ο σχεδιαστής.
+MSG_COL         equ  9          ; (40 - μήκος) / 2, σε χαρακτήρες
+MSG_ROW_HI      equ  7          ; γραμμή πλέγματος όταν ο ήρωας είναι χαμηλά
+MSG_ROW_LO      equ  16         ; …και όταν είναι ψηλά
+MSG_LEN         equ  msg_door_end-msg_door
+MSG_NONE        equ  #FF        ; δεν φαίνεται μήνυμα
 
 LINEBUF_W         equ  24     ; πλάτος buffer γραμμής σε bytes
 SCR_BASE        equ  #C000
@@ -189,6 +206,7 @@ ml_anim:        call anim_frame
                 call MC_WAIT_FLYBACK
                 call draw_hero          ; μόνο εγγραφές στην οθόνη
                 call draw_hud
+                call door_msg
 
                 ; Η αλλαγή αίθουσας γίνεται στο ΤΕΛΟΣ του frame, όχι μέσα στην
                 ; ενημέρωση: το render_room ξαναζωγραφίζει όλη την οθόνη και δεν
@@ -368,9 +386,10 @@ anim_cur        db   0
 ;   Ζωγραφίζει ΜΟΝΟ όταν κάτι άλλαξε: το HUD είναι στατικό τις περισσότερες
 ;   στιγμές και δεν αξίζει 40 bytes εγγραφών ανά frame.
 ;---------------------------------------------------------------------
-draw_hud:       ld   a,(hud_dirty)
-                or   a
-                ret  z
+draw_hud:       call draw_garrows       ; τα βελάκια έχουν ΔΙΚΟ ΤΟΥΣ κριτήριο:
+                ld   a,(hud_dirty)      ; η βαρύτητα του ήρωα αλλάζει σε κάθε
+                or   a                  ; γωνία που περπατάει, χωρίς να πειράζει
+                ret  z                  ; ενέργεια ή inventory
                 xor  a
                 ld   (hud_dirty),a
 
@@ -444,15 +463,6 @@ inv_pad:        ld   a,b                ; οι υπόλοιπες θέσεις �
                 dec  b
                 jr   inv_pad
 
-                ld   a,(world_g)        ; βέλη βαρύτητας: κόσμος και ήρωας
-                ld   hl,grav_gfx_world
-                ld   c,GRAV_WX
-                call draw_garrow
-                ld   a,(hero_g)
-                ld   hl,grav_gfx_hero
-                ld   c,GRAV_HX
-                call draw_garrow
-
 inv_draw:       xor  a
                 ld   (inv_i),a
 inv_dlp:        ld   a,(inv_i)
@@ -497,6 +507,41 @@ inv_line:       push bc
                 cp   INV_MAX
                 jr   nz,inv_dlp
                 ret
+
+;---------------------------------------------------------------------
+; draw_garrows — τα δύο βελάκια βαρύτητας, ΜΟΝΟ όταν άλλαξε κάτι
+;
+;   Δικό τους κριτήριο και όχι το hud_dirty: η βαρύτητα του ήρωα γυρίζει σε
+;   κάθε γωνία που περπατάει, χωρίς να αλλάζει ενέργεια ή inventory. Με το
+;   hud_dirty τα βελάκια θα έμεναν παγωμένα· χωρίς κανένα κριτήριο θα
+;   ξαναγράφονταν 50 φορές το δευτερόλεπτο.
+;
+;   ΠΡΟΣΟΧΗ ΣΤΟ ΠΟΥ ΜΠΑΙΝΕΙ Η ΚΛΗΣΗ: πρώτη γραφή τους ήταν μετά από ένα
+;   `jr inv_pad`, δηλαδή σε σημείο όπου δεν φτάνει ποτέ η ροή — ο κώδικας ήταν
+;   σωστός αλλά δεν τον καλούσε κανείς και στον Amstrad δεν φαινόταν τίποτα.
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+draw_garrows:   ld   a,(world_g)
+                ld   hl,hud_g_last
+                cp   (hl)
+                jr   nz,dga_go
+                ld   a,(hero_g)
+                inc  hl
+                cp   (hl)
+                ret  z                  ; τίποτα δεν άλλαξε
+dga_go:         ld   a,(world_g)
+                ld   (hud_g_last),a
+                ld   hl,grav_gfx_world
+                ld   c,GRAV_WX
+                call draw_garrow
+                ld   a,(hero_g)
+                ld   (hud_g_last+1),a
+                ld   hl,grav_gfx_hero
+                ld   c,GRAV_HX
+                jp   draw_garrow
+
+; #FF: καμία έγκυρη φορά, ώστε η πρώτη κλήση να ζωγραφίζει σίγουρα.
+hud_g_last      db #FF,#FF
 
 ; inv_add — προσθέτει A αντίγραφα του τύπου C, όσο υπάρχει χώρος (B)
 inv_add:        or   a
@@ -1155,6 +1200,88 @@ dga_line:       push bc
 
 dga_src         dw 0
 dga_col         db 0
+
+;---------------------------------------------------------------------
+; door_msg — δείχνει «Up or down to exit room» όσο ο ήρωας πατάει πόρτα
+;
+;   Δεν εμποδίζει τίποτα: είναι σκέτη σχεδίαση στο τέλος του frame. Σβήνει
+;   ξαναζωγραφίζοντας τα πλακίδια της γραμμής του, γιατί από κάτω μπορεί να
+;   υπάρχει οτιδήποτε — δεν αρκεί να γράψεις κενά.
+;
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+door_msg:       ld   bc,(hero_x)        ; πατάει πόρτα; κρίνεται από το κελί
+                ld   de,(hero_y)        ; του ΣΩΜΑΤΟΣ, όπως και το h_use
+                call cell_at
+                cp   T_EXIT
+                jr   z,dm_want
+
+                ld   a,(msg_row)        ; δεν πατάει: σβήσε ό,τι φαίνεται
+                cp   MSG_NONE
+                ret  z
+                jp   dm_erase
+
+                ; Ποια γραμμή; Μακριά από τον ήρωα, ώστε να μη σκεπάζει την
+                ; πόρτα που περιγράφει.
+dm_want:        ld   a,(cell_row)
+                cp   12
+                ld   a,MSG_ROW_LO
+                jr   c,dm_row
+                ld   a,MSG_ROW_HI
+dm_row:         ld   b,a
+                ld   a,(msg_row)
+                cp   b
+                ret  z                  ; ήδη εκεί: μην ξαναγράφεις κάθε frame
+                cp   MSG_NONE
+                jr   z,dm_show
+                push bc                 ; άλλαξε μισό: σβήσε το παλιό πρώτα
+                call dm_erase
+                pop  bc
+
+dm_show:        ld   a,b
+                ld   (msg_row),a
+                ld   a,INK_HERO_PEN
+                call TXT_SET_PEN
+                ld   a,(msg_row)
+                add  a,2                ; γραμμή πλέγματος -> γραμμή κειμένου
+                ld   l,a                ; (το HUD πιάνει την πρώτη)
+                ld   h,MSG_COL
+                call TXT_SET_CURSOR
+                ld   hl,msg_door
+                ld   b,MSG_LEN
+dm_lp:          ld   a,(hl)
+                push hl
+                push bc
+                call TXT_OUTPUT
+                pop  bc
+                pop  hl
+                inc  hl
+                djnz dm_lp
+                ret
+
+                ; Σβήσιμο: ξαναζωγράφισε τα πλακίδια κάτω από το κείμενο.
+dm_erase:       ld   a,(msg_row)
+                cp   MSG_NONE
+                ret  z
+                ld   b,a
+                ld   c,MSG_COL-1        ; οι στήλες κειμένου ξεκινούν από 1
+                ld   a,MSG_LEN
+                ld   (dm_n),a
+dm_elp:         push bc
+                call draw_tile
+                pop  bc
+                inc  c
+                ld   hl,dm_n
+                dec  (hl)
+                jr   nz,dm_elp
+                ld   a,MSG_NONE
+                ld   (msg_row),a
+                ret
+
+dm_n            db 0
+msg_row         db MSG_NONE     ; σε ποια γραμμή πλέγματος φαίνεται· #FF = πουθενά
+msg_door        db "Up or down to exit room"
+msg_door_end:
 
 ;---------------------------------------------------------------------
 ; scr_addr — διεύθυνση οθόνης για (στήλη byte, scanline)

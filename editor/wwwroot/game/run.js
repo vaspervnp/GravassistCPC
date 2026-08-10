@@ -36,6 +36,10 @@
   // που ΞΕΧΕΙΛΙΣΕ = μπλοκ. Πόρτα προς δωμάτιο που δεν έχεις δει = ανοιχτή.
   const trail = { rooms: [], sealed: new Set() };
 
+  // Ίδιο κείμενο και ίδια στήλη με το src/main.asm.
+  const DOOR_MSG = "Up or down to exit room";
+  const MSG_COL = 9;
+
   function trailEnter(current, entering) {
     const at = trail.rooms.indexOf(entering);
     if (at >= 0) {                      // γύρισες πίσω: ξετυλίγεται η στοίβα
@@ -182,6 +186,13 @@
     screen.sprite(R.heroSprite(hero.g, animFrame()), hero.x, hero.y);
     screen.hud(hero);
     screen.flush();
+
+    // ΜΗΝΥΜΑ ΠΟΡΤΑΣ: μόνο όσο πατάς πόρτα, και στο ΑΛΛΟ μισό της οθόνης ώστε
+    // να μη σκεπάζει αυτό που περιγράφει. Είναι σκέτη σχεδίαση μετά το frame:
+    // δεν αγγίζει τη φυσική και δεν εμποδίζει την κίνηση.
+    const [dc, dr] = hero.bodyCell();
+    if (room.cell(dc, dr) === D.TYPE_NAMES.indexOf("EXIT"))
+      screen.text(DOOR_MSG, dr < 12 ? 16 : 7, MSG_COL);
     requestAnimationFrame(frame);
   }
 

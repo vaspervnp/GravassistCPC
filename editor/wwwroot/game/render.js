@@ -118,6 +118,23 @@
       this.ctx.imageSmoothingEnabled = false;
       this.ctx.drawImage(this.tmp, 0, 0, W * this.scale, H * this.scale);
     }
+
+    /// Κείμενο σε γραμμή ΠΛΕΓΜΑΤΟΣ, μετά το flush.
+    ///
+    /// Ο Amstrad το τυπώνει με τη γραμματοσειρά του firmware, που δεν την
+    /// έχουμε εδώ — το σχήμα των γραμμάτων διαφέρει. Η ΘΕΣΗ και η
+    /// ΣΥΜΠΕΡΙΦΟΡΑ είναι ίδιες, και αυτές δοκιμάζει ο σχεδιαστής.
+    text(msg, gridRow, col) {
+      const x = col * 8 * this.scale;
+      const y = (D.GRID_Y0 + gridRow * D.CELL + 7) * this.scale;
+      this.ctx.font = (8 * this.scale) + "px monospace";
+      this.ctx.textBaseline = "alphabetic";
+      this.ctx.fillStyle = "#000080";
+      this.ctx.fillRect(x - 2, y - 8 * this.scale,
+                        msg.length * 8 * this.scale + 4, 9 * this.scale);
+      this.ctx.fillStyle = "#FFFFFF";
+      this.ctx.fillText(msg, x, y);
+    }
   }
 
   window.GRAV_RENDER = { Screen, heroSprite, paraSprite, W, H };
