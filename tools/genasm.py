@@ -295,12 +295,14 @@ def rooms_asm(rooms):
             for cc, cr in cells:
                 out.append(f"                db {cc},{cr},{dest},{1 if two else 0}")
         out += ["                db #FF", "",
-                f"room_{r.number}_arr:     ; αίθουσα προέλευσης, col, row ... #FF",
+                f"room_{r.number}_arr:     ; αίθουσα προέλευσης, col, row, "
+                f"βαρύτητα ... #FF",
                 ]
         for other in rooms:
             a = r.arrival_for(other.number)
             if a:
-                out.append(f"                db {other.number},{a[0]},{a[1]}")
+                out.append(
+                    f"                db {other.number},{a[0]},{a[1]},{a[2]}")
         out += ["                db #FF", "",
                 f"room_{r.number}_tps:     ; col, row, dcol, drow ... #FF = τέλος"]
         for (c, rr), dest, cells in r.teleport_groups():

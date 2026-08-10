@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace GravassistEditor.Models;
 
@@ -203,6 +205,49 @@ public sealed class LevelDocument
 
         return changed;
     }
+
+    /// <summary>
+    /// Η αρχική φορά βαρύτητας της αίθουσας — η γραμμή «gravity N» της ουράς.
+    /// Αν λείπει, ισχύει 0 (DOWN), όπως και στο tools/physics.py.
+    /// </summary>
+    public int StartGravity
+    {
+        get
+        {
+            foreach (var line in Footer)
+            {
+                var m = GravityPattern.Match(line);
+                if (m.Success) return int.Parse(m.Groups[1].Value,
+                    CultureInfo.InvariantCulture);
+            }
+
+            return 0;
+        }
+        set
+        {
+            var g = Math.Clamp(value, 0, 7);
+            var line = string.Create(CultureInfo.InvariantCulture, $"gravity {g}");
+            // ΕΠΙΤΟΠΟΥ: η γραμμή είναι πάντα πρώτη στην ουρά των υπαρχόντων
+            // αρχείων και δεν θέλουμε να τη μετακινήσουμε στο τέλος — θα
+            // μόλυνε το diff κάθε φορά που αγγίζεις την αίθουσα.
+            for (var i = 0; i < Footer.Count; i++)
+            {
+                if (!GravityPattern.IsMatch(Footer[i])) continue;
+                Footer[i] = line;
+                return;
+            }
+
+            // Δεν υπήρχε: μπαίνει ΠΡΙΝ από τις «exit»/«tp», για να διαβάζεται
+            // η ουρά με την ίδια σειρά παντού.
+            var at = Footer.FindIndex(l => ExitGraph.IsExitLine(l)
+                                        || TeleportGraph.IsTeleportLine(l));
+            if (at < 0) Footer.Add(line); else Footer.Insert(at, line);
+        }
+    }
+
+    private static readonly Regex GravityPattern =
+        new(@"^\s*gravity\s+([0-7])\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public void SetExitLinks(IEnumerable<ExitLink> links)
     {

@@ -190,20 +190,26 @@ class Room:
         tpd = {}                        # (col,row) -> κελί προορισμού
         two = {}                        # (col,row) -> διπλής κατεύθυνσης;
         arr = {}                        # (col,row) -> κελί άφιξης της πόρτας
+        arg = {}                        # (col,row) -> φορά βαρύτητας στην άφιξη
         for ln in text.splitlines():
             m = re.match(r"\s*gravity\s+([0-7])\s*$", ln, re.I)
             if m:
                 self.start_g = int(m.group(1))
-            # Τα προαιρετικά πεδία είναι ΘΕΣΗΣ: το κελί άφιξης έρχεται μετά τη
-            # σημαία διπλής κατεύθυνσης.
+            # Τα προαιρετικά πεδία είναι ΘΕΣΗΣ:
+            #   exit <col> <row> <αίθουσα> [διπλή] [acol] [arow] [g]
+            # Η φορά βαρύτητας της άφιξης έρχεται τελευταία, γιατί χωρίς κελί
+            # άφιξης δεν έχει σε τι να εφαρμοστεί.
             m = re.match(r"\s*exit\s+(\d+)\s+(\d+)\s+(\d+)"
-                         r"(?:\s+([01])(?:\s+(\d+)\s+(\d+))?)?\s*$", ln, re.I)
+                         r"(?:\s+([01])(?:\s+(\d+)\s+(\d+)(?:\s+([0-7]))?)?)?\s*$",
+                         ln, re.I)
             if m:
                 key = (int(m.group(1)), int(m.group(2)))
                 decl[key] = int(m.group(3))
                 two[key] = m.group(4) == "1"
                 if m.group(5):
                     arr[key] = (int(m.group(5)), int(m.group(6)))
+                if m.group(7):
+                    arg[key] = int(m.group(7))
             m = re.match(r"\s*tp\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", ln, re.I)
             if m:
                 a, b, c, d = (int(x) for x in m.groups())
@@ -214,6 +220,7 @@ class Room:
         self.exit_two = {k: bool(v) for k, v in
                          self._link(EXIT, two, "εξόδου (κατεύθυνση)").items()}
         self.exit_arrive = self._link(EXIT, arr, "εξόδου (άφιξη)")
+        self.exit_arrive_g = self._link(EXIT, arg, "εξόδου (βαρύτητα άφιξης)")
 
     def _groups_of(self, kind):
         """Συνιστώσες γειτονικών κελιών τύπου `kind` (γειτνίαση 4).
@@ -278,14 +285,23 @@ class Room:
         pixel φαρδύς και ακουμπάει και το επόμενο κελί. Γι' αυτό υπάρχει η ρητή
         δήλωση.
 
-        Επιστρέφει κελί (col,row) ή None αν δεν υπάρχει πόρτα επιστροφής.
+        Η ΦΟΡΑ ΒΑΡΥΤΗΤΑΣ δηλώνεται κι αυτή στην ίδια γραμμή. Χωρίς δήλωση
+        ισχύει η αρχική φορά της αίθουσας — που είναι λάθος όποτε μπαίνεις από
+        πόρτα σε τοίχο ή σε ταβάνι, γιατί η αίθουσα «ξεκινάει» αλλού από εκεί
+        που μπαίνεις. Επιστρέφεται πάντα λυμένη, ώστε ούτε ο Z80 ούτε η
+        JavaScript να χρειάζεται να ξέρουν τον κανόνα.
+
+        Επιστρέφει (col, row, g) ή None αν δεν υπάρχει πόρτα επιστροφής.
         """
         for cell, dest, _two, cells in self.exit_groups():
             if dest != origin:
                 continue
+            g = self.exit_arrive_g.get(cell)
+            if g is None:
+                g = self.start_g
             declared = self.exit_arrive.get(cell)
             if declared is not None:
-                return declared
+                return declared[0], declared[1], g
             for c, r in cells:          # σταθερή σειρά -> προβλέψιμο σημείο
                 for nc, nr in ((c-1, r), (c+1, r), (c, r-1), (c, r+1)):
                     if not (0 <= nc < COLS and 0 <= nr < ROWS):
@@ -293,7 +309,7 @@ class Room:
                     t = self.cells[nr][nc]
                     if t == EMPTY or not (PROPS[t] & (F_SOLID | F_DEADLY)):
                         if t != EXIT:
-                            return nc, nr
+                            return nc, nr, g
         return None
 
     def teleport_groups(self):

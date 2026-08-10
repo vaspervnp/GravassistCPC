@@ -264,6 +264,28 @@
     .link-two { display:flex; align-items:center; gap:.25rem; font-size:.85em;
                 color:#9ab; white-space:nowrap; cursor:pointer; }
 
+    /* Η αρχική βαρύτητα της αίθουσας, κάτω από τα κουμπιά αρχείου. */
+    .gravline {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        font-size: 11px;
+        color: #8a8ac0;
+    }
+
+    .gravline select, .link-row select.grav {
+        font: inherit;
+        font-size: 11px;
+        color: var(--ink);
+        background: var(--chrome-2);
+        border: 1px solid var(--line);
+        padding: 2px 3px;
+    }
+
+    .link-row select.grav { flex: 0 0 auto; }
+    .gravhint { color: var(--edge); }
+
     .link-row.picking {
         background: rgba(255, 128, 0, 0.18);
         outline: 1px solid var(--edge);
@@ -320,8 +342,15 @@
                 <input type="text" id="file-name" placeholder="name.txt" />
                 <button id="btn-save" type="button">Save</button>
             </div>
+            <div class="gravline">
+                <label for="room-gravity">Start gravity</label>
+                <select id="room-gravity"
+                        title="Gravity direction when the player starts in this room (the footer's gravity line)"></select>
+                <span class="gravhint" id="room-gravity-hint"></span>
+            </div>
             <div class="hintline">The levels folder is the repo's <code>levels/</code>.
-                Rooms are <code>room_&lt;N&gt;.txt</code> files.</div>
+                Rooms are <code>room_&lt;N&gt;.txt</code> files. Start gravity applies at
+                the <code>@@</code> marker; each door can override it on arrival.</div>
         </div>
 
         <div class="panel">
@@ -456,6 +485,46 @@
         const SVGNS = "http://www.w3.org/2000/svg";
         const TILE_BY_SYMBOL = new Map(DATA.tiles.map(t => [t.symbol, t]));
 
+        // Οι 8 φορές βαρύτητας, ανά 45 μοίρες, με 0 = DOWN και δεξιόστροφα.
+        // Ίδια αρίθμηση με το tools/physics.py και το src/tables.asm.
+        const GRAV = [
+            [0, "\u2193 down"],       [1, "\u2199 down-left"],
+            [2, "\u2190 left"],       [3, "\u2196 up-left"],
+            [4, "\u2191 up"],         [5, "\u2197 up-right"],
+            [6, "\u2192 right"],      [7, "\u2198 down-right"],
+        ];
+
+        /// Γεμίζει ένα <select> με τις 8 φορές. `blank` = προσθέτει κενή επιλογή
+        /// («όπως η αίθουσα») για τις πόρτες, που δεν είναι υποχρεωμένες να ορίσουν.
+        function fillGravity(sel, blank) {
+            sel.textContent = "";
+            if (blank) {
+                const o = document.createElement("option");
+                o.value = ""; o.textContent = "\u2014 room";
+                o.title = "Use the room's start gravity";
+                sel.appendChild(o);
+            }
+            for (const [v, label] of GRAV) {
+                const o = document.createElement("option");
+                o.value = String(v); o.textContent = label;
+                sel.appendChild(o);
+            }
+        }
+
+        const gravSel = document.getElementById("room-gravity");
+        const gravHint = document.getElementById("room-gravity-hint");
+        fillGravity(gravSel, false);
+        let startGravity = 0;
+        gravSel.addEventListener("change", function () {
+            startGravity = parseInt(gravSel.value, 10) || 0;
+            dirty = true;
+            renderGravHint();
+        });
+
+        function renderGravHint() {
+            gravHint.textContent = "gravity " + startGravity;
+        }
+
         const svg = document.getElementById("grid");
         const cellsGroup = document.getElementById("cells");
         const gridlines = document.getElementById("gridlines");
@@ -495,6 +564,7 @@
         // κρατηθεί μόνο εκεί χάνεται με την πρώτη πινελιά στο πλέγμα.
         let exitTwo = new Map();          // cellKey -> διπλής κατεύθυνσης;
         let exitArrive = new Map();       // cellKey -> [col,row] άφιξης ή null
+        let exitArriveG = new Map();      // cellKey -> φορά βαρύτητας άφιξης ή null
         let exitGroups = [];              // [{col,row,cells:[[c,r],…],room,twoWay,arrive}]
         let knownRooms = new Set();       // αριθμοί αιθουσών που υπάρχουν ως αρχεία
 
@@ -620,11 +690,12 @@
             exitGroups = findGroups(EXIT);
 
             const next = new Map(), nextTwo = new Map(), nextArr = new Map();
+            const nextArrG = new Map();
             exitGroups.forEach(function (g) {
                 // Προορισμός της ομάδας = η πρώτη γνωστή τιμή σε σειρά σάρωσης.
                 // Αν ενωθούν δύο ομάδες με διαφορετικούς προορισμούς, κερδίζει η
                 // πάνω-αριστερή — μία έξοδος, ένας προορισμός.
-                let room = null, two = false, arrive = null;
+                let room = null, two = false, arrive = null, arriveG = null;
                 for (const cell of g.cells) {
                     const v = exitRooms.get(cellKey(cell[0], cell[1]));
                     if (v !== undefined && v !== null) { room = v; break; }
@@ -636,19 +707,28 @@
                     const v = exitArrive.get(cellKey(cell[0], cell[1]));
                     if (v) { arrive = v; break; }
                 }
+                // ΠΡΟΣΟΧΗ: η φορά 0 (DOWN) είναι έγκυρη τιμή. Ο έλεγχος είναι
+                // «δηλωμένη;» και ΟΧΙ «αληθής;», αλλιώς το down θα χανόταν.
+                for (const cell of g.cells) {
+                    const v = exitArriveG.get(cellKey(cell[0], cell[1]));
+                    if (v !== null && v !== undefined) { arriveG = v; break; }
+                }
                 g.room = room;
                 g.twoWay = two;
                 g.arrive = arrive;
+                g.arriveG = arriveG;
                 g.cells.forEach(function (cell) {
                     const k = cellKey(cell[0], cell[1]);
                     next.set(k, room);
                     nextTwo.set(k, two);
                     nextArr.set(k, arrive);
+                    nextArrG.set(k, arriveG);
                 });
             });
             exitRooms = next;
             exitTwo = nextTwo;
             exitArrive = nextArr;
+            exitArriveG = nextArrG;
 
             // Αν χάθηκε η ομάδα που περίμενε κλικ (π.χ. σβήστηκε), βγες από την
             // κατάσταση επιλογής αντί να ορίσεις άφιξη σε λάθος σειρά.
@@ -770,9 +850,22 @@
 
                 if (picking) row.classList.add("picking");
 
+                // Η φορά βαρύτητας της άφιξης: χωρίς αυτήν, μπαίνοντας από πόρτα
+                // σε τοίχο ή ταβάνι ο παίκτης έπαιρνε την αρχική φορά της
+                // αίθουσας και έπεφτε αμέσως.
+                const gsel = document.createElement("select");
+                gsel.className = "grav";
+                gsel.title = "Gravity the player arrives with (— room = the room's start gravity)";
+                fillGravity(gsel, true);
+                gsel.value = (g.arriveG === null || g.arriveG === undefined)
+                    ? "" : String(g.arriveG);
+                gsel.addEventListener("change", function () {
+                    setGroupArriveG(i, gsel.value === "" ? null : parseInt(gsel.value, 10));
+                });
+
                 const arrBox = document.createElement("span");
                 arrBox.className = "link-arr";
-                arrBox.append(document.createTextNode("arrival"), acol, arow, pick);
+                arrBox.append(document.createTextNode("arrival"), acol, arow, pick, gsel);
 
                 row.append(tag, pos, input, twoLbl, arrBox);
                 exitListEl.appendChild(row);
@@ -878,6 +971,17 @@
             if (!g) return;
             g.twoWay = two;
             g.cells.forEach(cell => exitTwo.set(cellKey(cell[0], cell[1]), two));
+            dirty = true;
+            renderExitPanel();
+        }
+
+        /// Η φορά βαρύτητας με την οποία μπαίνει ο παίκτης από αυτή την πόρτα.
+        /// null = όπως η αίθουσα.
+        function setGroupArriveG(index, g) {
+            const grp = exitGroups[index];
+            if (!grp) return;
+            grp.arriveG = g;
+            grp.cells.forEach(cell => exitArriveG.set(cellKey(cell[0], cell[1]), g));
             dirty = true;
             renderExitPanel();
         }
@@ -1435,11 +1539,15 @@
             grid = dto.rows.map(line => line.split(""));
             header = dto.header || [];
             footer = dto.footer || [];
+            startGravity = dto.gravity || 0;
+            gravSel.value = String(startGravity);
+            renderGravHint();
             // Ο server δίνει τους προορισμούς στο αναγνωριστικό κάθε ομάδας· το
             // syncLinks() (μέσω του drawAll) τους απλώνει σε όλα τα κελιά της.
             exitRooms = new Map();
             exitTwo = new Map();
             exitArrive = new Map();
+            exitArriveG = new Map();
             (dto.exits || []).forEach(function (e) {
                 const k = cellKey(e.col, e.row);
                 exitRooms.set(k, (e.room === undefined) ? null : e.room);
@@ -1447,6 +1555,8 @@
                 exitArrive.set(k, (e.arriveCol === null || e.arriveCol === undefined ||
                                    e.arriveRow === null || e.arriveRow === undefined)
                     ? null : [e.arriveCol, e.arriveRow]);
+                exitArriveG.set(k, (e.arriveG === null || e.arriveG === undefined)
+                    ? null : e.arriveG);
             });
             teleDests = new Map();
             (dto.teleports || []).forEach(function (t) {
@@ -1541,11 +1651,14 @@
                 rows: grid.map(row => row.join("")),
                 header: header,
                 footer: footer,
+                gravity: startGravity,
                 exits: exitGroups.map(g => ({
                     col: g.col, row: g.row, room: g.room, cells: g.cells.length,
                     twoWay: !!g.twoWay,
                     arriveCol: g.arrive === null ? null : g.arrive[0],
                     arriveRow: g.arrive === null ? null : g.arrive[1],
+                    arriveG: (g.arriveG === null || g.arriveG === undefined)
+                        ? null : g.arriveG,
                 })),
                 // Μία εγγραφή ανά ΟΜΑΔΑ — ο server γράφει μία γραμμή «tp …» για
                 // όσες έχουν προορισμό και παραλείπει τις υπόλοιπες.

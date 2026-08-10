@@ -134,16 +134,19 @@
       for (let c = 0; c < D.COLS; c++) {
         if (meta.cells[r][c] !== EX) continue;
         if (meta.exits[c + "," + r] !== origin) continue;
+        // Δηλωμένη φορά βαρύτητας· χωρίς δήλωση, η αρχική της αίθουσας.
+        const gd = (meta.arriveG || {})[c + "," + r];
+        const g = gd === undefined ? meta.start[2] : gd;
         // Ρητά δηλωμένο σημείο άφιξης: κερδίζει το αυτόματο διπλανό κελί.
         const dec = (meta.arrive || {})[c + "," + r];
         if (dec) return [dec[0] * D.CELL + D.CELL / 2,
-                         D.GRID_Y0 + dec[1] * D.CELL + D.CELL / 2, meta.start[2]];
+                         D.GRID_Y0 + dec[1] * D.CELL + D.CELL / 2, g];
         for (const [nc, nr] of [[c-1,r],[c+1,r],[c,r-1],[c,r+1]]) {
           if (nc < 0 || nr < 0 || nc >= D.COLS || nr >= D.ROWS) continue;
           const t = meta.cells[nr][nc];
           if (t !== EX && !(D.PROPS[t] & (D.F.SOLID | D.F.DEADLY)))
             return [nc * D.CELL + D.CELL / 2,
-                    D.GRID_Y0 + nr * D.CELL + D.CELL / 2, meta.start[2]];
+                    D.GRID_Y0 + nr * D.CELL + D.CELL / 2, g];
         }
       }
     return null;
@@ -173,13 +176,15 @@
       }));
       const foot = (doc.footer || []).join("\n");
       const exits = {}, teleports = {};
-      const twoWay = {}, arrive = {};
-      // Τα προαιρετικά πεδία είναι ΘΕΣΗΣ: το κελί άφιξης μετά τη σημαία διπλής.
+      const twoWay = {}, arrive = {}, arriveG = {};
+      // Τα προαιρετικά πεδία είναι ΘΕΣΗΣ: κελί άφιξης μετά τη σημαία διπλής,
+      // φορά βαρύτητας τελευταία (χωρίς κελί δεν έχει σε τι να εφαρμοστεί).
       for (const m of foot.matchAll(
-             /exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01])(?:\s+(\d+)\s+(\d+))?)?/gi)) {
+             /exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01])(?:\s+(\d+)\s+(\d+)(?:\s+([0-7]))?)?)?/gi)) {
         exits[m[1] + "," + m[2]] = +m[3];
         twoWay[m[1] + "," + m[2]] = m[4] === "1";
         if (m[5] !== undefined) arrive[m[1] + "," + m[2]] = [+m[5], +m[6]];
+        if (m[7] !== undefined) arriveG[m[1] + "," + m[2]] = +m[7];
       }
       for (const m of foot.matchAll(/tp\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/gi))
         teleports[m[1] + "," + m[2]] = [+m[3], +m[4]];
@@ -188,7 +193,11 @@
       spread(cells, teleports, D.TYPE_NAMES.indexOf("TELEPORT"));
       spread(cells, twoWay, D.TYPE_NAMES.indexOf("EXIT"));
       spread(cells, arrive, D.TYPE_NAMES.indexOf("EXIT"));
-      rooms[name] = { cells, start, exits, teleports, twoWay, arrive };
+      // Το arriveG ΔΕΝ απλώνεται: το spread() κρατά την πρώτη ΑΛΗΘΗ τιμή, άρα
+      // θα έτρωγε τη φορά 0 (DOWN) — την πιο συνηθισμένη. Δεν χρειάζεται
+      // ούτως ή άλλως: το arrivalIn σαρώνει κατά γραμμές και πέφτει πρώτα στο
+      // πάνω-αριστερό κελί της ομάδας, που είναι το κλειδί της δήλωσης.
+      rooms[name] = { cells, start, exits, teleports, twoWay, arrive, arriveG };
       const o = document.createElement("option");
       o.value = name; o.textContent = name;
       sel.appendChild(o);

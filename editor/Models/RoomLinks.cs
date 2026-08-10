@@ -30,8 +30,13 @@ public sealed record CellGroup(int Col, int Row, IReadOnlyList<GridCell> Cells);
 /// του το παιχνίδι (πρώτο ελεύθερο διπλανό κελί)· αυτό αρκεί μόνο όταν η πόρτα
 /// δεν είναι κολλημένη σε γωνία ή σε άλλη πόρτα, γι' αυτό και ορίζεται ρητά.
 /// </param>
+/// <param name="ArriveG">
+/// Φορά βαρύτητας (0..7) με την οποία μπαίνει ο παίκτης. null = η αρχική φορά
+/// της αίθουσας — που είναι λάθος όποτε η πόρτα βρίσκεται σε τοίχο ή σε
+/// ταβάνι, γιατί η αίθουσα «ξεκινάει» αλλού από εκεί που μπαίνεις.
+/// </param>
 public sealed record ExitLink(int Col, int Row, int Room, bool TwoWay = false,
-    int? ArriveCol = null, int? ArriveRow = null);
+    int? ArriveCol = null, int? ArriveRow = null, int? ArriveG = null);
 
 /// <summary>
 /// Μία γραμμή footer «tp &lt;col&gt; &lt;row&gt; &lt;dcol&gt; &lt;drow&gt;».
@@ -118,7 +123,8 @@ public static class ExitGraph
     // Τα προαιρετικά πεδία είναι ΘΕΣΗΣ: το σημείο άφιξης έρχεται μετά τη σημαία
     // διπλής κατεύθυνσης, οπότε για να γράψεις άφιξη πρέπει να γράψεις και σημαία.
     private static readonly Regex LinePattern = new(
-        @"^\s*exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01])(?:\s+(\d+)\s+(\d+))?)?\s*$",
+        @"^\s*exit\s+(\d+)\s+(\d+)\s+(\d+)"
+        + @"(?:\s+([01])(?:\s+(\d+)\s+(\d+)(?:\s+([0-7]))?)?)?\s*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>Είναι η γραμμή δήλωση εξόδου (και όχι σχόλιο ή ρύθμιση);</summary>
@@ -130,8 +136,13 @@ public static class ExitGraph
         var head = string.Create(CultureInfo.InvariantCulture,
             $"exit {link.Col} {link.Row} {link.Room}");
         if (link.ArriveCol is { } ac && link.ArriveRow is { } ar)
-            return string.Create(CultureInfo.InvariantCulture,
+        {
+            var body = string.Create(CultureInfo.InvariantCulture,
                 $"{head} {(link.TwoWay ? 1 : 0)} {ac} {ar}");
+            return link.ArriveG is { } ag
+                ? string.Create(CultureInfo.InvariantCulture, $"{body} {ag}")
+                : body;
+        }
         return link.TwoWay ? head + " 1" : head;
     }
 
@@ -151,7 +162,9 @@ public static class ExitGraph
                 m.Groups[5].Success
                     ? int.Parse(m.Groups[5].Value, CultureInfo.InvariantCulture) : null,
                 m.Groups[6].Success
-                    ? int.Parse(m.Groups[6].Value, CultureInfo.InvariantCulture) : null));
+                    ? int.Parse(m.Groups[6].Value, CultureInfo.InvariantCulture) : null,
+                m.Groups[7].Success
+                    ? int.Parse(m.Groups[7].Value, CultureInfo.InvariantCulture) : null));
         }
 
         return links;

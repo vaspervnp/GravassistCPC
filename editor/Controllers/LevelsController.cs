@@ -55,7 +55,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             doc.SetExitLinks(request.Exits
                 .Where(e => e.Room is not null)
                 .Select(e => new ExitLink(e.Col, e.Row, e.Room!.Value, e.TwoWay,
-                    e.ArriveCol, e.ArriveRow)));
+                    e.ArriveCol, e.ArriveRow, e.ArriveG)));
 
             // ΜΕΤΑ τις εξόδους, ώστε η ουρά να μένει «… exit … / tp …» — η ίδια
             // σειρά με τα υπάρχοντα αρχεία (round-trip χωρίς αλλαγές).
@@ -64,6 +64,8 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             doc.SetTeleportLinks(request.Teleports
                 .Where(t => t.DestCol is not null && t.DestRow is not null)
                 .Select(t => new TeleportLink(t.Col, t.Row, t.DestCol!.Value, t.DestRow!.Value)));
+
+            doc.StartGravity = request.Gravity;
 
             var warnings = store.Save(request.Name, doc);
             return Ok(new
@@ -161,7 +163,8 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             {
                 byAnchor.TryGetValue((g.Col, g.Row), out var link);
                 return new ExitDto(g.Col, g.Row, link?.Room, g.Cells.Count,
-                    link?.TwoWay ?? false, link?.ArriveCol, link?.ArriveRow);
+                    link?.TwoWay ?? false, link?.ArriveCol, link?.ArriveRow,
+                    link?.ArriveG);
             })
             .ToList();
 
@@ -176,6 +179,6 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             .ToList();
 
         return new LevelDto(name, doc.Rows, doc.Header, doc.Footer,
-            exits, teleports, RoomNaming.NumberOf(name));
+            exits, teleports, RoomNaming.NumberOf(name), doc.StartGravity);
     }
 }

@@ -310,24 +310,28 @@ def main():
             check(f"room_{dest}: υπάρχει άφιξη από την {r.number}", a is not None, f"{a}")
             if a is None:
                 continue
-            check(f"room_{dest}: η άφιξη {a} ΔΕΝ είναι πάνω στην πόρτα",
-                  other.cell(*a) != P.EXIT, P.TYPE_NAMES[other.cell(*a)])
-            check(f"room_{dest}: η άφιξη {a} δεν είναι στερεή",
-                  not (P.PROPS[other.cell(*a)] & P.F_SOLID))
+            ac, ar, ag = a
+            where = (ac, ar)
+            check(f"room_{dest}: η άφιξη {where} ΔΕΝ είναι πάνω στην πόρτα",
+                  other.cell(ac, ar) != P.EXIT, P.TYPE_NAMES[other.cell(ac, ar)])
+            check(f"room_{dest}: η άφιξη {where} δεν είναι στερεή",
+                  not (P.PROPS[other.cell(ac, ar)] & P.F_SOLID))
 
+            # Με τη ΔΗΛΩΜΕΝΗ φορά βαρύτητας, όχι με την αρχική της αίθουσας:
+            # αυτό ακριβώς επιτρέπει σε πόρτα σε τοίχο να έχει άφιξη που στέκει.
             fresh_room = P.load_room(other.path)
             h = P.Hero(fresh_room,
-                       a[0] * P.CELL + P.CELL // 2,
-                       P.GRID_Y0 + a[1] * P.CELL + P.CELL // 2,
-                       fresh_room.start_g)
+                       ac * P.CELL + P.CELL // 2,
+                       P.GRID_Y0 + ar * P.CELL + P.CELL // 2,
+                       ag)
             bounced = False
             for _ in range(SETTLE):
                 h.update()
                 if h.won:
                     bounced = True
                     break
-            check(f"room_{dest}: η άφιξη {a} δεν ξαναπερνά την πόρτα",
-                  not bounced, f"βαρύτητα {fresh_room.start_g}")
+            check(f"room_{dest}: η άφιξη {where} δεν ξαναπερνά την πόρτα",
+                  not bounced, f"βαρύτητα {ag}")
 
     # Γειτονικές έξοδοι με ΔΙΑΦΟΡΕΤΙΚΟΥΣ προορισμούς πρέπει να απορρίπτονται.
     bad = ";\n" + "\n".join(

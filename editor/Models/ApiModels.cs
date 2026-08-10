@@ -13,8 +13,9 @@ public sealed record LevelFileInfo(string Name, int? Room);
 /// <param name="TwoWay">Υπάρχει πόρτα επιστροφής στην άλλη αίθουσα;</param>
 /// <param name="ArriveCol">Στήλη του κελιού άφιξης, ή null = να το βρει το παιχνίδι.</param>
 /// <param name="ArriveRow">Γραμμή του κελιού άφιξης, ή null = να το βρει το παιχνίδι.</param>
+/// <param name="ArriveG">Φορά βαρύτητας άφιξης (0..7), ή null = της αίθουσας.</param>
 public sealed record ExitDto(int Col, int Row, int? Room, int Cells, bool TwoWay,
-    int? ArriveCol = null, int? ArriveRow = null);
+    int? ArriveCol = null, int? ArriveRow = null, int? ArriveG = null);
 
 /// <summary>
 /// Μία ομάδα τηλεμεταφοράς με τον προορισμό της, όπως ταξιδεύει στο JSON.
@@ -34,7 +35,8 @@ public sealed record LevelDto(
     IReadOnlyList<string> Footer,
     IReadOnlyList<ExitDto> Exits,
     IReadOnlyList<TeleportDto> Teleports,
-    int? Room);
+    int? Room,
+    int Gravity);
 
 /// <summary>
 /// Αίτημα αποθήκευσης από τον browser.
@@ -50,6 +52,9 @@ public sealed class SaveLevelRequest
     public List<string> Footer { get; set; } = [];
     public List<ExitDto> Exits { get; set; } = [];
     public List<TeleportDto> Teleports { get; set; } = [];
+
+    /// <summary>Αρχική φορά βαρύτητας της αίθουσας (0..7) — η γραμμή «gravity N».</summary>
+    public int Gravity { get; set; }
 }
 
 /// <summary>Ενιαία μορφή απάντησης σφάλματος (ελληνικό μήνυμα).</summary>
