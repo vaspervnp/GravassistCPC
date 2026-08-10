@@ -153,6 +153,65 @@ def main():
             check("το ημερολόγιο δεν διαρρέει σε άλλη αίθουσα",
                   t.peek(cell_buf, RF.CELLS) == flat)
 
+    # 5. Διακόπτης -> ΠΟΛΛΕΣ πόρτες, και ιδιότητες κελιών. Χτίζουμε δωμάτιο
+    #    επί τούτου: το κανάλι είναι ο σύνδεσμος, όχι η γειτνίαση.
+    t.stub("DRAW_TILE")
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[5][1] = "S"
+    for c in (10, 20, 30):
+        rows[8][c] = "G"
+    rows[12][5] = "G"                                   # άλλο κανάλι
+    rows[22][7] = "K"                                   # κλειδαριά ταυτότητας 3
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + "\n".join(
+        ["gravity 0", "sw 1 5 1", "gate 10 8 1", "gate 20 8 1", "gate 30 8 1",
+         "gate 5 12 2", "lock 7 22 3"])
+    room = P.Room(text)
+    room.number, room.path = 1, ""
+    t.poke(set_buf, RF.build_set([room]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.call("ROOM_LOAD", a=1)
+
+    def cell(c, r):
+        return t.peek(cell_buf + r * P.COLS + c)[0]
+
+    for c, r, want in ((1, 5, 1), (10, 8, 1), (5, 12, 2), (7, 22, 3), (0, 0, 0)):
+        t.call("CELL_ATTR", bc=(c << 8) | r)
+        check(f"cell_attr ({c},{r})", t.m.a == want, f"{t.m.a} vs {want}")
+
+    check("οι πόρτες ξεκινούν κλειστές",
+          all(cell(c, 8) == P.GATE for c in (10, 20, 30)))
+    t.call("GATE_TOGGLE", a=1)
+    check("ένας διακόπτης άνοιξε ΚΑΙ ΤΙΣ ΤΡΕΙΣ πόρτες του καναλιού",
+          all(cell(c, 8) == P.GATE_OPEN for c in (10, 20, 30)),
+          str([P.TYPE_NAMES[cell(c, 8)] for c in (10, 20, 30)]))
+    check("η πόρτα άλλου καναλιού ΔΕΝ πειράχτηκε", cell(5, 12) == P.GATE,
+          P.TYPE_NAMES[cell(5, 12)])
+    t.call("GATE_TOGGLE", a=1)
+    check("ο διακόπτης ξανακλείνει (δεν είναι μιας χρήσης)",
+          all(cell(c, 8) == P.GATE for c in (10, 20, 30)))
+
+    check("το άνοιγμα πόρτας μπήκε στο ημερολόγιο",
+          t.peek(t.sym("JR_COUNT"))[0] == 3,
+          f"{t.peek(t.sym('JR_COUNT'))[0]} εγγραφές")
+
+    # 6. Τα βελάκια βαρύτητας του HUD φτάνουν στη σωστή θέση της οθόνης, με
+    #    τα σωστά pixel. Η διάταξη της οθόνης του CPC είναι interleaved και
+    #    ένα λάθος εδώ ζωγραφίζει μέσα στην πίστα αντί για το HUD.
+    import genasm as GA
+    t.call("INIT_LINETAB")
+    for g in range(8):
+        for a in range(0xC000, 0x10000):
+            t.m.memory[a] = 0
+        t.call("DRAW_GARROW", a=g, hl=t.sym("GRAV_GFX_WORLD"), bc=68)
+        got, want = [], []
+        for y in range(8):
+            base = 0xC000 + (y % 8) * 0x800 + (y // 8) * 80 + 68
+            got.append((t.m.memory[base], t.m.memory[base + 1]))
+            want.append(tuple(GA.pack_mode1(GA.arrow_pixels(g, 3)[y])))
+        check(f"βέλος βαρύτητας φοράς {g} στο HUD", got == want)
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

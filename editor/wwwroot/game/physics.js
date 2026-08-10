@@ -26,11 +26,25 @@
   }
 
   class Room {
-    constructor(cells, teleports) {
+    constructor(cells, teleports, attrs) {
       this.cells = cells.map(r => r.slice());
       this.probeG = 0;
-      this.gateOpen = false;
+      // Ιδιότητα ανά κελί: κανάλι για διακόπτες/πόρτες, ταυτότητα για
+      // κλειδιά/κλειδαριές. Η πόρτα ΔΕΝ είναι πια καθολική σημαία — κάθε
+      // κελί κρατά την κατάστασή του, όπως και στον Amstrad.
+      this.attrs = attrs || {};           // "c,r" -> 0..ATTR_MAX-1
       this.teleports = teleports || {};   // "c,r" -> [dc, dr]
+    }
+    attr(c, r) { return this.attrs[c + "," + r] || 0; }
+    gateCells(channel) {
+      const out = [];
+      for (const k in this.attrs) {
+        if (this.attrs[k] !== channel) continue;
+        const [c, r] = k.split(",").map(Number);
+        const v = this.cell(c, r);
+        if (v === T.GATE || v === T.GATE_OPEN) out.push([c, r]);
+      }
+      return out;
     }
     cell(c, r) {
       if (c < 0 || r < 0 || c >= D.COLS || r >= D.ROWS) return T.SOLID;
@@ -43,7 +57,6 @@
       const mask = D.RAMP_MASK[t];
       if (mask) return !!mask[((py % D.CELL) + D.CELL) % D.CELL][((px % D.CELL) + D.CELL) % D.CELL];
       if (D.PROPS[t] & D.F.ONEWAY) return (D.FACING[t] + 4) % 8 === this.probeG;
-      if (t === T.GATE) return !this.gateOpen;
       return !!(D.PROPS[t] & D.F.SOLID);
     }
   }
@@ -53,7 +66,10 @@
       this.room = room; this.x = x; this.y = y; this.g = g;
       this.fallDist = 0; this.state = "FALL"; this.prevSupport = T.EMPTY;
       this.fallV = K.FALL_V0; this.fallAcc = 0;
-      this.energy = K.ENERGY_MAX; this.keys = 0;
+      this.energy = K.ENERGY_MAX;
+      // ΕΝΑΣ ΜΕΤΡΗΤΗΣ ΑΝΑ ΤΑΥΤΟΤΗΤΑ: το κλειδί 3 ανοίγει μόνο την κλειδαριά 3.
+      this.keys = new Array(K.ATTR_MAX).fill(0);
+      this.spikeTick = 0; this.prevCell = null; this.prevBody = null;
       this.parachute = 0; this.paraOpen = 0; this.won = false;
       this.crateTick = 0; this.walkAcc = 0; this.worldG = g; this.cratesOn = false;
       this.face = 1; this.carry = 0; this.warp = false;
@@ -240,15 +256,43 @@
         this.room.cells[row][col] = T.EMPTY;
         if (t === T.ENERGY) this.energy = Math.min(K.ENERGY_MAX, this.energy + K.ENERGY_PICK);
         else if (t === T.PARACHUTE) this.parachute++;
-        else if (t === T.KEY) this.keys++;
+        else if (t === T.KEY) this.keys[this.room.attr(col, row)]++;
       } else if (t === T.EXIT) {
         this.won = true;
-      } else if (t === T.SWITCH) {
-        this.room.gateOpen = !this.room.gateOpen;
-        this.room.cells[row][col] = T.EMPTY;
+      } else if (t === T.SWITCH && (col + "," + row) !== this.prevBody) {
+        // ΤΟ ΠΑΤΑΣ, ΔΕΝ ΤΟ ΞΟΔΕΥΕΙΣ: γυρίζει κάθε πόρτα του καναλιού του και
+        // μένει εκεί. Ακμή και όχι κράτημα, αλλιώς οι πόρτες ανοιγοκλείνουν
+        // 50 φορές το δευτερόλεπτο.
+        this.toggleGates(this.room.attr(col, row));
       }
+      this.prevBody = col + "," + row;
+
+      // ΕΥΘΡΑΥΣΤΟ: καταρρέει μόλις φύγεις από πάνω του, ώστε να το περνάς
+      // ακριβώς μία φορά. Το F_FRAGILE υπήρχε αλλά κανείς δεν το κοιτούσε.
+      const sc = this.supportCell();
+      const key = sc ? sc[0] + "," + sc[1] : null;
+      if (this.prevCell !== null && key !== this.prevCell) {
+        const [pc, pr] = this.prevCell.split(",").map(Number);
+        if (D.PROPS[this.room.cell(pc, pr)] & D.F.FRAGILE) {
+          this.room.cells[pr][pc] = T.EMPTY;
+        }
+      }
+      this.prevCell = key;
+
       const st = this.supportType();
-      if ((D.PROPS[st] & D.F.DEADLY) && (D.FACING[st] + 4) % 8 === this.g) this.hurt(K.SPIKE_DMG);
+      if ((D.PROPS[st] & D.F.DEADLY) && (D.FACING[st] + 4) % 8 === this.g) {
+        // Ζημιά ανά SPIKE_TICKS frames, όχι σε κάθε frame: αλλιώς η ενέργεια
+        // εξατμιζόταν πριν προλάβεις να φύγεις.
+        if (this.spikeTick === 0) this.hurt(K.SPIKE_DMG);
+        this.spikeTick = (this.spikeTick + 1) % K.SPIKE_TICKS;
+      } else {
+        this.spikeTick = 0;
+      }
+    }
+    toggleGates(channel) {
+      for (const [c, r] of this.room.gateCells(channel)) {
+        this.room.cells[r][c] = this.room.cells[r][c] === T.GATE ? T.GATE_OPEN : T.GATE;
+      }
     }
     aheadCell() {
       const rs = D.RSTEP[this.g];
@@ -258,8 +302,11 @@
     use() {
       const sc = this.supportCell();
       const st = sc ? this.room.cell(sc[0], sc[1]) : T.EMPTY;
-      if (st === T.LOCK && this.keys) {
-        this.keys--; this.room.cells[sc[1]][sc[0]] = T.LOCK_OPEN; return true;
+      // ΤΟ ΚΛΕΙΔΙ ΤΑΙΡΙΑΖΕΙ Ή ΔΕΝ ΑΝΟΙΓΕΙ — αλλιώς ο σχεδιαστής δεν μπορεί
+      // να επιβάλει σειρά, που είναι όλο το puzzle.
+      const kid = sc ? this.room.attr(sc[0], sc[1]) : 0;
+      if (st === T.LOCK && this.keys[kid]) {
+        this.keys[kid]--; this.room.cells[sc[1]][sc[0]] = T.LOCK_OPEN; return true;
       }
       const [col, row] = this.bodyCell();
       if (this.room.cell(col, row) === T.TELEPORT) return this.teleport(col, row);

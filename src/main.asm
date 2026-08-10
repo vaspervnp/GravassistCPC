@@ -82,6 +82,12 @@ HUD_Y           equ  2          ; πρώτη scanline
 HUD_H           equ  4          ; ύψος σε γραμμές
 HUD_SEG         equ  2          ; bytes ανά μονάδα ενέργειας
 INV_X           equ  22         ; πρώτη στήλη byte του inventory
+; Τα δύο βελάκια βαρύτητας, δεξιά από το inventory. Δύο ΞΕΧΩΡΙΣΤΑ πράγματα:
+; η βαρύτητα του ΚΟΣΜΟΥ είναι αυτή που όρισε ο παίκτης και την ακολουθούν τα
+; κιβώτια· η βαρύτητα του ΗΡΩΑ γυρίζει μόνη της σε κάθε γωνία που περπατάει.
+; Χωρίς αυτά ο παίκτης δεν είχε τρόπο να δει γιατί το κιβώτιο πάει αλλού.
+GRAV_WX         equ  68          ; στήλη byte του βέλους του κόσμου
+GRAV_HX         equ  72          ; στήλη byte του βέλους του ήρωα
 INV_MAX         equ  10         ; πόσα εικονίδια χωράνε δίπλα στη μπάρα
 BYTE_PEN2       equ  #0F        ; 4 pixels pen2 (πράσινο)
 BYTE_PEN3       equ  #FF        ; 4 pixels pen3 (πορτοκαλί)
@@ -408,7 +414,16 @@ dhd_line:       push bc
                 ; διαβάζεται αμέσως ("τρία κλειδιά" = τρία κλειδιά).
                 ld   hl,inv_list
                 ld   b,INV_MAX
-                ld   a,(hero_keys)
+                push hl                 ; ΣΥΝΟΛΟ κλειδιών, όλων των ταυτοτήτων:
+                push bc                 ; το HUD δείχνει ΠΟΣΑ έχεις, όχι ποια
+                ld   hl,hero_keys
+                ld   b,ATTR_MAX
+                xor  a
+dhd_ksum:       add  a,(hl)
+                inc  hl
+                djnz dhd_ksum
+                pop  bc
+                pop  hl
                 ld   c,T_KEY
                 call inv_add
                 ld   a,(hero_para)
@@ -424,6 +439,15 @@ inv_pad:        ld   a,b                ; οι υπόλοιπες θέσεις �
                 inc  hl
                 dec  b
                 jr   inv_pad
+
+                ld   a,(world_g)        ; βέλη βαρύτητας: κόσμος και ήρωας
+                ld   hl,grav_gfx_world
+                ld   c,GRAV_WX
+                call draw_garrow
+                ld   a,(hero_g)
+                ld   hl,grav_gfx_hero
+                ld   c,GRAV_HX
+                call draw_garrow
 
 inv_draw:       xor  a
                 ld   (inv_i),a
@@ -1086,6 +1110,49 @@ dhb_half        db   0
 linebuf         ds   LINEBUF_W, 0
 
 ;---------------------------------------------------------------------
+; draw_garrow — ζωγραφίζει ένα βελάκι βαρύτητας στο HUD
+;
+;   Το γραφικό είναι 8 γραμμές x 2 bytes, δηλαδή ακριβώς το ύψος του HUD.
+;   Ο πολλαπλασιασμός φορά*16 γίνεται σε 16 bits: με 8 φορές δεν ξεχειλίζει
+;   σήμερα, αλλά η ίδια πράξη σε 8 bits έχει ήδη δώσει δύο σφάλματα σε αυτό
+;   το project (type*16, col*8) και δεν αξίζει να ξαναγραφτεί λάθος.
+;
+; IN:  A = φορά βαρύτητας (0..7), HL = πίνακας γραφικών, C = στήλη byte
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+draw_garrow:    push hl
+                ld   l,a
+                ld   h,0
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl              ; φορά * 16
+                pop  de
+                add  hl,de
+                ld   (dga_src),hl
+                ld   a,c
+                ld   (dga_col),a
+                ld   b,0                ; scanline 0 = πρώτη γραμμή του HUD
+dga_line:       push bc
+                ld   a,(dga_col)
+                ld   c,a
+                call scr_addr
+                ex   de,hl
+                ld   hl,(dga_src)
+                ldi                     ; δύο bytes = 8 pixels σε MODE 1
+                ldi
+                ld   (dga_src),hl
+                pop  bc
+                inc  b
+                ld   a,b
+                cp   8
+                jr   c,dga_line
+                ret
+
+dga_src         dw 0
+dga_col         db 0
+
+;---------------------------------------------------------------------
 ; scr_addr — διεύθυνση οθόνης για (στήλη byte, scanline)
 ;   IN: C = X σε bytes, B = Y σε scanlines    OUT: HL = διεύθυνση
 ;   Lookup αντί για υπολογισμό: καλείται εκατοντάδες φορές ανά frame και ο
@@ -1178,13 +1245,16 @@ prog_end
 ;--- buffers ΜΟΝΟ στη μνήμη -------------------------------------------
 ; Δηλώνονται ΜΕΤΑ το save, οπότε δεν μπαίνουν στο MAIN.BIN: είναι ~10 KB
 ; μηδενικών που δεν έχει νόημα να ταξιδεύουν στη δισκέτα και να φορτώνονται.
-set_buf         ds   SET_MAX            ; το τρέχον σετ αιθουσών, όπως ήρθε
 cell_buf        ds   LVL_CELLS          ; το ξεδιπλωμένο πλέγμα που παίζεται
 journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi, τύπος)
-mem_end
 
+; Το σετ αιθουσών παίρνει ΟΛΟ ό,τι περισσεύει, χωρίς δηλωμένο μέγεθος: είναι
+; τελευταίο και τίποτα δεν ακολουθεί. Έτσι κάθε γραμμή κώδικα που προσθέτουμε
+; μικραίνει απλώς τη χωρητικότητα σε αίθουσες, αντί να σπάει το build και να
+; ζητά χειροκίνητο ξανασυντονισμό ενός SET_MAX.
+;
 ; Με ενεργό AMSDOS η μνήμη ΔΕΝ φτάνει ως το firmware: ο δίσκος κρατά δικό του
-; χώρο εργασίας και το ταβάνι πέφτει στο #A67B. Αν το build το περάσει, το
-; παιχνίδι θα έγραφε πάνω στα δεδομένα του AMSDOS και θα κρεμούσε στον
-; πραγματικό υπολογιστή — ενώ στον assembler όλα θα έμοιαζαν εντάξει.
-                assert mem_end <= MEM_CEIL
+; χώρο εργασίας και το ταβάνι πέφτει στο #A67B.
+set_buf
+set_capacity    equ  MEM_CEIL-set_buf   ; το διαβάζει το tools/roomfile.py
+                assert set_capacity > 0

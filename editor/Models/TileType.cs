@@ -317,6 +317,19 @@ public static class TileCatalog
                   transform="rotate(-35 2.4 3.4)"/>
             """),
 
+        // Ίδια λογική με το lock_open: κατάσταση εκτέλεσης, όχι εργαλείο
+        // σχεδίασης. Προκύπτει όταν ένας διακόπτης ανοίξει την πόρτα.
+        new TileType('g', "gate_open", MechGroup, "Gate opened",
+            "Opened by a switch: still visible, but you pass through it.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <rect x="1.2" y="0.8" width="5.6" height="6.4" fill="none"
+                  stroke="var(--edge)" stroke-width="0.8"
+                  stroke-dasharray="1.2 1"/>
+            <path d="M4,1.6 L4,6.4" stroke="var(--fill)" stroke-width="0.6"
+                  stroke-dasharray="1 1"/>
+            """),
+
         new TileType('@', "start", MechGroup, "Start position",
             "Where the player starts. The cell stays empty in the game.",
             Palette.Ink, Palette.EdgeColor,

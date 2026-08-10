@@ -98,6 +98,7 @@ PEN_BODY, PEN_EDGE = 2, 3
 PLACEHOLDER = {
     P.EXIT: ("EXIT", 0), P.ENERGY: ("ENERGY", 0), P.PARACHUTE: ("PARACHUTE", 0),
     P.LOCK_OPEN: ("LOCK", 0, True),   # η "ενεργή" εκδοχή του placeholder
+    P.GATE_OPEN: ("GATE", 0, True),   # ανοιγμένη: φαίνεται, αλλά περνάς
     P.KEY: ("KEY", 0), P.LOCK: ("LOCK", 0), P.GATE: ("GATE", 0),
     P.SWITCH: ("SWITCH", 0), P.PLATE: ("PLATE", 0), P.TELEPORT: ("TELEPORT", 0),
     P.CRATE: ("CRATE", 0), P.CRUMBLE: ("CRUMBLE", 0), P.GRAVLOCK: ("GRAVLOCK", 0),
@@ -106,6 +107,60 @@ PLACEHOLDER = {
     P.ONEWAY_U: ("ONEWAY", 0), P.ONEWAY_L: ("ONEWAY", 1),
     P.ONEWAY_D: ("ONEWAY", 2), P.ONEWAY_R: ("ONEWAY", 3),
 }
+
+
+# --- Βελάκια βαρύτητας για το HUD -------------------------------------
+# Ένα 8x8 ανά φορά. Σχεδιάζονται ΜΙΑ φορά (κάτω) και οι υπόλοιπες επτά
+# προκύπτουν με περιστροφή, ώστε να μη διαφωνούν μεταξύ τους: αν διορθώσεις
+# το σχήμα, διορθώνονται όλες.
+ARROW_DOWN = [
+    "..XX....",
+    "..XX....",
+    "..XX....",
+    "XXXXXX..",
+    ".XXXX...",
+    "..XX....",
+    "........",
+    "........",
+]
+
+
+def arrow_pixels(g, pen):
+    """8x8 βέλος που δείχνει προς τη φορά βαρύτητας `g`, σε χρώμα `pen`.
+
+    Οι φορές 0,2,4,6 είναι ακριβείς περιστροφές 90. Οι διαγώνιες δεν είναι
+    περιστροφή του ίδιου σχήματος — ζωγραφίζονται ξεχωριστά ως διαγώνια
+    γραμμή με μύτη, γιατί μια περιστροφή 45 σε πλέγμα 8x8 βγάζει σκάλες.
+    """
+    grid = [[0] * 8 for _ in range(8)]
+    if g % 2 == 0:
+        src = rot90([[1 if c == "X" else 0 for c in row] for row in ARROW_DOWN],
+                    {0: 0, 2: 1, 4: 2, 6: 3}[g])
+        for v in range(8):
+            for u in range(8):
+                if src[v][u]:
+                    grid[v][u] = pen
+        return grid
+
+    # Διαγώνια: ΣΦΗΝΑ στη γωνία και κοντός κορμός προς το κέντρο. Το βέλος
+    # με γραμμή και μύτη, που δουλεύει στις ορθές φορές, γίνεται δυσανάγνωστο
+    # στις 45 μοίρες σε πλέγμα 8x8 — η γεμάτη σφήνα διαβάζεται αμέσως.
+    dx = -1 if g in (1, 3) else 1
+    dy = 1 if g in (1, 7) else -1
+    cu = 0 if dx < 0 else 7          # η γωνία προς την οποία δείχνει
+    cv = 7 if dy > 0 else 0
+    for v in range(8):
+        for u in range(8):
+            if (abs(u - cu) <= 3 and abs(v - cv) <= 3
+                    and abs(u - cu) + abs(v - cv) <= 4):
+                grid[v][u] = pen
+    for k in range(2, 6):            # κορμός: από το κέντρο προς τη σφήνα
+        u, v = cu - dx * k, cv - dy * k
+        if 0 <= u < 8 and 0 <= v < 8:
+            grid[v][u] = pen
+            if 0 <= u + dx < 8:
+                grid[v][u + dx] = pen
+    return grid
 
 
 def rot90(g, times):
@@ -208,6 +263,9 @@ def defs_asm(rooms=()):
             "MEM_CEIL        equ #A67B",
             "",
             f"NTYPES          equ {P.NTYPES}",
+            f"ATTR_MAX        equ {P.ATTR_MAX}   ; κανάλια διακοπτών / "
+            "ταυτότητες κλειδιών",
+            f"SPIKE_TICKS     equ {P.SPIKE_TICKS}",
             f"ENERGY_MAX      equ {P.ENERGY_MAX}",
             f"ENERGY_PICK     equ {P.ENERGY_PICK}",
             f"SPIKE_DMG       equ {P.SPIKE_DMG}",
@@ -281,6 +339,19 @@ def rooms_asm(rooms):
         for v in range(8):
             a, b = pack_mode1(px[v])
             out.append(f"                db #{a:02X},#{b:02X}")
+
+    # Δύο χρώματα: το ένα βελάκι είναι η βαρύτητα του ΚΟΣΜΟΥ (αυτή που όρισε
+    # ο παίκτης, την ακολουθούν τα κιβώτια) και το άλλο η βαρύτητα του ΗΡΩΑ
+    # (γυρίζει μόνη της σε κάθε γωνία). Είναι διαφορετικά πράγματα και ο
+    # παίκτης δεν είχε τρόπο να τα ξεχωρίσει.
+    for name, pen in (("grav_gfx_world", 3), ("grav_gfx_hero", 2)):
+        out += ["", f"{name}:      ; 8 φορές x 8 γραμμές x 2 bytes"]
+        for g in range(8):
+            px = arrow_pixels(g, pen)
+            out.append(f"                ; φορά {g}")
+            for v in range(8):
+                a, b = pack_mode1(px[v])
+                out.append(f"                db #{a:02X},#{b:02X}")
 
     out += ["",
             "; Ιδιότητες ανά τύπο κελιού — ένα AND αντί για σκόρπιες συγκρίσεις",

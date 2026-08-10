@@ -22,6 +22,7 @@
     (col,row,room,two)*   #FF      έξοδοι
     (origin,col,row,g)*   #FF      σημεία άφιξης
     (col,row,dcol,drow)*  #FF      τηλεμεταφορές
+    (col,row,τιμή)*       #FF      ιδιότητες κελιών (κανάλι / ταυτότητα)
     (count,type)*                  RLE κελιά, μέχρι να βγουν COLS*ROWS
 
 Οι τρεις πίνακες τερματίζονται με #FF ακριβώς όπως πριν, ώστε οι βρόχοι
@@ -29,6 +30,7 @@
 """
 
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -48,9 +50,33 @@ CELLS = P.COLS * P.ROWS         # 960
 # (ταβάνι με ενεργό AMSDOS) αφού πάρουν το μερίδιό τους ο κώδικας, το
 # ξεδιπλωμένο πλέγμα και το ημερολόγιο αλλαγών. Το src/main.asm το επιβάλλει
 # με assert, οπότε τα δύο δεν μπορούν να ξεσυγχρονιστούν σιωπηλά.
-# Χωράνε 40 αραιές αίθουσες ή περίπου 28 πυκνές σαν τη room_1 ΑΝΑ ΣΕΤ· τα
+# Χωράνε 40 αραιές αίθουσες ή περίπου 27 πυκνές σαν τη room_1 ΑΝΑ ΣΕΤ· τα
 # σετ όμως είναι όσα θες, οπότε το σύνολο των αιθουσών δεν έχει όριο.
-SET_MAX = 6400
+def set_capacity():
+    """Πόσα bytes περισσεύουν στην πράξη για ένα σετ.
+
+    ΔΕΝ είναι σταθερά: το σύμβολο βγαίνει από τον assembler (MEM_CEIL μείον
+    την αρχή του set_buf), οπότε κάθε γραμμή κώδικα που προσθέτουμε μικραίνει
+    αυτόματα τη χωρητικότητα σε αίθουσες. Ένα χειρόγραφο νούμερο εδώ σήμαινε
+    ότι το build έσπαγε σε κάθε αλλαγή και ζητούσε ξανασυντονισμό.
+
+    Αν δεν υπάρχει ακόμα πίνακας συμβόλων (πρώτο build), πέφτουμε σε μια
+    συντηρητική τιμή — ο assembler θα πει την αλήθεια στο επόμενο πέρασμα.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(root, "build", "symbols.txt")
+    try:
+        with open(path) as f:
+            for line in f:
+                m = re.match(r"SET_CAPACITY\s+#([0-9A-F]+)", line, re.I)
+                if m:
+                    return int(m.group(1), 16)
+    except OSError:
+        pass
+    return 4096
+
+
+SET_MAX = set_capacity()
 
 
 def rle_encode(cells):
@@ -107,6 +133,14 @@ def room_record(room):
             continue                    # αδήλωτη: δεν κάνει τίποτα στο παιχνίδι
         for cc, cr in cells:
             out += bytes((cc, cr, dest[0], dest[1]))
+    out.append(0xFF)
+
+    # Ιδιότητες κελιών: κανάλι για διακόπτες/πόρτες, ταυτότητα για
+    # κλειδιά/κλειδαριές. Μόνο οι μη μηδενικές — το 0 είναι η προεπιλογή και
+    # δεν χρειάζεται να ταξιδεύει.
+    for (cc, cr), v in sorted(room.attrs.items()):
+        if v:
+            out += bytes((cc, cr, v))
     out.append(0xFF)
 
     flat = [v for row in room.cells for v in row]

@@ -32,6 +32,7 @@ T_TELEPORT       equ 24
 T_CRATE          equ 25
 T_START          equ 26
 T_LOCK_OPEN      equ 27
+T_GATE_OPEN      equ 28
 
 ; Αίθουσα εκκίνησης. Ο editor τη γράφει με --start ώστε να δοκιμάζεις
 ; οποιαδήποτε αίθουσα χωρίς να πειράζεις τα αρχεία των πιστών.
@@ -46,7 +47,7 @@ GTAB_OFF        equ 15
 SET_ROOMS       equ 40
 SET_NUMBERS     equ 5          ; offset του numbers[] στην κεφαλή
 SET_OFFS        equ 45         ; offset του offs[]
-SET_MAX         equ 6400       ; χωρητικότητα του set_buf
+SET_MAX         equ 6140       ; χωρητικότητα του set_buf
 LVL_CELLS       equ 960
 ; Πόσες αλλαγές κελιών θυμάται το παιχνίδι συνολικά. Κάθε εγγραφή
 ; είναι 4 bytes· γεμάτο ημερολόγιο σημαίνει ότι οι παλιότερες
@@ -56,7 +57,9 @@ JOURNAL_MAX     equ 64
 ; Ταβάνι μνήμης με ενεργό AMSDOS — δες την assert στο main.asm.
 MEM_CEIL        equ #A67B
 
-NTYPES          equ 28
+NTYPES          equ 29
+ATTR_MAX        equ 8   ; κανάλια διακοπτών / ταυτότητες κλειδιών
+SPIKE_TICKS     equ 10
 ENERGY_MAX      equ 8
 ENERGY_PICK     equ 2
 SPIKE_DMG       equ 2

@@ -39,7 +39,8 @@
 
   function start(name, cells, startPos) {
     curName = name;
-    room = new G.Room(cells, (rooms[name] || {}).teleports);
+    room = new G.Room(cells, (rooms[name] || {}).teleports,
+                     (rooms[name] || {}).attrs);
     hero = new G.Hero(room, startPos[0], startPos[1], startPos[2]);
     tick = 0; hist = []; paraFrame = 0; paraTick = 0;
     note.textContent = "";
@@ -188,6 +189,11 @@
       }
       for (const m of foot.matchAll(/tp\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/gi))
         teleports[m[1] + "," + m[2]] = [+m[3], +m[4]];
+      // Ιδιότητες κελιών: ΕΝΑΣ πίνακας για διακόπτες, πόρτες, κλειδαριές και
+      // κλειδιά — κάθε κελί έχει ακριβώς έναν τύπο, οπότε δεν υπάρχει ασάφεια.
+      const attrs = {};
+      for (const m of foot.matchAll(/(sw|gate|lock|key)\s+(\d+)\s+(\d+)\s+(\d+)/gi))
+        attrs[m[2] + "," + m[3]] = +m[4];
       // Γειτονικά κελιά είναι ΕΝΑ αντικείμενο: ο προορισμός σε ΟΛΑ τα κελιά.
       spread(cells, exits, D.TYPE_NAMES.indexOf("EXIT"));
       spread(cells, teleports, D.TYPE_NAMES.indexOf("TELEPORT"));
@@ -197,7 +203,11 @@
       // θα έτρωγε τη φορά 0 (DOWN) — την πιο συνηθισμένη. Δεν χρειάζεται
       // ούτως ή άλλως: το arrivalIn σαρώνει κατά γραμμές και πέφτει πρώτα στο
       // πάνω-αριστερό κελί της ομάδας, που είναι το κλειδί της δήλωσης.
-      rooms[name] = { cells, start, exits, teleports, twoWay, arrive, arriveG };
+      spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("SWITCH"));
+      spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("GATE"));
+      spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("LOCK"));
+      spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("KEY"));
+      rooms[name] = { cells, start, exits, teleports, twoWay, arrive, arriveG, attrs };
       const o = document.createElement("option");
       o.value = name; o.textContent = name;
       sel.appendChild(o);
@@ -209,6 +219,10 @@
     start(want, rooms[want].cells, rooms[want].start);
     requestAnimationFrame(frame);
   }
+
+  // Ίδια πλημμύρα με το spread(), αλλά για τύπο που ΔΕΝ είναι έξοδος: μια
+  // ψηλή πόρτα δύο κελιών είναι ΕΝΑ αντικείμενο και έχει ένα κανάλι.
+  function spreadKind(cells, map, kind) { spread(cells, map, kind); }
 
   function spread(cells, exits, EX) {
     const seen = new Set();

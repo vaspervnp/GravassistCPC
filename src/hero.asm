@@ -86,7 +86,68 @@ hu_still:       call h_slipping
 hu_fall:        call h_fall_steps
 hu_done:        call h_support
                 ld   (hero_prev),a
+                call h_crumble
                 jp   h_track
+
+;---------------------------------------------------------------------
+; h_crumble — το εύθραυστο κελί καταρρέει μόλις ο ήρωας φύγει από πάνω του
+;
+;   Το F_FRAGILE υπήρχε στον πίνακα ιδιοτήτων από την αρχή, αλλά κανείς δεν
+;   το κοιτούσε: το πάτωμα δεν κατέρρεε ποτέ. Η κατάρρευση γίνεται στην
+;   ΑΝΑΧΩΡΗΣΗ και όχι στο πάτημα, ώστε να το περνάς ακριβώς μία φορά.
+;
+;   Το cell_ptr μετά το h_support δείχνει στο κελί στήριξης.
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+h_crumble:      ld   a,(cell_col)       ; ποιο κελί πατάμε ΤΩΡΑ;
+                ld   b,a
+                ld   a,(cell_row)
+                ld   c,a
+                ld   hl,cr_prev
+                ld   a,(hl)
+                cp   #FF
+                jr   z,hc_save          ; πρώτο frame: δεν υπάρχει "πριν"
+                cp   b
+                jr   nz,hc_left
+                inc  hl
+                ld   a,(hl)
+                cp   c
+                ret  z                  ; ίδιο κελί: ακόμα πάνω του
+
+hc_left:        push bc                 ; άλλαξε κελί: ήταν εύθραυστο το παλιό;
+                ld   a,(cr_prev)
+                ld   c,a
+                ld   a,(cr_prev+1)
+                ld   b,a
+                push bc
+                call cell_addr
+                ld   a,(hl)
+                ld   e,a
+                ld   d,0
+                push hl
+                ld   hl,tile_props
+                add  hl,de
+                ld   a,(hl)
+                pop  hl
+                and  F_FRAGILE
+                jr   z,hc_pop
+                xor  a                  ; ναι: εξαφανίζεται και ξαναζωγραφίζεται
+                call cell_set
+                pop  bc
+                push bc
+                call draw_tile
+hc_pop:         pop  bc
+                pop  bc
+
+hc_save:        ld   a,(cell_col)
+                ld   (cr_prev),a
+                ld   a,(cell_row)
+                ld   (cr_prev+1),a
+                ret
+
+cr_prev         db #FF,#FF              ; κελί στήριξης του προηγούμενου frame
+sw_prev         db #FF,#FF              ; κελί διακόπτη του προηγούμενου frame
+spike_tick      db 0
 
 ;---------------------------------------------------------------------
 ; h_touch — αντιδράσεις σε ό,τι ακουμπάει το σώμα (μία φορά ανά frame)
@@ -116,7 +177,15 @@ h_touch:        ld   bc,(hero_x)
                 jr   ht_spikes
 ht_np1:         cp   T_KEY
                 jr   nz,ht_np2
+                ld   a,(cell_col)
+                ld   b,a
+                ld   a,(cell_row)
+                ld   c,a
+                call cell_attr
+                ld   e,a
+                ld   d,0
                 ld   hl,hero_keys
+                add  hl,de
                 inc  (hl)
                 ld   a,1
                 ld   (hud_dirty),a
@@ -133,11 +202,42 @@ ht_esave:       ld   (hero_energy),a
 
 ht_nopick:      ld   a,(h_cell)
                 cp   T_EXIT
-                jr   nz,ht_spikes
+                jr   nz,ht_nosw
                 call exit_dest          ; ποια αίθουσα; 0 = καμία
                 or   a
                 jr   z,ht_spikes
                 ld   (pending_room),a
+                jr   ht_spikes
+
+                ; ΔΙΑΚΟΠΤΗΣ. Πυροδοτεί στην ΑΚΜΗ — μόλις μπεις στο κελί, όχι
+                ; όσο στέκεσαι πάνω του: αλλιώς οι πόρτες ανοιγοκλείνουν 50
+                ; φορές το δευτερόλεπτο και δεν ελέγχονται. Και ΔΕΝ ξοδεύεται:
+                ; το ξαναπατάς για να τις ξανακλείσεις.
+ht_nosw:        cp   T_SWITCH
+                jr   nz,ht_swclr
+                ld   a,(cell_col)
+                ld   b,a
+                ld   a,(cell_row)
+                ld   c,a
+                ld   hl,sw_prev         ; ίδιο κελί με το προηγούμενο frame;
+                ld   a,b
+                cp   (hl)
+                jr   nz,ht_swfire
+                inc  hl
+                ld   a,c
+                cp   (hl)
+                jr   z,ht_spikes        ; ναι: μη ξαναπυροδοτήσεις
+ht_swfire:      ld   a,b
+                ld   (sw_prev),a
+                ld   a,c
+                ld   (sw_prev+1),a
+                push bc
+                call cell_attr          ; A = κανάλι του διακόπτη
+                call gate_toggle
+                pop  bc
+                jr   ht_spikes
+ht_swclr:       ld   a,#FF              ; έφυγες από τον διακόπτη
+                ld   (sw_prev),a
 
 ht_spikes:      call h_support          ; αγκάθια: μόνο από τη μύτη
                 ld   e,a
@@ -154,7 +254,18 @@ ht_spikes:      call h_support          ; αγκάθια: μόνο από τη �
                 and  7
                 ld   hl,hero_g
                 cp   (hl)
-                ret  nz
+                jr   z,ht_hurt
+ht_nospike:     xor  a                  ; δεν πατάς αγκάθι: ο μετρητής μηδενίζει
+                ld   (spike_tick),a     ; ώστε το επόμενο χτύπημα να είναι άμεσο
+                ret
+
+                ; ΖΗΜΙΑ ΑΝΑ SPIKE_TICKS FRAMES, όχι σε κάθε frame. Με ζημιά
+                ; κάθε frame η ενέργεια εξατμιζόταν σε κλάσμα δευτερολέπτου —
+                ; το να πατήσεις αγκάθι ήταν στην πράξη θάνατος.
+ht_hurt:        ld   hl,spike_tick
+                ld   a,(hl)
+                or   a
+                jr   nz,ht_tick
                 ld   a,(hero_energy)
                 sub  SPIKE_DMG
                 jr   nc,ht_hset
@@ -162,6 +273,12 @@ ht_spikes:      call h_support          ; αγκάθια: μόνο από τη �
 ht_hset:        ld   (hero_energy),a
                 ld   a,1
                 ld   (hud_dirty),a
+                ld   hl,spike_tick
+ht_tick:        inc  (hl)
+                ld   a,(hl)
+                cp   SPIKE_TICKS
+                ret  c
+                ld   (hl),0
                 ret
 
 ; rl_arrival — τοποθετεί τον ήρωα στο σημείο άφιξης της πόρτας που γυρίζει
@@ -325,6 +442,8 @@ rl_have:        pop  af
                 call skip_tab
                 ld   (room_tps),hl
                 call skip_tab
+                ld   (room_attrs),hl    ; ο τέταρτος πίνακας: ιδιότητες κελιών
+                call skip_attr
 
                 push hl                 ; HL -> τα RLE κελιά
                 pop  ix
@@ -374,11 +493,22 @@ h_use:          call h_support          ; ΟΛΑ κρίνονται από το 
                                         ; "από κάτω μου" ναι.
                 cp   T_LOCK
                 jr   nz,hu_notlock
-                ld   a,(hero_keys)
+                ; ΤΟ ΚΛΕΙΔΙ ΤΑΙΡΙΑΖΕΙ Ή ΔΕΝ ΑΝΟΙΓΕΙ. Χωρίς ταυτότητες ένα
+                ; κλειδί άνοιγε ό,τι έβρισκε και ο σχεδιαστής δεν μπορούσε να
+                ; επιβάλει σειρά — που είναι όλο το puzzle.
+                ld   a,(cell_col)
+                ld   b,a
+                ld   a,(cell_row)
+                ld   c,a
+                call cell_attr
+                ld   e,a
+                ld   d,0
+                ld   hl,hero_keys
+                add  hl,de
+                ld   a,(hl)
                 or   a
-                jr   z,hu_notlock       ; χωρίς κλειδί: συνέχισε στα υπόλοιπα
-                dec  a
-                ld   (hero_keys),a
+                jr   z,hu_notlock       ; λάθος κλειδί: συνέχισε στα υπόλοιπα
+                dec  (hl)
                 ld   a,1
                 ld   (hud_dirty),a
                 ld   hl,(cell_ptr)      ; ΔΕΝ εξαφανίζεται: γίνεται ανοιγμένη
@@ -1397,7 +1527,7 @@ hero_v          dw FALL_V0      ; ταχύτητα πτώσης, 8.8
 hero_facc       db 0            ; κλάσμα pixel που μεταφέρεται στο επόμενο frame
 hero_energy     db ENERGY_MAX
 hero_prev       db 0            ; κελί στήριξης του προηγούμενου frame
-hero_keys       db 0
+hero_keys       ds ATTR_MAX     ; ΕΝΑΣ μετρητής ανά ταυτότητα κλειδιού
 hero_face       db 1            ; τελευταία φορά βάδισης
 hero_carry      db 0            ; κουβαλάει κιβώτιο
 world_g         db 0            ; η φορά που ΟΡΙΣΕ ο παίκτης (τα κιβώτια)

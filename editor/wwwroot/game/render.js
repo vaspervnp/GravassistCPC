@@ -88,13 +88,24 @@
           for (let x = 0; x < 8; x++) this.px(8 + i * 8 + x, y, pen);
       }
       const inv = [];
-      for (let i = 0; i < hero.keys; i++) inv.push(19);
+      // Άθροισμα όλων των ταυτοτήτων: το HUD δείχνει ΠΟΣΑ κλειδιά έχεις,
+      // όχι ποια — για το ποια υπάρχει ο editor.
+      const nkeys = hero.keys.reduce((a, b) => a + b, 0);
+      for (let i = 0; i < nkeys; i++) inv.push(19);
       for (let i = 0; i < hero.parachute; i++) inv.push(18);
       if (hero.carry) inv.push(25);
       for (let i = 0; i < 10; i++) {
         const px = D.TILE_PX[i < inv.length ? inv[i] : 0];
         for (let v = 0; v < D.CELL; v++)
           for (let u = 0; u < D.CELL; u++) this.px(88 + i * 8 + u, v, px[v][u]);
+      }
+      // Δύο ΞΕΧΩΡΙΣΤΑ βελάκια: η βαρύτητα του ΚΟΣΜΟΥ (την όρισε ο παίκτης,
+      // την ακολουθούν τα κιβώτια) και η βαρύτητα του ΗΡΩΑ (γυρίζει μόνη της
+      // σε κάθε γωνία). Ίδιες θέσεις με το src/main.asm: στήλες byte 68 και 72.
+      for (const [bank, g, col] of [[0, hero.worldG, 68], [1, hero.g, 72]]) {
+        const px = D.GRAV_PX[bank][g];
+        for (let v = 0; v < 8; v++)
+          for (let u = 0; u < 8; u++) this.px(col * 4 + u, v, px[v][u]);
       }
     }
     flush() {

@@ -56,6 +56,7 @@ TELEPORT = 24
 CRATE = 25
 START = 26              # δείκτης εκκίνησης· δεν υπάρχει στο παιχνίδι
 LOCK_OPEN = 27          # ξεκλειδωμένο: φαίνεται ακόμα, αλλά περνάς από μέσα
+GATE_OPEN = 28          # ανοιγμένη πόρτα· ίδια λογική με το LOCK_OPEN
 
 CHARS = {
     ".": EMPTY, "#": SOLID,
@@ -64,7 +65,7 @@ CHARS = {
     "-": ONEWAY_U, "[": ONEWAY_L, "_": ONEWAY_D, "]": ONEWAY_R,
     ":": GRAVLOCK, "%": CRUMBLE, "X": EXIT, "+": ENERGY, "P": PARACHUTE,
     "k": KEY, "K": LOCK, "G": GATE, "S": SWITCH, "p": PLATE,
-    "T": TELEPORT, "B": CRATE, "@": START, "|": LOCK_OPEN,
+    "T": TELEPORT, "B": CRATE, "@": START, "|": LOCK_OPEN, "g": GATE_OPEN,
 }
 NAMES = {v: k for k, v in CHARS.items()}
 TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
@@ -72,8 +73,8 @@ TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
               "ONEWAY_U", "ONEWAY_L", "ONEWAY_D", "ONEWAY_R",
               "GRAVLOCK", "CRUMBLE", "EXIT", "ENERGY", "PARACHUTE",
               "KEY", "LOCK", "GATE", "SWITCH", "PLATE", "TELEPORT", "CRATE",
-              "START", "LOCK_OPEN"]
-NTYPES = 28
+              "START", "LOCK_OPEN", "GATE_OPEN"]
+NTYPES = 29
 
 # --- Ιδιότητες ανά τύπο (bit flags) ----------------------------------
 # Ένας πίνακας αντί για σκόρπια if: ο ίδιος εξάγεται στο src/tables.asm και
@@ -173,7 +174,6 @@ class Room:
         assert len(rows) == ROWS, f"περίμενα {ROWS} γραμμές, βρήκα {len(rows)}"
         self.cells = [[CHARS[c] for c in ln] for ln in rows]
         self.probe_g = 0        # φορά βαρύτητας του ελέγχου (για τις μονόδρομες)
-        self.gate_open = False
 
         # Ο δείκτης '@' δηλώνει πού ξεκινά ο παίκτης. Δεν είναι αντικείμενο του
         # παιχνιδιού: διαβάζεται και το κελί γίνεται κενό.
@@ -191,6 +191,10 @@ class Room:
         two = {}                        # (col,row) -> διπλής κατεύθυνσης;
         arr = {}                        # (col,row) -> κελί άφιξης της πόρτας
         arg = {}                        # (col,row) -> φορά βαρύτητας στην άφιξη
+        # ΕΝΑΣ πίνακας ιδιοτήτων για όλα: κάθε κελί έχει ακριβώς έναν τύπο,
+        # οπότε δεν υπάρχει ασάφεια. Ο διακόπτης και η πόρτα μοιράζονται
+        # "κανάλι", το κλειδί και η κλειδαριά "ταυτότητα".
+        attrs = {}                      # (col,row) -> τιμή 0..ATTR_MAX-1
         for ln in text.splitlines():
             m = re.match(r"\s*gravity\s+([0-7])\s*$", ln, re.I)
             if m:
@@ -214,6 +218,10 @@ class Room:
             if m:
                 a, b, c, d = (int(x) for x in m.groups())
                 tpd[(a, b)] = (c, d)
+            m = re.match(r"\s*(sw|gate|lock|key)\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
+                         ln, re.I)
+            if m:
+                attrs[(int(m.group(2)), int(m.group(3)))] = int(m.group(4))
         self.exits = {k: (v or 0) for k, v in
                       self._link(EXIT, decl, "εξόδου").items()}
         self.teleports = self._link(TELEPORT, tpd, "τηλεμεταφοράς")
@@ -221,6 +229,13 @@ class Room:
                          self._link(EXIT, two, "εξόδου (κατεύθυνση)").items()}
         self.exit_arrive = self._link(EXIT, arr, "εξόδου (άφιξη)")
         self.exit_arrive_g = self._link(EXIT, arg, "εξόδου (βαρύτητα άφιξης)")
+
+        # Η ιδιότητα απλώνεται σε ΟΛΑ τα κελιά της ομάδας, όπως ο προορισμός
+        # μιας εξόδου: μια ψηλή πόρτα δύο κελιών είναι ΕΝΑ αντικείμενο.
+        self.attrs = {}
+        for kind in (SWITCH, GATE, GATE_OPEN, LOCK, LOCK_OPEN, KEY):
+            for cell, v in self._link(kind, attrs, "ιδιότητας").items():
+                self.attrs[cell] = v or 0
 
     def _groups_of(self, kind):
         """Συνιστώσες γειτονικών κελιών τύπου `kind` (γειτνίαση 4).
@@ -266,6 +281,15 @@ class Room:
             for g in group:
                 out[g] = dest
         return out
+
+    def attr(self, col, row):
+        """Κανάλι διακόπτη/πόρτας ή ταυτότητα κλειδιού/κλειδαριάς. 0 = προεπιλογή."""
+        return self.attrs.get((col, row), 0)
+
+    def gate_cells(self, channel):
+        """Τα κελιά πόρτας του καναλιού — και ανοιχτά και κλειστά."""
+        return [(c, r) for (c, r), v in self.attrs.items()
+                if v == channel and self.cells[r][c] in (GATE, GATE_OPEN)]
 
     def exit_groups(self):
         """[(πάνω-αριστερό κελί, αίθουσα, διπλής;, [κελιά])] ανά ομάδα εξόδου."""
@@ -343,8 +367,6 @@ class Room:
             # η βαρύτητα δείχνει ΑΝΤΙΘΕΤΑ από την όψη της. Το ίδιο tile είναι
             # πάτωμα ή αέρας ανάλογα με το πού κοιτάς — εκεί είναι η αξία του.
             return (FACING[t] + 4) % 8 == self.probe_g
-        if t == GATE:
-            return not self.gate_open
         return bool(PROPS[t] & F_SOLID)
 
 
@@ -356,6 +378,13 @@ WALL_A   = 3        # μισό πλάτος κορμού
 SCAN_MAX = 14       # πόσο βαθιά ψάχνουμε έδαφος
 ENERGY_MAX = 8
 SPIKE_DMG  = 2
+# Τα αγκάθια χτυπούν ΑΝΑ SPIKE_TICKS frames, όχι σε κάθε frame. Με ζημιά σε
+# κάθε frame η ενέργεια εξατμιζόταν σε κλάσμα δευτερολέπτου και το να πατήσεις
+# αγκάθι ήταν πρακτικά θάνατος· τώρα προλαβαίνεις να φύγεις.
+SPIKE_TICKS = 10
+# Πόσα διαφορετικά κανάλια διακοπτών και ταυτότητες κλειδιών. Ένα byte θα
+# χωρούσε 256, αλλά 8 φτάνουν για puzzle και κρατούν το inventory μικρό.
+ATTR_MAX = 8
 ENERGY_PICK = 2
 WALK_V = 512        # 2.0 px/frame· το τρέξιμο είναι διπλάσιο -> 4.0
 CRATE_TICKS = 4     # frames ανά κελί πτώσης κιβωτίου (8 px / 4 = 2 px/frame)
@@ -404,12 +433,23 @@ class Hero:
         self.fall_v = FALL_V0
         self.fall_acc = 0
         self.energy = ENERGY_MAX
-        self.keys = 0
+        # ΕΝΑΣ ΜΕΤΡΗΤΗΣ ΑΝΑ ΤΑΥΤΟΤΗΤΑ: το κλειδί 3 ανοίγει μόνο την κλειδαριά 3.
+        # Χωρίς ταυτότητες, ένα κλειδί άνοιγε ό,τι έβρισκε και ο σχεδιαστής δεν
+        # μπορούσε να επιβάλει σειρά — που είναι όλο το puzzle.
+        self.keys = [0] * ATTR_MAX
         self.parachute = 0      # ΠΛΗΘΟΣ αλεξίπτωτων, όχι σημαία
         self.para_open = 0      # ανοιγμένο αυτή τη στιγμή
         self.won = False
         self.crate_tick = 0
-        self.walk_acc = 0           # κλάσμα pixel που μεταφέρεται στο επόμενο frame
+        self.walk_acc = 0
+        self.spike_tick = 0
+        # Το κελί ΣΤΗΡΙΞΗΣ του προηγούμενου frame. Το εύθραυστο καταρρέει όταν
+        # το ΑΦΗΝΕΙΣ, όχι όταν το πατάς: έτσι το περνάς ακριβώς μία φορά.
+        self.prev_cell = None
+        # Το κελί ΣΩΜΑΤΟΣ του προηγούμενου frame, για την ΑΚΜΗ του διακόπτη.
+        # Χωρίς αυτό, στέκεσαι πάνω του και η πόρτα ανοιγοκλείνει 50 φορές
+        # το δευτερόλεπτο.
+        self.prev_body = None           # κλάσμα pixel που μεταφέρεται στο επόμενο frame
         self.moved_cells = []       # κελιά που πρέπει να ξαναζωγραφιστούν
         # Η φορά που ΟΡΙΣΕ Ο ΠΑΙΚΤΗΣ, όχι η τρέχουσα του ήρωα: η δική του
         # γυρίζει αυτόματα σε κάθε γωνία που περπατάει, ενώ η βαρύτητα του
@@ -525,8 +565,9 @@ class Hero:
         sc = self.support_cell()
         st = self.room.cell(*sc) if sc else EMPTY
 
-        if st == LOCK and self.keys:
-            self.keys -= 1
+        kid = self.room.attr(*sc) if sc else 0
+        if st == LOCK and self.keys[kid]:
+            self.keys[kid] -= 1
             # ΔΕΝ εξαφανίζεται: γίνεται ανοιγμένη πόρτα. Ο παίκτης βλέπει τι
             # ξεκλείδωσε και περνά από μέσα.
             self.room.cells[sc[1]][sc[0]] = LOCK_OPEN
@@ -544,6 +585,18 @@ class Hero:
             self.carry = 1
             return True
         return False
+
+    def toggle_gates(self, channel):
+        """Γυρίζει ΟΛΕΣ τις πόρτες ενός καναλιού: κλειστή <-> ανοιχτή.
+
+        Η ανοιχτή πόρτα δεν εξαφανίζεται — γίνεται GATE_OPEN και φαίνεται,
+        όπως και η ξεκλείδωτη κλειδαριά. Ο παίκτης πρέπει να βλέπει τι άλλαξε
+        ο διακόπτης, αλλιώς πατάει κάτι και δεν ξέρει τι έγινε.
+        """
+        for c, r in self.room.gate_cells(channel):
+            self.room.cells[r][c] = (
+                GATE_OPEN if self.room.cells[r][c] == GATE else GATE)
+            self.moved_cells.append((c, r))
 
     def drop(self):
         fc, fr = self.ahead_cell()
@@ -587,18 +640,36 @@ class Hero:
             elif t == PARACHUTE:
                 self.parachute += 1
             elif t == KEY:
-                self.keys += 1
+                self.keys[self.room.attr(col, row)] += 1
         elif t == EXIT:
             self.won = True
-        elif t == SWITCH:
-            self.room.gate_open = not self.room.gate_open
-            self.room.cells[row][col] = EMPTY    # μία χρήση προς το παρόν
+        elif t == SWITCH and (col, row) != self.prev_body:
+            # ΤΟ ΠΑΤΑΣ, ΔΕΝ ΤΟ ΞΟΔΕΥΕΙΣ: ο διακόπτης γυρίζει κάθε πόρτα του
+            # καναλιού του και μένει εκεί. Ένας διακόπτης μπορεί να οδηγεί
+            # ΠΟΛΛΕΣ πόρτες — αυτό είναι το νόημα του καναλιού.
+            self.toggle_gates(self.room.attr(col, row))
+        self.prev_body = (col, row)
 
         # Τα αγκάθια πονάνε μόνο αν πέφτεις ΠΑΝΩ στις μύτες: η βαρύτητα πρέπει
         # να δείχνει αντίθετα από την όψη τους. Από πίσω είναι απλό πάτωμα.
+        # ΕΥΘΡΑΥΣΤΟ: καταρρέει μόλις φύγεις από πάνω του.
+        sc = self.support_cell()
+        if self.prev_cell is not None and sc != self.prev_cell:
+            pc, pr = self.prev_cell
+            if PROPS[self.room.cell(pc, pr)] & F_FRAGILE:
+                self.room.cells[pr][pc] = EMPTY
+                self.moved_cells.append((pc, pr))
+        self.prev_cell = sc
+
         st = self.support_type()
         if PROPS[st] & F_DEADLY and (FACING[st] + 4) % 8 == self.g:
-            self.hurt(SPIKE_DMG)
+            # Ο μετρητής μηδενίζεται όταν ΔΕΝ πατάς αγκάθι, ώστε το πρώτο
+            # χτύπημα να είναι άμεσο και το επόμενο να αργεί.
+            if self.spike_tick == 0:
+                self.hurt(SPIKE_DMG)
+            self.spike_tick = (self.spike_tick + 1) % SPIKE_TICKS
+        else:
+            self.spike_tick = 0
 
     def hurt(self, n):
         self.energy = max(0, self.energy - n)

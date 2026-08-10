@@ -226,9 +226,9 @@ def main():
     for _ in range(80):
         h.update(0)
     check("κλειδαριά χωρίς κλειδί δεν ανοίγει", not h.use())
-    h.keys = 1
+    h.keys[0] = 1
     check("κλειδαριά με κλειδί ανοίγει",
-          h.use() and h.keys == 0 and room.cells[22][5] == P.LOCK_OPEN,
+          h.use() and h.keys[0] == 0 and room.cells[22][5] == P.LOCK_OPEN,
           P.TYPE_NAMES[room.cells[22][5]])
     check("ανοιγμένη κλειδαριά δεν είναι στερεή",
           not (P.PROPS[P.LOCK_OPEN] & P.F_SOLID))
@@ -332,6 +332,130 @@ def main():
                     break
             check(f"room_{dest}: η άφιξη {where} δεν ξαναπερνά την πόρτα",
                   not bounced, f"βαρύτητα {ag}")
+
+
+    # 15. Διακόπτης -> ΠΟΛΛΕΣ πόρτες. Το κανάλι είναι ο σύνδεσμος: ό,τι έχει
+    #     το ίδιο κανάλι γυρίζει μαζί, όσες πόρτες κι αν είναι.
+    grid = ["#" * 40] + [
+        "#" + ("S" if i == 5 else ".") * 1 + "." * 37 + "#" for i in range(1, 23)
+    ] + ["#" * 40]
+    rows = [list(r) for r in grid]
+    rows[5][1] = "S"                    # διακόπτης, κανάλι 1
+    rows[8][10] = "G"                   # τρεις ΞΕΧΩΡΙΣΤΕΣ πόρτες, ίδιο κανάλι
+    rows[8][20] = "G"
+    rows[8][30] = "G"
+    rows[12][5] = "G"                   # τέταρτη, ΑΛΛΟ κανάλι
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + "\n".join([
+        "gravity 0", "sw 1 5 1",
+        "gate 10 8 1", "gate 20 8 1", "gate 30 8 1", "gate 5 12 2"])
+    room = P.Room(text)
+    h = P.Hero(room, 1 * 8 + 4, P.GRID_Y0 + 5 * 8 + 4, 0)
+
+    check("οι πόρτες ξεκινούν κλειστές",
+          all(room.cell(c, r) == P.GATE for c, r in
+              ((10, 8), (20, 8), (30, 8), (5, 12))))
+    h.toggle_gates(1)
+    check("ένας διακόπτης άνοιξε ΚΑΙ ΤΙΣ ΤΡΕΙΣ πόρτες του καναλιού",
+          all(room.cell(c, r) == P.GATE_OPEN for c, r in
+              ((10, 8), (20, 8), (30, 8))),
+          str([P.TYPE_NAMES[room.cell(c, r)] for c, r in
+               ((10, 8), (20, 8), (30, 8))]))
+    check("η πόρτα άλλου καναλιού ΔΕΝ πειράχτηκε",
+          room.cell(5, 12) == P.GATE)
+    check("ανοιγμένη πόρτα δεν είναι στερεή",
+          not (P.PROPS[P.GATE_OPEN] & P.F_SOLID))
+    h.toggle_gates(1)
+    check("ο διακόπτης ξανακλείνει (δεν είναι μιας χρήσης)",
+          all(room.cell(c, r) == P.GATE for c, r in ((10, 8), (20, 8), (30, 8))))
+
+    # Το πάτημα δεν επαναλαμβάνεται όσο μένεις πάνω του: αλλιώς η πόρτα
+    # ανοιγοκλείνει 50 φορές το δευτερόλεπτο και δεν ελέγχεται.
+    h.x, h.y = 1 * 8 + 4, P.GRID_Y0 + 5 * 8 + 4
+    h.prev_body = None
+    h.touch_objects()
+    first = room.cell(10, 8)
+    h.touch_objects()
+    check("ο διακόπτης δεν ξαναπατιέται όσο στέκεσαι πάνω του",
+          room.cell(10, 8) == first, P.TYPE_NAMES[room.cell(10, 8)])
+
+    # 16. Το κλειδί ανοίγει ΤΗ ΔΙΚΗ ΤΟΥ κλειδαριά. Χωρίς ταυτότητες ο
+    #     σχεδιαστής δεν μπορεί να επιβάλει σειρά, που είναι όλο το puzzle.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][5] = "K"                   # κλειδαριά ταυτότητας 2
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + \
+        "\n".join(["gravity 0", "lock 5 22 2"])
+    room = P.Room(text)
+    h = P.Hero(room, 5 * 8 + 4, P.GRID_Y0 + 18 * 8, 0)
+    for _ in range(80):
+        h.update(0)
+    h.keys[1] = 1
+    check("λάθος κλειδί ΔΕΝ ανοίγει την κλειδαριά", not h.use(),
+          P.TYPE_NAMES[room.cell(5, 22)])
+    h.keys[2] = 1
+    check("το σωστό κλειδί ανοίγει", h.use() and room.cell(5, 22) == P.LOCK_OPEN)
+    check("καταναλώθηκε ΜΟΝΟ το σωστό κλειδί",
+          h.keys[2] == 0 and h.keys[1] == 1)
+
+    # 17. Εύθραυστο: το περνάς ΜΙΑ φορά. Το F_FRAGILE υπήρχε από την αρχή αλλά
+    #     κανείς δεν το κοιτούσε — το πάτωμα δεν κατέρρεε ποτέ.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    for c in range(4, 12):
+        rows[22][c] = "%"
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\ngravity 0"
+    room = P.Room(text)
+    h = P.Hero(room, 5 * 8 + 4, P.GRID_Y0 + 20 * 8, 0)
+    for _ in range(40):
+        h.update(0)
+    check("το εύθραυστο κρατάει όσο πατάς πάνω του",
+          room.cell(5, 22) == P.CRUMBLE, P.TYPE_NAMES[room.cell(5, 22)])
+    start = h.support_cell()
+    for _ in range(200):
+        h.update(1)
+        if h.support_cell() != start:
+            h.update(1)         # η κατάρρευση κρίνεται στο ΕΠΟΜΕΝΟ frame
+            break
+    check("το εύθραυστο καταρρέει μόλις φύγεις",
+          room.cell(*start) == P.EMPTY, P.TYPE_NAMES[room.cell(*start)])
+
+    # 18. Αγκάθια: ζημιά ανά SPIKE_TICKS frames, όχι σε κάθε frame. Με ζημιά
+    #     κάθε frame η ενέργεια εξατμιζόταν πριν προλάβεις να αντιδράσεις.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    for c in range(2, 20):
+        rows[22][c] = "^"
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\ngravity 0"
+    room = P.Room(text)
+    h = P.Hero(room, 5 * 8 + 4, P.GRID_Y0 + 21 * 8 + 4, 0)
+    h.energy = P.ENERGY_MAX
+    h.state = "IDLE"
+    for _ in range(P.SPIKE_TICKS):
+        h.touch_objects()
+    check(f"αγκάθια: ένα χτύπημα ανά {P.SPIKE_TICKS} frames",
+          h.energy == P.ENERGY_MAX - P.SPIKE_DMG,
+          f"ενέργεια {h.energy}/{P.ENERGY_MAX}")
+    h.touch_objects()
+    check("αγκάθια: δεύτερο χτύπημα στο επόμενο διάστημα",
+          h.energy == P.ENERGY_MAX - 2 * P.SPIKE_DMG, f"ενέργεια {h.energy}")
+
+    # 19. Ζημιά πτώσης: μόνο πάνω από FALL_SAFE, και ΠΟΤΕ με ανοιγμένο
+    #     αλεξίπτωτο — αυτός είναι όλος ο λόγος ύπαρξής του.
+    h = P.Hero(fresh(), 60, 100, 0)
+    h.energy, h.fall_dist, h.state = P.ENERGY_MAX, P.FALL_SAFE, "FALL"
+    h.land()
+    check(f"πτώση ακριβώς {P.FALL_SAFE}px δεν πονάει", h.energy == P.ENERGY_MAX,
+          f"ενέργεια {h.energy}")
+    h.energy, h.fall_dist, h.state = P.ENERGY_MAX, P.FALL_SAFE + 1, "FALL"
+    h.land()
+    check(f"πτώση πάνω από {P.FALL_SAFE}px πονάει", h.energy < P.ENERGY_MAX,
+          f"ενέργεια {h.energy}")
+    h.energy, h.fall_dist, h.state = P.ENERGY_MAX, 180, "FALL"
+    h.parachute, h.para_open = 1, 1
+    h.land()
+    check("με ανοιγμένο αλεξίπτωτο η πτώση ΔΕΝ πονάει",
+          h.energy == P.ENERGY_MAX and h.parachute == 0,
+          f"ενέργεια {h.energy}, αλεξίπτωτα {h.parachute}")
 
     # Γειτονικές έξοδοι με ΔΙΑΦΟΡΕΤΙΚΟΥΣ προορισμούς πρέπει να απορρίπτονται.
     bad = ";\n" + "\n".join(

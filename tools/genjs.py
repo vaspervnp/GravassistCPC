@@ -20,7 +20,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import physics as P
-from genasm import tile_pixels
+from genasm import arrow_pixels, tile_pixels
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "editor", "wwwroot", "game", "data.js")
@@ -63,11 +63,16 @@ def build():
               "FALL_V0": P.FALL_V0, "FALL_ACCEL": P.FALL_ACCEL,
               "FALL_VMAX": P.FALL_VMAX, "PARA_V": P.PARA_V,
               "ENERGY_MAX": P.ENERGY_MAX, "ENERGY_PICK": P.ENERGY_PICK,
-              "SPIKE_DMG": P.SPIKE_DMG, "CRATE_TICKS": P.CRATE_TICKS},
+              "SPIKE_DMG": P.SPIKE_DMG, "CRATE_TICKS": P.CRATE_TICKS,
+              "SPIKE_TICKS": P.SPIKE_TICKS, "ATTR_MAX": P.ATTR_MAX},
 
         # Γραφικά: τιμές pen ανά pixel, ίδια πηγή με τα tiles του Amstrad.
         "PALETTE": ["#000080", "#FFFFFF", "#00FF00", "#FF8000"],
         "TILE_PX": [tile_pixels(t) for t in range(P.NTYPES)],
+        # Βελάκια βαρύτητας του HUD — ίδια πηγή με τον Amstrad, ώστε η δοκιμή
+        # στον browser να δείχνει ακριβώς ό,τι θα δεις στην οθόνη του CPC.
+        "GRAV_PX": [[arrow_pixels(g, 3) for g in range(8)],
+                    [arrow_pixels(g, 2) for g in range(8)]],
         "HERO": {"w": stickman.W, "h": stickman.H,
                  "frames": sprite_frames(stickman.build_frames())},
         "HERO45": {"w": stickman.W45, "h": stickman.H45,

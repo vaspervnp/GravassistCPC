@@ -32,8 +32,10 @@ src/gamedefs.asm src/tables.asm src/rooms.asm: tools/genasm.py tools/physics.py 
 	$(PY) tools/genasm.py
 
 # Το rasm βγάζει το build/main.bin μέσω του `save` directive στο main.asm
+# Ο πίνακας συμβόλων δεν είναι για debugging: από εκεί διαβάζει το
+# roomfile.py πόσος χώρος ΠΡΑΓΜΑΤΙΚΑ περισσεύει για ένα σετ αιθουσών.
 $(BIN): $(SRC) $(DEPS) $(GFX) | build
-	$(ASM) $(SRC)
+	$(ASM) $(SRC) -s -sa -os build/symbols.txt
 
 # ASCII BASIC για το CPC: γραμμές με CR+LF, τερματισμός με &1A (EOF)
 $(BASD): $(BAS) | build
@@ -44,7 +46,8 @@ $(BASD): $(BAS) | build
 # από το src/rooms.asm, ένα `make clean` θα έσβηνε τα .BIN χωρίς να τα
 # ξαναφτιάξει — το rooms.asm θα ήταν ήδη ενημερωμένο — και η δισκέτα θα
 # έβγαινε ΧΩΡΙΣ αίθουσες.
-$(SETS): tools/roomfile.py tools/physics.py $(ROOMS) | build
+# ΜΕΤΑ το binary: η χωρητικότητα βγαίνει από τα σύμβολά του.
+$(SETS): tools/roomfile.py tools/physics.py $(ROOMS) $(BIN) | build
 	$(PY) tools/roomfile.py
 
 $(DSK): $(BIN) $(BASD) $(SETS)
