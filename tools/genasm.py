@@ -252,7 +252,6 @@ def defs_asm(rooms=()):
             "στην κεφαλή",
             f"SET_OFFS        equ {3 + 1 + 1 + RF.SET_ROOMS}         ; offset "
             "του offs[]",
-            f"SET_MAX         equ {RF.SET_MAX}       ; χωρητικότητα του set_buf",
             f"LVL_CELLS       equ {P.COLS * P.ROWS}",
             "; Πόσες αλλαγές κελιών θυμάται το παιχνίδι συνολικά. Κάθε εγγραφή",
             "; είναι 4 bytes· γεμάτο ημερολόγιο σημαίνει ότι οι παλιότερες",

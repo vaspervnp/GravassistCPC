@@ -15,6 +15,7 @@ src/hero.asm (Amstrad) και το JS του editor. Τρία αντίγραφα
 
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -58,7 +59,8 @@ def build():
         "GTAB": P.GTAB, "RTAB": P.RTAB,
         "GSTEP": P.GSTEP, "RSTEP": P.RSTEP,
 
-        "K": {"FEET_B": P.FEET_B, "FOOT_A": P.FOOT_A, "WALL_A": P.WALL_A,
+        "K": {"WALK_V": P.WALK_V,
+              "FEET_B": P.FEET_B, "FOOT_A": P.FOOT_A, "WALL_A": P.WALL_A,
               "SCAN_MAX": P.SCAN_MAX, "FALL_SAFE": P.FALL_SAFE,
               "FALL_V0": P.FALL_V0, "FALL_ACCEL": P.FALL_ACCEL,
               "FALL_VMAX": P.FALL_VMAX, "PARA_V": P.PARA_V,
@@ -84,13 +86,38 @@ def build():
     }
 
 
+def check_constants(data):
+    """Κάθε K.ΚΑΤΙ που διαβάζει η JavaScript πρέπει να εξάγεται από εδώ.
+
+    ΓΙΑΤΙ ΥΠΑΡΧΕΙ: το WALK_V έλειπε από το export και κανείς δεν το πήρε
+    είδηση. Στη JavaScript το `undefined * 2` δίνει NaN, το `NaN >> 8` δίνει
+    0, και ο ήρωας απλώς δεν περπατούσε — καμία εξαίρεση, κανένα μήνυμα, μόνο
+    ένα παιχνίδι που δεν αντιδρούσε στα πλήκτρα. Ένα σκέτο grep το πιάνει.
+    """
+    used = set()
+    game = os.path.join(ROOT, "editor", "wwwroot", "game")
+    for name in sorted(os.listdir(game)):
+        if not name.endswith(".js") or name == "data.js":
+            continue
+        with open(os.path.join(game, name)) as f:
+            used |= set(re.findall(r"\bK\.([A-Z_0-9]+)", f.read()))
+    missing = sorted(used - set(data["K"]))
+    if missing:
+        raise SystemExit(
+            "λείπουν σταθερές από το export της JavaScript: "
+            + ", ".join(missing))
+    return len(used)
+
+
 if __name__ == "__main__":
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     data = build()
+    n = check_constants(data)
     with open(OUT, "w") as f:
         f.write("// ΠΑΡΑΓΕΤΑΙ ΑΥΤΟΜΑΤΑ από tools/genjs.py — ΜΗΝ το επεξεργάζεσαι.\n")
         f.write("// Πηγή: tools/physics.py. Δες το docstring του genjs.py για το γιατί.\n")
         f.write("window.GAME_DATA = ")
         json.dump(data, f, separators=(",", ":"))
         f.write(";\n")
-    print(f"  {os.path.relpath(OUT, ROOT)}: {os.path.getsize(OUT)} bytes")
+    print(f"  {os.path.relpath(OUT, ROOT)}: {os.path.getsize(OUT)} bytes, "
+          f"{n} σταθερές σε χρήση")
