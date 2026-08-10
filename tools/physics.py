@@ -323,6 +323,7 @@ SCAN_MAX = 14       # πόσο βαθιά ψάχνουμε έδαφος
 ENERGY_MAX = 8
 SPIKE_DMG  = 2
 ENERGY_PICK = 2
+WALK_V = 384        # 1.5 px/frame· το τρέξιμο είναι διπλάσιο -> 3.0
 CRATE_TICKS = 4     # frames ανά κελί πτώσης κιβωτίου (8 px / 4 = 2 px/frame)
 FALL_SAFE = 36      # 3 x ύψος ήρωα
 TILT_45  = 3        # διαφορά ύψους (σε 2*FOOT_A pixels) που μετράει για 45 μοίρες
@@ -335,7 +336,7 @@ TILT_45  = 3        # διαφορά ύψους (σε 2*FOOT_A pixels) που μ
 FALL_V0    = 256
 FALL_ACCEL = 26
 FALL_VMAX  = 1024
-PARA_V     = 128        # με αλεξίπτωτο: 0.5 px/frame, χωρίς επιτάχυνση
+PARA_V     = 192        # με αλεξίπτωτο: 0.75 px/frame, χωρίς επιτάχυνση
 
 # ΠΡΟΣΟΧΗ: η ταχύτητα ΔΕΝ γίνεται ποτέ βήμα πολλών pixel. Εκτελούνται πολλαπλά
 # βήματα του ΕΝΟΣ pixel ανά frame, γιατί οι γωνίες, οι ακμές και οι ράμπες
@@ -374,6 +375,7 @@ class Hero:
         self.para_open = 0      # ανοιγμένο αυτή τη στιγμή
         self.won = False
         self.crate_tick = 0
+        self.walk_acc = 0           # κλάσμα pixel που μεταφέρεται στο επόμενο frame
         self.moved_cells = []       # κελιά που πρέπει να ξαναζωγραφιστούν
         # Η φορά που ΟΡΙΣΕ Ο ΠΑΙΚΤΗΣ, όχι η τρέχουσα του ήρωα: η δική του
         # γυρίζει αυτόματα σε κάθε γωνία που περπατάει, ενώ η βαρύτητα του
@@ -603,7 +605,7 @@ class Hero:
             self.y += gy * step
         return False
 
-    def update(self, walk=0):
+    def update(self, walk=0, run=False):
         """Η ΣΕΙΡΑ εδώ είναι ο πυρήνας του παιχνιδιού:
 
         Η βαρύτητα ευθυγραμμίζεται με την επιφάνεια ΜΟΝΟ μέσα από το περπάτημα
@@ -624,7 +626,14 @@ class Hero:
         # έλεγχος γλιστρήματος πρέπει να γίνει ΜΕΤΑ, αλλιώς ο ήρωας γλιστράει
         # στο πρώτο pixel κάθε ράμπας πριν προλάβει να κουμπώσει πάνω της.
         if walk:
-            self.do_walk(walk)
+            # Η ταχύτητα ΔΕΝ γίνεται μεγαλύτερο βήμα: εκτελούνται τόσα βήματα
+            # του ενός pixel όσα λέει ο συσσωρευτής. Οι γωνίες και οι ράμπες
+            # ανιχνεύονται ανά pixel — με βήμα 3 pixel θα προσπερνιόνταν.
+            self.walk_acc += WALK_V * (2 if run else 1)
+            steps = self.walk_acc >> 8
+            self.walk_acc &= 0xFF
+            for _ in range(steps):
+                self.do_walk(walk)
         elif self.slipping():
             self.fall_step()
         else:

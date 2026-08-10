@@ -55,7 +55,7 @@
       this.fallV = K.FALL_V0; this.fallAcc = 0;
       this.energy = K.ENERGY_MAX; this.keys = 0;
       this.parachute = 0; this.paraOpen = 0; this.won = false;
-      this.crateTick = 0; this.worldG = g; this.cratesOn = false;
+      this.crateTick = 0; this.walkAcc = 0; this.worldG = g; this.cratesOn = false;
       this.face = 1; this.carry = 0; this.warp = false;
     }
 
@@ -288,14 +288,21 @@
     // Η σειρά και οι πρόωροι τερματισμοί είναι ΑΚΡΙΒΩΣ του physics.py.update.
     // Στην πτώση το prevSupport ΔΕΝ ενημερώνεται — αυτό κρατά τη μνήμη ότι
     // ερχόμασταν από ράμπα, που χρειάζεται το align.
-    update(walk) {
+    update(walk, run) {
       walk = walk | 0;
       this.crateStep();
       this.touchObjects();
       const k = this.groundDepth(0);
       if (k === null || k > K.FEET_B + 2) { this.fallStep(); return; }
       if (this.state === "FALL") this.land();
-      if (walk) this.doWalk(walk);
+      if (walk) {
+        // Η ταχύτητα ΔΕΝ γίνεται μεγαλύτερο βήμα: τόσα βήματα του ενός pixel
+        // όσα λέει ο συσσωρευτής, αλλιώς προσπερνιούνται γωνίες και ράμπες.
+        this.walkAcc += K.WALK_V * (run ? 2 : 1);
+        const steps = this.walkAcc >> 8;
+        this.walkAcc &= 0xFF;
+        for (let i = 0; i < steps; i++) this.doWalk(walk);
+      }
       else if (this.slipping()) this.fallStep();
       else this.state = "IDLE";
       this.prevSupport = this.supportType();

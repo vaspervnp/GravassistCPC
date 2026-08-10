@@ -36,19 +36,44 @@
 }
 
 <style>
+    /* Τα εργαλεία πάνω, σε στήλες· η πίστα και το πηγαίο της από κάτω.
+       Οι στήλες προσαρμόζονται στο πλάτος: σε στενή οθόνη γίνονται μία. */
     .workbench {
         display: flex;
+        flex-direction: column;
         gap: 20px;
-        align-items: flex-start;
-        flex-wrap: wrap;
     }
 
-    .sidebar {
-        width: 320px;
-        flex: 0 0 auto;
-        display: flex;
-        flex-direction: column;
+    .toolcols {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 14px;
+        align-items: start;
+    }
+
+    /* Χωρίς αυτό, το μεγάλο min-content πλάτος των βοηθητικών κειμένων
+       φουσκώνει τις στήλες και το πλέγμα καταρρέει σε μία. */
+    .toolcols > .panel { min-width: 0; }
+    .toolcols .hintline { overflow-wrap: anywhere; }
+
+    /* Η παλέτα τύπων δίπλα στην πίστα: τη χρησιμοποιείς ΕΝΩ ζωγραφίζεις, οπότε
+       η απόσταση από το πλέγμα είναι που μετράει. Σε στενή οθόνη πέφτει από
+       κάτω και απλώνεται σε στήλες, ώστε να μη γίνεται ατέλειωτη λίστα. */
+    .stagerow {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 16px;
+        align-items: start;
+    }
+
+    .panel.palette { position: sticky; top: 12px; max-height: 82vh; overflow-y: auto; }
+    .panel.palette .tiles { grid-template-columns: repeat(2, 1fr); }
+    .panel.palette h3.group { grid-column: 1 / -1; }
+
+    @@media (max-width: 1000px) {
+        .stagerow { grid-template-columns: 1fr; }
+        .panel.palette { position: static; max-height: none; }
+        .panel.palette .tiles { grid-template-columns: repeat(3, 1fr); }
     }
 
     .panel {
@@ -117,13 +142,12 @@
     .filebar select, .filebar input[type=text] { flex: 1 1 100%; }
 
     .stage {
-        flex: 1 1 640px;
         min-width: 0;
     }
 
     #grid {
         width: 100%;
-        max-width: 1000px;
+        max-width: 1280px;
         display: block;
         background: var(--bg);
         border: 2px solid var(--edge);
@@ -241,7 +265,7 @@
 <script id="editor-data" type="application/json">@Html.Raw(tileJson)</script>
 
 <div class="workbench">
-    <div class="sidebar">
+    <div class="toolcols">
         <div class="panel">
             <h2>Αρχείο</h2>
             <div class="filebar">
@@ -298,26 +322,6 @@
         </div>
 
         <div class="panel">
-            <h2>Τύποι κελιών</h2>
-            @foreach (var group in Model.Tiles.GroupBy(t => t.Group))
-            {
-                <h3 class="group">@group.Key</h3>
-                <div class="palette">
-                    @foreach (var t in group)
-                    {
-                        <button type="button" class="tile-btn" data-symbol="@t.Symbol"
-                                title="@t.Name — @t.Hint (χαρακτήρας '@t.Symbol')">
-                            <svg viewBox="0 0 8 8" width="26" height="26" aria-hidden="true">
-                                <use href="#t-@t.Id" width="8" height="8"></use>
-                            </svg>
-                            <span class="label">@t.Name<br /><span class="key">@t.Symbol</span></span>
-                        </button>
-                    }
-                </div>
-            }
-        </div>
-
-        <div class="panel">
             <h2>Εργαλεία</h2>
             <div class="toolbar">
                 <button type="button" class="tool-btn" data-tool="brush">Πινέλο</button>
@@ -340,6 +344,7 @@
         </div>
     </div>
 
+    <div class="stagerow">
     <div class="stage">
         <svg id="grid" viewBox="0 0 @(Model.Cols * 8) @(Model.Rows * 8)"
              preserveAspectRatio="xMidYMid meet" role="img"
@@ -375,11 +380,33 @@
         <div class="status info" id="status">Έτοιμο.</div>
         <div class="readout" id="readout">—</div>
 
-        <details class="source">
-            <summary>Πηγαίο κείμενο πίστας</summary>
-            <pre id="source-view"></pre>
-        </details>
     </div>
+
+        <div class="panel palette">
+            <h2>Τύποι κελιών</h2>
+            @foreach (var group in Model.Tiles.GroupBy(t => t.Group))
+            {
+                <h3 class="group">@group.Key</h3>
+                <div class="palette">
+                    @foreach (var t in group)
+                    {
+                        <button type="button" class="tile-btn" data-symbol="@t.Symbol"
+                                title="@t.Name — @t.Hint (χαρακτήρας '@t.Symbol')">
+                            <svg viewBox="0 0 8 8" width="26" height="26" aria-hidden="true">
+                                <use href="#t-@t.Id" width="8" height="8"></use>
+                            </svg>
+                            <span class="label">@t.Name<br /><span class="key">@t.Symbol</span></span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <details class="source" open>
+        <summary>Πηγαίο κείμενο πίστας</summary>
+        <pre id="source-view"></pre>
+    </details>
 </div>
 
 <script>
@@ -1341,6 +1368,51 @@
         document.getElementById("btn-new").addEventListener("click", newLevel);
         document.getElementById("btn-new-room").addEventListener("click", newRoom);
         document.getElementById("btn-save").addEventListener("click", saveLevel);
+
+        // --- Δοκιμή και χτίσιμο ------------------------------------------
+        // Και τα δύο τρέχουν πάνω στο ΑΠΟΘΗΚΕΥΜΕΝΟ αρχείο, όχι στο πλέγμα της
+        // οθόνης: δοκιμάζεις ακριβώς ό,τι θα παίξει, χωρίς να μπερδεύεσαι με
+        // αλλαγές που δεν έχεις σώσει.
+        function roomNumberOfName(name) {
+            const m = /^room_(\d+)\.txt$/i.exec(name || "");
+            return m ? parseInt(m[1], 10) : 0;
+        }
+
+        document.getElementById("btn-play").addEventListener("click", function () {
+            const name = fileName.value.trim();
+            if (!name) {
+                setStatus("Άνοιξε ή αποθήκευσε πρώτα μια αίθουσα.", true);
+                return;
+            }
+            if (dirty) setStatus("Προσοχή: η δοκιμή τρέχει το αποθηκευμένο αρχείο.");
+            window.open("/game/play.html?level=" + encodeURIComponent(name), "_blank");
+        });
+
+        document.getElementById("btn-dsk").addEventListener("click", async function (ev) {
+            const room = roomNumberOfName(fileName.value.trim());
+            if (!room) {
+                setStatus("Το .dsk ξεκινά από αίθουσα — άνοιξε ένα room_<N>.txt.", true);
+                return;
+            }
+            const btn = ev.currentTarget;
+            btn.disabled = true;
+            setStatus("Χτίσιμο για αίθουσα " + room + "…");
+            try {
+                const res = await fetch("/api/build", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ room: room })
+                });
+                const b = await res.json();
+                setStatus(b.ok
+                    ? "Έτοιμο: " + b.dsk + " (" + b.bytes + " bytes), αίθουσα " + room
+                    : "Απέτυχε το χτίσιμο: " + (b.output || b.error || ""), !b.ok);
+            } catch (e) {
+                setStatus("Σφάλμα χτισίματος: " + e, true);
+            } finally {
+                btn.disabled = false;
+            }
+        });
 
         window.addEventListener("beforeunload", function (ev) {
             if (!dirty) return;

@@ -159,22 +159,21 @@ ml_walk:        call read_use
                 call nz,h_use
 ml_nouse:       call read_walk
                 ld   (ml_dir),a
-                call hero_update
 
-                ; ΤΡΕΞΙΜΟ: δεύτερο ΠΛΗΡΕΣ βήμα φυσικής, όχι βήμα 2 pixels.
-                ; Με βήμα 2 pixels ο ήρωας θα προσπερνούσε ακμές και ράμπες —
-                ; το μοντέλο ανιχνεύει γωνίες και κλίσεις ανά pixel.
+                ; Το τρέξιμο ΔΕΝ είναι δεύτερη ενημέρωση: αυτό θα διπλασίαζε και
+                ; την πτώση, τα κιβώτια και τα αντικείμενα. Είναι σημαία που
+                ; διπλασιάζει ΜΟΝΟ τον ρυθμό βημάτων βάδισης.
                 xor  a
-                ld   (ml_run),a
+                ld   (hero_run),a
                 ld   a,(ml_dir)
                 or   a
-                jr   z,ml_anim          ; τρέξιμο μόνο όταν περπατάει
+                jr   z,ml_upd
                 ld   a,K_SHIFT
                 call KM_TEST_KEY
-                jr   z,ml_anim
+                jr   z,ml_upd
                 ld   a,1
-                ld   (ml_run),a
-                ld   a,(ml_dir)
+                ld   (hero_run),a
+ml_upd:         ld   a,(ml_dir)
                 call hero_update
 
 ml_anim:        call anim_frame
@@ -207,7 +206,6 @@ ml_esc:
 
 ml_dir          db   0
 ml_grav         db   0
-ml_run          db   0
 
 ;---------------------------------------------------------------------
 ; set_palette — τα 4 pens του MODE 1
@@ -318,7 +316,7 @@ use_prev        db   0
 ;---------------------------------------------------------------------
 anim_frame:     ld   hl,anim_tick
                 inc  (hl)
-                ld   a,(ml_run)         ; στο τρέξιμο, διπλάσιος ρυθμός καρέ
+                ld   a,(hero_run)       ; στο τρέξιμο, διπλάσιος ρυθμός καρέ
                 or   a
                 jr   z,af_state
                 inc  (hl)

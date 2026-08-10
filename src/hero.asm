@@ -54,7 +54,29 @@ hu_td:          ld   (h_td),a
                 ld   a,(h_d)
                 or   a
                 jr   z,hu_still
+
+                ; Η ταχύτητα ΔΕΝ γίνεται μεγαλύτερο βήμα: εκτελούνται τόσα
+                ; βήματα του ΕΝΟΣ pixel όσα λέει ο συσσωρευτής. Γωνίες και
+                ; ράμπες ανιχνεύονται ανά pixel — με βήμα 3 θα προσπερνιόνταν.
+                ld   a,(walk_acc)
+                ld   l,a
+                ld   h,0
+                ld   de,WALK_V
+                add  hl,de
+                ld   a,(hero_run)
+                or   a
+                jr   z,hu_wacc
+                add  hl,de              ; τρέξιμο: διπλάσιος ρυθμός
+hu_wacc:        ld   a,l
+                ld   (walk_acc),a       ; κρατάμε μόνο το κλάσμα
+                ld   a,h
+                or   a
+                jr   z,hu_done
+                ld   b,a
+hu_wlp:         push bc
                 call h_walk
+                pop  bc
+                djnz hu_wlp
                 jr   hu_done
 hu_still:       call h_slipping
                 jr   c,hu_fall
@@ -1364,6 +1386,8 @@ hero_won        db 0
 h_cell          db 0
 
 h_d             db 0            ; κατεύθυνση βάδισης αυτού του frame
+hero_run        db 0            ; κρατημένο SHIFT
+walk_acc        db 0            ; κλάσμα pixel βάδισης
 h_td            db 1            ; κατεύθυνση για τη μέτρηση κλίσης
 h_sd            db 1            ; πρόσημο για το h_stepr
 h_sgn           db 1

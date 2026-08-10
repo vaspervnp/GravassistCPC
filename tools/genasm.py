@@ -200,6 +200,7 @@ def defs_asm(rooms=()):
             f"FALL_ACCEL      equ {P.FALL_ACCEL}",
             f"FALL_VMAX       equ {P.FALL_VMAX}",
             f"PARA_V          equ {P.PARA_V}",
+            f"WALK_V          equ {P.WALK_V}",
             "",
             "; Ιδιότητες ανά τύπο — ένα AND αντί για σκόρπιες συγκρίσεις",
             "F_SOLID         equ #01",

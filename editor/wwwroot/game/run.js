@@ -73,8 +73,7 @@
 
   function frame() {
     const { walk, run } = input();
-    hero.update(walk);
-    if (run && walk) hero.update(walk);
+    hero.update(walk, run);      // το τρέξιμο είναι ΣΗΜΑΙΑ, όχι δεύτερη ενημέρωση
     tick += run ? 2 : 1;
 
     if (hero.paraOpen) {
