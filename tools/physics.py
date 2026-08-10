@@ -317,7 +317,7 @@ class Room:
 
         Επιστρέφει (col, row, g) ή None αν δεν υπάρχει πόρτα επιστροφής.
         """
-        for cell, dest, _two, cells in self.exit_groups():
+        for cell, dest, two, cells in self.exit_groups():
             if dest != origin:
                 continue
             g = self.exit_arrive_g.get(cell)
@@ -326,6 +326,16 @@ class Room:
             declared = self.exit_arrive.get(cell)
             if declared is not None:
                 return declared[0], declared[1], g
+            if not two:
+                # Η πόρτα δεν δηλώνει ούτε σημείο άφιξης ούτε «διπλή»: ο
+                # παίκτης ξεκινά από το '@' της αίθουσας.
+                #
+                # Η ΣΥΝΘΗΚΗ ΚΡΙΝΕΤΑΙ ΕΔΩ, στην πόρτα από την οποία ΒΓΑΙΝΕΙΣ.
+                # Παλιά την έκρινε η πόρτα από την οποία ΜΠΗΚΕΣ — που ζει σε
+                # ΑΛΛΟ αρχείο. Έτσι το σημείο άφιξης που έβλεπες μπροστά σου
+                # αγνοούνταν επειδή έλειπε μια σημαία σε άλλη αίθουσα: δύο
+                # μισά της ίδιας απόφασης σε δύο μεριές.
+                return None
             for c, r in cells:          # σταθερή σειρά -> προβλέψιμο σημείο
                 for nc, nr in ((c-1, r), (c+1, r), (c, r-1), (c, r+1)):
                     if not (0 <= nc < COLS and 0 <= nr < ROWS):

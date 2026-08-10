@@ -92,13 +92,11 @@
       hero.won = false;
       if (dest && rooms["room_" + dest + ".txt"]) {
         const from = roomNumberOf(curName);
-        const [bc, br] = hero.bodyCell();
-        const two = (rooms[curName].twoWay || {})[bc + "," + br];
         const nr = rooms["room_" + dest + ".txt"];
         sel.value = "room_" + dest + ".txt";
-        // Πόρτα διπλής κατεύθυνσης: εμφανίζεσαι ΔΙΠΛΑ στην πόρτα επιστροφής,
-        // όχι πάνω της — εκεί θα σε ξαναπερνούσε αμέσως, ατέρμονα.
-        const arr = two ? arrivalIn(nr, from) : null;
+        // Το αν υπάρχει σημείο άφιξης το κρίνει η πόρτα από την οποία ΒΓΑΙΝΕΙΣ
+        // — όχι αυτή από την οποία μπήκες, που ζει σε άλλο αρχείο.
+        const arr = arrivalIn(nr, from);
         start(sel.value, nr.cells, arr || nr.start);
         note.textContent = "Room " + dest + (arr ? " (door arrival point)" : "");
       } else if (dest) {
@@ -142,6 +140,8 @@
         const dec = (meta.arrive || {})[c + "," + r];
         if (dec) return [dec[0] * D.CELL + D.CELL / 2,
                          D.GRID_Y0 + dec[1] * D.CELL + D.CELL / 2, g];
+        // Χωρίς δήλωση, μόνο αν η ίδια η πόρτα λέει «διπλή».
+        if (!(meta.twoWay || {})[c + "," + r]) return null;
         for (const [nc, nr] of [[c-1,r],[c+1,r],[c,r-1],[c,r+1]]) {
           if (nc < 0 || nr < 0 || nc >= D.COLS || nr >= D.ROWS) continue;
           const t = meta.cells[nr][nc];

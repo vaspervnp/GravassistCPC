@@ -298,16 +298,17 @@ def main():
     #     ατέρμονα (αυτό ακριβώς έγινε στο room_1, όπου η βαρύτητα τραβάει
     #     ΔΕΞΙΑ και η πόρτα είναι στον δεξιό τοίχο). Ο μόνος έλεγχος που το
     #     πιάνει είναι να αφήσουμε τον ήρωα να τρέξει.
-    SETTLE = 90
+    # Αρκετά frames ώστε να πιαστεί και το ΑΡΓΟ γλίστρημα: μια άφιξη μπορεί
+    # να φαίνεται σταθερή για δευτερόλεπτα και μετά να μπει στην πόρτα.
+    SETTLE = 400
     for r in rooms:
         for cell, dest, two, cells in r.exit_groups():
-            if not two:
-                continue
             other = next((o for o in rooms if o.number == dest), None)
             if other is None:
                 continue
+            # Η συνθήκη κρίνεται στην πόρτα από την οποία ΒΓΑΙΝΕΙΣ, όχι σε
+            # αυτή από την οποία μπήκες: το arrival_for() το ξέρει, εμείς όχι.
             a = other.arrival_for(r.number)
-            check(f"room_{dest}: υπάρχει άφιξη από την {r.number}", a is not None, f"{a}")
             if a is None:
                 continue
             ac, ar, ag = a
