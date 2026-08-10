@@ -1,0 +1,102 @@
+@model IReadOnlyList<GravassistEditor.Services.Account>
+@{
+    ViewData["Title"] = "Accounts";
+    var pending = Model.Where(a => !a.Allowed).ToList();
+    var allowed = Model.Where(a => a.Allowed).ToList();
+}
+
+<style>
+    .adm { display: grid; gap: 16px; max-width: 720px; }
+    .adm table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    .adm th, .adm td { text-align: left; padding: 5px 8px;
+                       border-bottom: 1px solid var(--line); }
+    .adm th { color: var(--edge); font-weight: normal; letter-spacing: 1px; }
+    .adm .who { color: var(--ink); }
+    .adm .note { color: #8a8ac0; }
+    .adm form.row { display: inline; }
+    .adm .msg { color: var(--material); }
+</style>
+
+<div class="adm">
+    <div class="panel">
+        <h2>Invite an account</h2>
+        <form method="post" asp-action="Invite" class="toolbar">
+            @Html.AntiForgeryToken()
+            <input type="email" name="email" placeholder="name@example.com"
+                   required style="min-width:16rem" />
+            <button type="submit">Invite</button>
+        </form>
+        <div class="hintline">
+            An invited account can sign in straight away. Anyone who signs in
+            without an invitation lands in <b>Waiting</b> below &mdash; they
+            cannot use the editor until you approve them, and no folder is
+            created for them.
+        </div>
+        @if (TempData["Msg"] is string msg)
+        {
+            <div class="msg">@msg</div>
+        }
+    </div>
+
+    <div class="panel">
+        <h2>Waiting for approval (@pending.Count)</h2>
+        @if (pending.Count == 0)
+        {
+            <div class="hintline" style="margin-top:0">Nobody is waiting.</div>
+        }
+        else
+        {
+            <table>
+                <tr><th>Account</th><th>Since</th><th></th></tr>
+                @foreach (var a in pending)
+                {
+                    <tr>
+                        <td class="who">@a.Email</td>
+                        <td class="note">@a.Seen.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                        <td>
+                            <form method="post" asp-action="Approve" class="row">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="email" value="@a.Email" />
+                                <button type="submit">Approve</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </table>
+        }
+    </div>
+
+    <div class="panel">
+        <h2>Allowed (@(allowed.Count + 1))</h2>
+        <table>
+            <tr><th>Account</th><th>How</th><th></th></tr>
+            <tr>
+                <td class="who">@ViewData["Admin"]</td>
+                <td class="note">administrator</td>
+                <td></td>
+            </tr>
+            @foreach (var a in allowed)
+            {
+                <tr>
+                    <td class="who">@a.Email</td>
+                    <td class="note">@a.Note</td>
+                    <td>
+                        <form method="post" asp-action="Revoke" class="row">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="email" value="@a.Email" />
+                            <button type="submit">Revoke</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </table>
+        <div class="hintline">
+            Revoking keeps the account&rsquo;s folder under <code>levels/</code>
+            &mdash; it only stops them signing in. The administrator cannot be
+            revoked, otherwise one wrong click would lock out the only person
+            who can unlock it.
+        </div>
+    </div>
+
+    <div><a href="/">&larr; Back to the editor</a></div>
+</div>

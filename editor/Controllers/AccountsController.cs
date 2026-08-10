@@ -48,6 +48,21 @@ public sealed class AccountsController : Controller
         email = User.FindFirstValue(ClaimTypes.Email),
     });
 
+    /// <summary>
+    /// Ο λογαριασμός συνδέθηκε αλλά δεν έχει εγκριθεί. Ξεχωριστή σελίδα και
+    /// όχι σκέτο 403: ο χρήστης πρέπει να μάθει ότι ΠΕΡΙΜΕΝΕΙ, όχι ότι κάτι
+    /// χάλασε — και να μπορεί να αποσυνδεθεί για να δοκιμάσει άλλο email.
+    /// </summary>
+    [HttpGet("pending")]
+    public IActionResult Pending([FromServices] AccountStore accounts)
+    {
+        var email = User.FindFirstValue(ClaimTypes.Email) ?? "";
+        if (accounts.IsAllowed(email)) return Redirect("/");
+        ViewData["Email"] = email;
+        ViewData["Admin"] = accounts.AdminEmail;
+        return View();
+    }
+
     [HttpGet("denied")]
     public IActionResult Denied() =>
         Content("This Google account is not allowed to use the editor.",

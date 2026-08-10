@@ -2,6 +2,7 @@
     Layout του editor. ΟΛΟ το CSS/JS είναι inline — καμία εξάρτηση από CDN,
     ώστε το εργαλείο να δουλεύει χωρίς σύνδεση στο internet.
 *@
+@inject GravassistEditor.Services.AccountStore Accounts
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -94,6 +95,12 @@
         {
             <span class="account">
                 @User.Identity.Name
+                @* Ο σύνδεσμος φαίνεται μόνο στον διαχειριστή — σε άλλον θα
+                   έδειχνε πόρτα που δεν ανοίγει. *@
+                @if (Accounts.IsAdmin(User.FindFirstValue(ClaimTypes.Email)))
+                {
+                    <a href="/admin">Accounts</a>
+                }
                 <a href="/accounts/logout">Sign out</a>
             </span>
         }

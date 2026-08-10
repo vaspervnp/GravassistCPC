@@ -1,0 +1,14 @@
+@{ ViewData["Title"] = "Waiting for approval"; }
+
+<div class="panel" style="max-width:32rem">
+    <h2>Waiting for approval</h2>
+    <p>You are signed in as <b>@ViewData["Email"]</b>, but this account is not
+       allowed to use the editor yet.</p>
+    <p>The administrator (<b>@ViewData["Admin"]</b>) has been shown your
+       request and can approve it. Nothing has been created for you until
+       then.</p>
+    <div class="toolbar" style="margin-top:10px">
+        <a href="/accounts/logout"><button type="button">Sign out</button></a>
+        <a href="/"><button type="button">Try again</button></a>
+    </div>
+</div>

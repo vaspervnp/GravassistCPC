@@ -7,6 +7,8 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddHttpContextAccessor();
 // Ο προσωπικός φάκελος κάθε λογαριασμού μέσα στο levels/.
 builder.Services.AddSingleton<UserWorkspace>();
+// Ποιοι λογαριασμοί επιτρέπονται· ο διαχειριστής πάντα.
+builder.Services.AddSingleton<AccountStore>();
 // SCOPED και όχι singleton: η ρίζα του εξαρτάται από ΠΟΙΟΣ ζητά. Ως singleton
 // θα κλείδωνε τον πρώτο χρήστη που θα συνδεόταν και όλοι οι υπόλοιποι θα
 // έγραφαν στα δικά του αρχεία.
@@ -46,6 +48,9 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+// ΜΕΤΑ την εξουσιοδότηση: ξέρουμε ποιος είναι και κόβουμε όσους δεν έχουν
+// εγκριθεί ακόμα, δείχνοντάς τους ΓΙΑΤΙ περιμένουν.
+app.UseMiddleware<ApprovalGate>();
 
 // Τα API endpoints ([ApiController] + [Route]) και μετά η σελίδα του editor.
 app.MapControllers();

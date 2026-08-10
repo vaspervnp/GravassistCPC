@@ -11,6 +11,8 @@ __pycache__/
 # παράγωγα του .NET level editor
 editor/bin/
 editor/obj/
+editor.Tests/bin/
+editor.Tests/obj/
 
 # τοπικές ρυθμίσεις εργαλείων (απόλυτες διαδρομές μηχανήματος)
 .claude/
@@ -22,3 +24,6 @@ editor/wwwroot/game/parity-expected.json
 # Οι προσωπικοί φάκελοι πιστών κάθε λογαριασμού. Φτιάχνονται από τον editor
 # και είναι η δουλειά του καθενός — δεν ανήκουν στο repo.
 levels/*/
+
+# Η λίστα λογαριασμών: διευθύνσεις email πραγματικών ανθρώπων.
+editor/App_Data/

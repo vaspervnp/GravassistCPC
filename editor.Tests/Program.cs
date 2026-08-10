@@ -64,6 +64,102 @@ Check("…και ΔΕΝ βλέπει τα αρχεία του πρώτου",
 Check("οι φάκελοι χρηστών δεν αντιγράφονται σε νέους",
     !Directory.Exists(Path.Combine(dir2, "a_at_b.com")));
 
+// ---------------------------------------------------------------- λογαριασμοί
+// Η λίστα εγκεκριμένων είναι ο ΜΟΝΟΣ φραγμός ανάμεσα σε «συνδέθηκα με Google»
+// και «γράφω αρχεία στον server». Δεν ελέγχεται με το μάτι.
+var adminMail = "boss@example.com";
+var accRoot = Path.Combine(Path.GetTempPath(), "gravassist-acc-test");
+if (Directory.Exists(accRoot)) Directory.Delete(accRoot, true);
+Directory.CreateDirectory(accRoot);
+var accEnv = new Env { ContentRootPath = accRoot };
+var accCfg = new ConfigurationBuilder()
+    .AddInMemoryCollection(new Dictionary<string, string?>
+        { ["gravassistGadmin"] = "  BOSS@Example.com "  })
+    .Build();
+var acc = new AccountStore(accEnv, accCfg);
+
+Check("ο διαχειριστής επιτρέπεται πάντα, χωρίς εγγραφή",
+    acc.IsAllowed("Boss@Example.COM") && acc.IsAdmin(adminMail));
+Check("άγνωστος λογαριασμός ΔΕΝ επιτρέπεται", !acc.IsAllowed("x@y.com"));
+Check("κενό email ΔΕΝ επιτρέπεται", !acc.IsAllowed("") && !acc.IsAllowed(null));
+
+acc.RecordPending("Pending@X.com");
+Check("όποιος ζητήσει καταγράφεται…",
+    acc.All().Any(a => a.Email == "pending@x.com" && !a.Allowed));
+Check("…αλλά ΔΕΝ αποκτά πρόσβαση", !acc.IsAllowed("pending@x.com"));
+
+Check("έγκριση δίνει πρόσβαση",
+    acc.Approve("PENDING@x.com") && acc.IsAllowed("pending@x.com"));
+acc.RecordPending("pending@x.com");
+Check("νέα σύνδεση ΔΕΝ ξαναρίχνει εγκεκριμένον σε αναμονή",
+    acc.IsAllowed("pending@x.com"));
+
+Check("πρόσκληση δίνει πρόσβαση κατευθείαν",
+    acc.Invite("friend@x.com") && acc.IsAllowed("friend@x.com"));
+Check("σκουπίδι δεν μπαίνει στη λίστα",
+    !acc.Invite("όχι-email") && !acc.Invite("a b@c.com") && !acc.Invite(""));
+
+Check("η ανάκληση κόβει την πρόσβαση",
+    acc.Revoke("friend@x.com") && !acc.IsAllowed("friend@x.com"));
+Check("ο διαχειριστής ΔΕΝ ανακαλείται",
+    !acc.Revoke(adminMail) && acc.IsAllowed(adminMail));
+
+Check("όσοι περιμένουν έρχονται πρώτοι στη λίστα",
+    acc.All().First().Allowed == false);
+
+// --- επιβίωση σε restart
+var acc2 = new AccountStore(accEnv, accCfg);
+Check("η λίστα διαβάζεται ξανά μετά από restart",
+    acc2.IsAllowed("pending@x.com") && !acc2.IsAllowed("friend@x.com"));
+
+// --- χαλασμένο αρχείο: ο editor πρέπει να σηκώνεται
+File.WriteAllText(Path.Combine(accRoot, "App_Data", "accounts.json"), "{όχι json");
+var acc3 = new AccountStore(accEnv, accCfg);
+Check("χαλασμένο accounts.json δεν ρίχνει τον editor",
+    acc3.IsAllowed(adminMail) && !acc3.IsAllowed("pending@x.com"));
+
+// ------------------------------------------------------------------- ο φραγμός
+// Ο ApprovalGate είναι που εμποδίζει ΣΤΗΝ ΠΡΑΞΗ. Αν περάσει το αίτημα, το
+// επόμενο βήμα φτιάχνει φάκελο στα levels/ — γι' αυτό ο ψεύτικος «επόμενος»
+// εδώ κάνει ακριβώς αυτό.
+var gate = new AccountStore(accEnv, accCfg);
+gate.Invite("ok@x.com");
+
+async Task<(bool passed, int status, string? go)> Ask(string path, string? email)
+{
+    var passed = false;
+    var mw = new ApprovalGate(c =>
+    {
+        passed = true;
+        if (email is not null) ws.PathFor(U((ClaimTypes.Email, email)));   // ό,τι κάνει ο editor
+        return Task.CompletedTask;
+    });
+    var ctx = new DefaultHttpContext();
+    ctx.Request.Path = path;
+    if (email is not null)
+        ctx.User = new ClaimsPrincipal(
+            new ClaimsIdentity([new Claim(ClaimTypes.Email, email)], "test"));
+    await mw.Invoke(ctx, gate);
+    return (passed, ctx.Response.StatusCode, ctx.Response.Headers.Location);
+}
+
+var r = await Ask("/", "blocked@x.com");
+Check("ο μη εγκεκριμένος ΔΕΝ περνά", !r.passed);
+Check("…και στέλνεται στη σελίδα αναμονής", r.go == "/accounts/pending", r.go ?? "-");
+Check("…ΔΕΝ του φτιάχνεται φάκελος στα levels/",
+    !Directory.Exists(Path.Combine(root, "blocked_at_x.com")));
+Check("…αλλά ο διαχειριστής βλέπει το αίτημά του",
+    gate.All().Any(a => a.Email == "blocked@x.com" && !a.Allowed));
+
+Check("ο εγκεκριμένος περνά", (await Ask("/", "ok@x.com")).passed);
+Check("ο διαχειριστής περνά", (await Ask("/admin", adminMail)).passed);
+Check("η αποσύνδεση δουλεύει και για μη εγκεκριμένον",
+    (await Ask("/accounts/logout", "blocked@x.com")).passed);
+Check("η σελίδα αναμονής δεν στέλνει στον εαυτό της",
+    (await Ask("/accounts/pending", "blocked@x.com")).passed);
+Check("ο ασύνδετος περνά (τον πιάνει η σύνδεση, όχι ο φραγμός)",
+    (await Ask("/", null)).passed);
+
 Console.WriteLine(fails == 0 ? "ΟΛΑ ΣΩΣΤΑ" : $"{fails} ΑΠΟΤΥΧΙΕΣ");
 Environment.Exit(fails);
 
