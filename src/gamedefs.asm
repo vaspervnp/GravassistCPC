@@ -51,8 +51,8 @@ FALL_SAFE       equ 36
 FALL_V0         equ 256
 FALL_ACCEL      equ 26
 FALL_VMAX       equ 1024
-PARA_V          equ 192
-WALK_V          equ 384
+PARA_V          equ 256
+WALK_V          equ 512
 
 ; Ιδιότητες ανά τύπο — ένα AND αντί για σκόρπιες συγκρίσεις
 F_SOLID         equ #01
