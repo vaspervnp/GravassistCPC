@@ -68,7 +68,9 @@
     // ΚΛΕΙΣΤΗ ΠΥΛΗ ΜΠΡΟΣΤΑ: είναι στερεή, δεν στέκεσαι μέσα της — την
     // ακουμπάς. Το μήνυμα λέει ΤΙ την ανοίγει, που είναι το μόνο που δεν
     // φαίνεται κοιτάζοντάς την.
-    const [ac, ar] = h.aheadCell();
+    // Είτε την ΠΑΤΑΣ (είναι στερεή, άρα πάτωμα) είτε την ακουμπάς μπροστά.
+    const g = st === T.indexOf("GATE") ? sc : h.aheadCell();
+    const [ac, ar] = g;
     if (h.room.cell(ac, ar) === T.indexOf("GATE")) {
       const ch = h.room.attr(ac, ar);
       let sw = false, plate = false;

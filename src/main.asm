@@ -1335,17 +1335,27 @@ hp_free:        ld   a,(hp_body)
                 ld   a,MSG_GATE
                 ret  z
 
-                ; ΚΛΕΙΣΤΗ ΠΥΛΗ ΜΠΡΟΣΤΑ: είναι στερεή, οπότε δεν στέκεσαι ποτέ
-                ; μέσα της — την ΑΚΟΥΜΠΑΣ. Το μήνυμα λέει ΤΙ την ανοίγει, που
-                ; είναι το μόνο που δεν φαίνεται κοιτάζοντάς την.
-                call h_ahead
+                ; ΚΛΕΙΣΤΗ ΠΥΛΗ: είναι στερεή, οπότε δεν στέκεσαι ποτέ ΜΕΣΑ της
+                ; — ή την πατάς από πάνω (είναι πάτωμα) ή την ακουμπάς μπροστά
+                ; σου. Και στις δύο περιπτώσεις το μήνυμα λέει ΤΙ την ανοίγει,
+                ; που είναι το μόνο που δεν φαίνεται κοιτάζοντάς την.
+                ld   a,(hp_sup)
+                cp   T_GATE
+                jr   nz,hp_gahead
+                ld   a,(hp_scol)
+                ld   b,a
+                ld   a,(hp_srow)
+                ld   c,a
+                jr   hp_gmsg
+
+hp_gahead:      call h_ahead
                 cp   T_GATE
                 jr   nz,hp_none
                 ld   a,(cell_col)
                 ld   b,a
                 ld   a,(cell_row)
                 ld   c,a
-                call cell_attr
+hp_gmsg:        call cell_attr
                 call gate_drivers       ; A: bit0 = διακόπτης, bit1 = πλάκα
                 or   a
                 ld   a,MSG_GDEAD

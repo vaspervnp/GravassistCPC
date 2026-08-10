@@ -665,7 +665,15 @@ def main():
             (17, "διακόπτη ΚΑΙ πλάκα", "A switch or a plate opens this"),
             (23, "τίποτα", "This gate has nothing to open it")):
         got = hint(col, 22)
-        check(f"κλειστή πύλη με {what}", got == want, f"«{got}»")
+        check(f"δίπλα σε κλειστή πύλη με {what}", got == want, f"«{got}»")
+
+    # Η πύλη είναι στερεή, άρα και ΠΑΤΩΜΑ: στέκεσαι από πάνω της και το
+    # μήνυμα πρέπει να λέει το ίδιο πράγμα.
+    for col, what, want in (
+            (6, "διακόπτη", "Find its switch to open this"),
+            (12, "πλάκα", "Weigh down its plate to open")):
+        got = hint(col, 21)
+        check(f"ΠΑΝΩ σε κλειστή πύλη με {what}", got == want, f"«{got}»")
 
     # Τα μηνύματα είναι ΟΔΗΓΟΣ: σβήνουν μετά τις πρώτες αίθουσες, αλλιώς
     # γίνονται μόνιμος θόρυβος για παίκτη που ξέρει ήδη τα πλήκτρα.
