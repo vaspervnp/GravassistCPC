@@ -300,6 +300,165 @@ lo_next:        pop  hl
 lo_id           db 0
 
 ;---------------------------------------------------------------------
+; plate_step — οι πλάκες πίεσης κρατούν ανοιχτές τις πύλες τους
+;
+;   ΣΤΙΓΜΙΑΙΕΣ, σε αντίθεση με τον διακόπτη: η πύλη ανοίγει όσο η πλάκα
+;   πατιέται και ξανακλείνει μόλις φύγεις. Το κιβώτιο είναι ο τρόπος να την
+;   κρατήσεις πατημένη — γι' αυτό υπάρχει ο τύπος T_PLATE_DOWN.
+;
+;   Οι πύλες γράφονται ΜΟΝΟ όταν αλλάζει η κατάσταση του καναλιού: το
+;   plate_prev κρατά μάσκα οκτώ καναλιών και συγκρίνεται με τη νέα. Αλλιώς
+;   κάθε πλάκα θα ξανάγραφε τις πύλες της πενήντα φορές το δευτερόλεπτο.
+;
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+plate_step:     ld   bc,(hero_x)        ; ποιο κελί πατάει το ΣΩΜΑ
+                ld   de,(hero_y)
+                call cell_at
+                ld   a,(cell_col)
+                ld   (ps_bcol),a
+                ld   a,(cell_row)
+                ld   (ps_brow),a
+
+                xor  a
+                ld   (ps_mask),a
+                ld   hl,(room_attrs)
+ps_lp:          ld   a,(hl)
+                cp   #FF
+                jr   z,ps_done
+                ld   c,a                ; στήλη
+                inc  hl
+                ld   b,(hl)             ; γραμμή
+                inc  hl
+                ld   a,(hl)             ; κανάλι
+                inc  hl
+                ld   (ps_chan),a
+                push hl
+
+                push bc                 ; είναι πλάκα;
+                call cell_addr
+                pop  bc
+                ld   a,(hl)
+                cp   T_PLATE_DOWN
+                jr   z,ps_hold          ; με κιβώτιο: πατημένη μόνη της
+                cp   T_PLATE
+                jr   nz,ps_next
+
+                ld   a,(ps_bcol)        ; αλλιώς: την πατάει ο ήρωας;
+                cp   c
+                jr   nz,ps_next
+                ld   a,(ps_brow)
+                cp   b
+                jr   nz,ps_next
+
+ps_hold:        ld   a,(ps_chan)
+                call ps_bit
+                ld   hl,ps_mask
+                or   (hl)
+                ld   (hl),a
+
+ps_next:        pop  hl
+                jr   ps_lp
+
+                ; Μόνο τα κανάλια που ΑΛΛΑΞΑΝ ξαναγράφουν πύλες.
+ps_done:        ld   a,(ps_mask)
+                ld   hl,plate_prev
+                xor  (hl)
+                ret  z                  ; τίποτα δεν άλλαξε
+                ld   (ps_diff),a
+                ld   a,(ps_mask)
+                ld   (plate_prev),a
+
+                xor  a
+                ld   (ps_ch),a
+ps_chlp:        ld   a,(ps_ch)
+                call ps_bit
+                ld   hl,ps_diff
+                and  (hl)
+                jr   z,ps_chnext
+                ld   a,(ps_ch)
+                call ps_bit
+                ld   hl,ps_mask
+                and  (hl)
+                ld   c,0                ; Z = κλειστές, NZ = ανοιχτές
+                jr   z,ps_set
+                ld   c,1
+ps_set:         ld   a,(ps_ch)
+                call gate_set
+ps_chnext:      ld   hl,ps_ch
+                inc  (hl)
+                ld   a,(hl)
+                cp   ATTR_MAX
+                jr   c,ps_chlp
+                ret
+
+; ps_bit — A = κανάλι (0..7) -> A = η μάσκα του bit του
+; ΑΛΛΟΙΩΝΕΙ: AF, C
+ps_bit:         and  7
+                ld   c,a
+                inc  c
+                ld   a,1
+psb_lp:         dec  c
+                ret  z
+                add  a,a
+                jr   psb_lp
+
+ps_bcol         db 0
+ps_brow         db 0
+ps_chan         db 0
+ps_ch           db 0
+ps_mask         db 0
+ps_diff         db 0
+plate_prev      db 0
+
+;---------------------------------------------------------------------
+; gate_set — βάζει ΟΛΕΣ τις πύλες του καναλιού A σε κατάσταση C
+;   C = 1 ανοιχτές, C = 0 κλειστές. Ίδια σάρωση με το gate_toggle, αλλά με
+;   επιβολή αντί για εναλλαγή: η πλάκα δεν «γυρίζει», ΚΡΑΤΑΕΙ.
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+gate_set:       ld   (gs_chan),a
+                ld   a,c
+                ld   (gs_open),a
+                ld   hl,(room_attrs)
+gs_lp:          ld   a,(hl)
+                cp   #FF
+                ret  z
+                ld   c,a
+                inc  hl
+                ld   b,(hl)
+                inc  hl
+                ld   a,(hl)
+                inc  hl
+                push hl
+                ld   hl,gs_chan
+                cp   (hl)
+                jr   nz,gs_next
+
+                push bc
+                call cell_addr
+                pop  bc
+                ld   a,(hl)
+                cp   T_GATE
+                jr   z,gs_isgate
+                cp   T_GATE_OPEN
+                jr   nz,gs_next
+gs_isgate:      ld   a,(gs_open)
+                or   a
+                ld   a,T_GATE
+                jr   z,gs_put
+                ld   a,T_GATE_OPEN
+gs_put:         call cell_set
+                push bc
+                call draw_tile
+                pop  bc
+gs_next:        pop  hl
+                jr   gs_lp
+
+gs_chan         db 0
+gs_open         db 0
+
+;---------------------------------------------------------------------
 ; cell_set — γράφει τύπο σε κελί ΚΑΙ το καταγράφει στο ημερολόγιο
 ;
 ;   Χωρίς αυτό, ό,τι αλλάζει ο παίκτης (μαζεμένο κλειδί, ξεκλείδωτο λουκέτο,

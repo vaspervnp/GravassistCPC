@@ -57,6 +57,7 @@ CRATE = 25
 START = 26              # δείκτης εκκίνησης· δεν υπάρχει στο παιχνίδι
 LOCK_OPEN = 27          # ξεκλειδωμένο: φαίνεται ακόμα, αλλά περνάς από μέσα
 GATE_OPEN = 28          # ανοιγμένη πόρτα· ίδια λογική με το LOCK_OPEN
+PLATE_DOWN = 29         # πλάκα με ΚΙΒΩΤΙΟ πάνω της: μένει πατημένη μόνη της
 
 CHARS = {
     ".": EMPTY, "#": SOLID,
@@ -66,6 +67,7 @@ CHARS = {
     ":": GRAVLOCK, "%": CRUMBLE, "X": EXIT, "+": ENERGY, "P": PARACHUTE,
     "k": KEY, "K": LOCK, "G": GATE, "S": SWITCH, "p": PLATE,
     "T": TELEPORT, "B": CRATE, "@": START, "|": LOCK_OPEN, "g": GATE_OPEN,
+    "d": PLATE_DOWN,
 }
 NAMES = {v: k for k, v in CHARS.items()}
 TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
@@ -73,8 +75,8 @@ TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
               "ONEWAY_U", "ONEWAY_L", "ONEWAY_D", "ONEWAY_R",
               "GRAVLOCK", "CRUMBLE", "EXIT", "ENERGY", "PARACHUTE",
               "KEY", "LOCK", "GATE", "SWITCH", "PLATE", "TELEPORT", "CRATE",
-              "START", "LOCK_OPEN", "GATE_OPEN"]
-NTYPES = 29
+              "START", "LOCK_OPEN", "GATE_OPEN", "PLATE_DOWN"]
+NTYPES = 30
 
 # --- Ιδιότητες ανά τύπο (bit flags) ----------------------------------
 # Ένας πίνακας αντί για σκόρπια if: ο ίδιος εξάγεται στο src/tables.asm και
@@ -88,8 +90,12 @@ F_ONEWAY  = 0x20        # στερεό μόνο από τη μία πλευρά
 F_TRIGGER = 0x40        # ενεργοποιεί κάτι (έξοδος, διακόπτης, τηλεμεταφορά)
 
 PROPS = [0] * NTYPES
-for _t in (SOLID, RAMP_DR, RAMP_DL, RAMP_UR, RAMP_UL, LOCK, GATE, CRATE):
+for _t in (SOLID, RAMP_DR, RAMP_DL, RAMP_UR, RAMP_UL, LOCK, GATE):
     PROPS[_t] |= F_SOLID
+# ΤΟ ΚΙΒΩΤΙΟ ΔΕΝ ΕΙΝΑΙ ΣΤΕΡΕΟ: ο ήρωας περνάει από μέσα, όπως στον
+# teleporter. Δεν το σπρώχνεις και δεν στέκεσαι πάνω του — το σηκώνεις. Άλλα
+# κιβώτια όμως το βλέπουν: το crate_step κινείται μόνο σε ΚΕΝΟ κελί, οπότε τα
+# κιβώτια εξακολουθούν να στοιβάζονται και να σταματούν στα στερεά.
 for _t in (SPIKE_U, SPIKE_L, SPIKE_D, SPIKE_R):
     PROPS[_t] |= F_DEADLY | F_SOLID     # στερεά: πατάς πάνω τους, δεν τα περνάς
 for _t in (ENERGY, PARACHUTE, KEY):
@@ -98,7 +104,7 @@ for _t in (ONEWAY_U, ONEWAY_L, ONEWAY_D, ONEWAY_R):
     PROPS[_t] |= F_ONEWAY | F_SOLID
 PROPS[GRAVLOCK] |= F_NOFLIP
 PROPS[CRUMBLE] |= F_SOLID | F_FRAGILE
-for _t in (EXIT, SWITCH, TELEPORT, PLATE):
+for _t in (EXIT, SWITCH, TELEPORT, PLATE, PLATE_DOWN):
     PROPS[_t] |= F_TRIGGER
 
 # Η φορά που "κοιτάει" κάθε κατευθυντικός τύπος (κωδικός βαρύτητας 0..7).
@@ -218,8 +224,9 @@ class Room:
             if m:
                 a, b, c, d = (int(x) for x in m.groups())
                 tpd[(a, b)] = (c, d)
-            m = re.match(r"\s*(sw|gate|lock|key)\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
-                         ln, re.I)
+            m = re.match(
+                r"\s*(sw|gate|lock|key|plate)\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
+                ln, re.I)
             if m:
                 attrs[(int(m.group(2)), int(m.group(3)))] = int(m.group(4))
         self.exits = {k: (v or 0) for k, v in
@@ -233,7 +240,8 @@ class Room:
         # Η ιδιότητα απλώνεται σε ΟΛΑ τα κελιά της ομάδας, όπως ο προορισμός
         # μιας εξόδου: μια ψηλή πόρτα δύο κελιών είναι ΕΝΑ αντικείμενο.
         self.attrs = {}
-        for kind in (SWITCH, GATE, GATE_OPEN, LOCK, LOCK_OPEN, KEY):
+        for kind in (SWITCH, GATE, GATE_OPEN, LOCK, LOCK_OPEN, KEY,
+                     PLATE, PLATE_DOWN):
             for cell, v in self._link(kind, attrs, "ιδιότητας").items():
                 self.attrs[cell] = v or 0
 
@@ -453,6 +461,7 @@ class Hero:
         self.crate_tick = 0
         self.walk_acc = 0
         self.spike_tick = 0
+        self.plate_on = {}      # κανάλι -> πατημένο; (για ΑΚΜΗ, όχι κάθε frame)
         # Το κελί ΣΤΗΡΙΞΗΣ του προηγούμενου frame. Το εύθραυστο καταρρέει όταν
         # το ΑΦΗΝΕΙΣ, όχι όταν το πατάς: έτσι το περνάς ακριβώς μία φορά.
         self.prev_cell = None
@@ -595,8 +604,15 @@ class Hero:
         if self.carry:
             return self.drop()
 
-        if st == CRATE:
-            self.room.cells[sc[1]][sc[0]] = EMPTY
+        # Το σηκώνεις από το κελί ΤΟΥ ΣΩΜΑΤΟΣ: το κιβώτιο δεν είναι στερεό,
+        # οπότε δεν στέκεσαι ποτέ πάνω του — στέκεσαι ΜΕΣΑ του.
+        bt = self.room.cell(col, row)
+        if bt == CRATE:
+            self.room.cells[row][col] = EMPTY
+            self.carry = 1
+            return True
+        if bt == PLATE_DOWN:            # σήκωσε το κιβώτιο, άφησε την πλάκα
+            self.room.cells[row][col] = PLATE
             self.carry = 1
             return True
         return False
@@ -621,6 +637,38 @@ class Hero:
                 self.room.cells[r][c] = LOCK_OPEN
                 self.moved_cells.append((c, r))
 
+    def plates_step(self):
+        """Οι πλάκες πίεσης κρατούν ανοιχτές τις πύλες του καναλιού τους.
+
+        ΣΤΙΓΜΙΑΙΕΣ, σε αντίθεση με τον διακόπτη: η πύλη ανοίγει όσο η πλάκα
+        πατιέται και ξανακλείνει μόλις φύγεις. Το κιβώτιο είναι ο τρόπος να
+        την κρατήσεις πατημένη — γι' αυτό υπάρχει το PLATE_DOWN.
+
+        Οι πύλες γράφονται ΜΟΝΟ όταν αλλάζει η κατάσταση του καναλιού· αλλιώς
+        θα ξαναγράφονταν πενήντα φορές το δευτερόλεπτο.
+        """
+        body = (self.x // CELL, (self.y - GRID_Y0) // CELL)
+        held, chans = set(), set()
+        for (c, r), v in self.room.attrs.items():
+            t = self.room.cells[r][c]
+            if t not in (PLATE, PLATE_DOWN):
+                continue
+            chans.add(v)
+            if t == PLATE_DOWN or (c, r) == body:
+                held.add(v)
+        for ch in chans:
+            want = ch in held
+            if self.plate_on.get(ch) == want:
+                continue
+            self.plate_on[ch] = want
+            self.set_gates(ch, want)
+
+    def set_gates(self, channel, opened):
+        """Βάζει ΟΛΕΣ τις πύλες ενός καναλιού σε συγκεκριμένη κατάσταση."""
+        for c, r in self.room.gate_cells(channel):
+            self.room.cells[r][c] = GATE_OPEN if opened else GATE
+            self.moved_cells.append((c, r))
+
     def toggle_gates(self, channel):
         """Γυρίζει ΟΛΕΣ τις πόρτες ενός καναλιού: κλειστή <-> ανοιχτή.
 
@@ -634,13 +682,29 @@ class Hero:
             self.moved_cells.append((c, r))
 
     def drop(self):
-        fc, fr = self.ahead_cell()
+        """Αφήνει το κιβώτιο ΕΚΕΙ ΠΟΥ ΣΤΕΚΕΣΑΙ — και πάνω σε πλάκα πίεσης.
+
+        Στο κελί του σώματος και όχι «μπροστά»: με τον ήρωα να περπατά σε
+        τοίχους και ταβάνια, το μπροστά δεν προβλέπεται εύκολα, ενώ το «εδώ
+        που είμαι» ναι. Και αφού το κιβώτιο δεν είναι στερεό, δεν σε εμποδίζει
+        να μείνεις εκεί.
+
+        Η πλάκα δεν αντικαθίσταται από το κιβώτιο: γίνεται PLATE_DOWN. Αν το
+        κιβώτιο έγραφε πάνω της, η πλάκα θα εξαφανιζόταν και δεν θα υπήρχε
+        τρόπος να την ξαναδείς — ούτε να πάρεις πίσω το κιβώτιο.
+        """
+        fc, fr = self.x // CELL, (self.y - GRID_Y0) // CELL
         if not (0 <= fc < COLS and 0 <= fr < ROWS):
             return False
-        if self.room.cells[fr][fc] != EMPTY:
+        t = self.room.cells[fr][fc]
+        if t == PLATE:
+            self.room.cells[fr][fc] = PLATE_DOWN
+        elif t == EMPTY:
+            self.room.cells[fr][fc] = CRATE
+        else:
             return False
-        self.room.cells[fr][fc] = CRATE
         self.carry = 0
+        self.moved_cells.append((fc, fr))
         return True
 
     def teleport(self, col, row):
@@ -756,6 +820,7 @@ class Hero:
         γλίστρημα δεν θα συνέβαινε ποτέ.
         """
         self.moved_cells = []
+        self.plates_step()
         self.crate_step()
         self.touch_objects()        # και στον αέρα: μαζεύεις πέφτοντας
         k = self.ground_depth(0)

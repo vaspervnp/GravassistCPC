@@ -25,6 +25,7 @@
         wiring = new[]
         {
             new { kind = "sw",   symbols = "S",  label = "Switch",  peer = "gate" },
+            new { kind = "plate",symbols = "pd", label = "Plate",   peer = "gate" },
             new { kind = "gate", symbols = "Gg", label = "Gate",    peer = "sw" },
             new { kind = "lock", symbols = "K|", label = "Lock",    peer = "key" },
             new { kind = "key",  symbols = "k",  label = "Key",     peer = "lock" },
@@ -862,7 +863,7 @@
         }
 
         function renderAttrPanels() {
-            renderAttrPanel(swListEl, ["sw", "gate"]);
+            renderAttrPanel(swListEl, ["sw", "plate", "gate"]);
             renderAttrPanel(keyListEl, ["key", "lock"]);
         }
 

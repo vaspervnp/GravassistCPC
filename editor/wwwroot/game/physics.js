@@ -70,6 +70,7 @@
       // ΕΝΑΣ ΜΕΤΡΗΤΗΣ ΑΝΑ ΤΑΥΤΟΤΗΤΑ: το κλειδί 3 ανοίγει μόνο την κλειδαριά 3.
       this.keys = new Array(K.ATTR_MAX).fill(0);
       this.spikeTick = 0; this.prevCell = null; this.prevBody = null;
+      this.plateOn = {};                // κανάλι -> πατημένο; (ΑΚΜΗ)
       this.parachute = 0; this.paraOpen = 0; this.won = false;
       this.crateTick = 0; this.walkAcc = 0; this.worldG = g; this.cratesOn = false;
       this.face = 1; this.carry = 0; this.warp = false;
@@ -300,6 +301,32 @@
       }
     }
 
+    /// Οι πλάκες πίεσης κρατούν ανοιχτές τις πύλες του καναλιού τους. Το
+    /// κιβώτιο πάνω τους (PLATE_DOWN) τις κρατά πατημένες χωρίς εσένα.
+    platesStep() {
+      const [bc, br] = this.bodyCell();
+      const held = new Set(), chans = new Set();
+      for (const k in this.room.attrs) {
+        const [c, r] = k.split(",").map(Number);
+        const v = this.room.cell(c, r);
+        if (v !== T.PLATE && v !== T.PLATE_DOWN) continue;
+        const ch = this.room.attrs[k];
+        chans.add(ch);
+        if (v === T.PLATE_DOWN || (c === bc && r === br)) held.add(ch);
+      }
+      for (const ch of chans) {
+        const want = held.has(ch);
+        if (this.plateOn[ch] === want) continue;
+        this.plateOn[ch] = want;
+        this.setGates(ch, want);
+      }
+    }
+
+    setGates(channel, opened) {
+      for (const [c, r] of this.room.gateCells(channel))
+        this.room.cells[r][c] = opened ? T.GATE_OPEN : T.GATE;
+    }
+
     toggleGates(channel) {
       for (const [c, r] of this.room.gateCells(channel)) {
         this.room.cells[r][c] = this.room.cells[r][c] === T.GATE ? T.GATE_OPEN : T.GATE;
@@ -329,14 +356,27 @@
       const [col, row] = this.bodyCell();
       if (this.room.cell(col, row) === T.TELEPORT) return this.teleport(col, row);
       if (this.carry) return this.drop();
-      if (st === T.CRATE) { this.room.cells[sc[1]][sc[0]] = T.EMPTY; this.carry = 1; return true; }
+      // Από το κελί ΤΟΥ ΣΩΜΑΤΟΣ: το κιβώτιο δεν είναι στερεό, οπότε δεν
+      // στέκεσαι ποτέ πάνω του — στέκεσαι ΜΕΣΑ του.
+      const bt = this.room.cell(col, row);
+      if (bt === T.CRATE) { this.room.cells[row][col] = T.EMPTY; this.carry = 1; return true; }
+      if (bt === T.PLATE_DOWN) {
+        this.room.cells[row][col] = T.PLATE; this.carry = 1; return true;
+      }
       return false;
     }
     drop() {
-      const [c, r] = this.aheadCell();
+      // ΕΚΕΙ ΠΟΥ ΣΤΕΚΕΣΑΙ, όχι μπροστά: το κιβώτιο δεν είναι στερεό και δεν
+      // σε εμποδίζει να μείνεις στο ίδιο κελί.
+      const [c, r] = this.bodyCell();
       if (c < 0 || r < 0 || c >= D.COLS || r >= D.ROWS) return false;
-      if (this.room.cells[r][c] !== T.EMPTY) return false;
-      this.room.cells[r][c] = T.CRATE; this.carry = 0; return true;
+      // ΠΑΝΩ ΣΕ ΠΛΑΚΑ η πλάκα δεν χάνεται: γίνεται πατημένη. Αν το κιβώτιο
+      // έγραφε πάνω της, δεν θα υπήρχε τρόπος να το πάρεις πίσω.
+      const v = this.room.cells[r][c];
+      if (v === T.PLATE) this.room.cells[r][c] = T.PLATE_DOWN;
+      else if (v === T.EMPTY) this.room.cells[r][c] = T.CRATE;
+      else return false;
+      this.carry = 0; return true;
     }
     // Στο ΔΗΛΩΜΕΝΟ κελί. Αδήλωτη τηλεμεταφορά δεν κάνει τίποτα — παλιά έψαχνε
     // "τον άλλον στο δωμάτιο", που δούλευε μόνο με ακριβώς δύο.
@@ -355,6 +395,7 @@
     // ερχόμασταν από ράμπα, που χρειάζεται το align.
     update(walk, run) {
       walk = walk | 0;
+      this.platesStep();
       this.crateStep();
       this.touchObjects();
       const k = this.groundDepth(0);

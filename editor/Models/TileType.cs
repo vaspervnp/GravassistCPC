@@ -330,6 +330,16 @@ public static class TileCatalog
                   stroke-dasharray="1 1"/>
             """),
 
+        // Κατάσταση εκτέλεσης: προκύπτει όταν αφήσεις κιβώτιο πάνω στην πλάκα.
+        new TileType('d', "plate_down", MechGroup, "Plate pressed",
+            "A crate is holding this plate down, so its gates stay open.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <rect x="1" y="4.4" width="6" height="2.2" fill="var(--fill)"/>
+            <rect x="2" y="2.6" width="4" height="1.8" fill="none"
+                  stroke="var(--edge)" stroke-width="0.7"/>
+            """),
+
         new TileType('@', "start", MechGroup, "Start position",
             "Where the player starts. The cell stays empty in the game.",
             Palette.Ink, Palette.EdgeColor,

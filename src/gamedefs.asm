@@ -33,6 +33,7 @@ T_CRATE          equ 25
 T_START          equ 26
 T_LOCK_OPEN      equ 27
 T_GATE_OPEN      equ 28
+T_PLATE_DOWN     equ 29
 
 ; Αίθουσα εκκίνησης. Ο editor τη γράφει με --start ώστε να δοκιμάζεις
 ; οποιαδήποτε αίθουσα χωρίς να πειράζεις τα αρχεία των πιστών.
@@ -57,7 +58,7 @@ TRAIL_MAX       equ 4    ; πόσα δωμάτια πίσω γυρνάς
 ; Ταβάνι μνήμης με ενεργό AMSDOS — δες την assert στο main.asm.
 MEM_CEIL        equ #A67B
 
-NTYPES          equ 29
+NTYPES          equ 30
 ATTR_MAX        equ 8   ; κανάλια διακοπτών / ταυτότητες κλειδιών
 SPIKE_TICKS     equ 10
 ENERGY_MAX      equ 8

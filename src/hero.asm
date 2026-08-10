@@ -30,6 +30,9 @@ HST_FALL        equ 2
 ;   IN: A = κατεύθυνση βάδισης: -1 πίσω, 0 ακίνητος, +1 μπροστά
 ;=====================================================================
 hero_update:    ld   (h_d),a
+                push af
+                call plate_step         ; οι πλάκες κρατούν τις πύλες τους
+                pop  af
                 or   a                  ; κατεύθυνση για τη μέτρηση κλίσης:
                 jr   nz,hu_td           ; όταν στέκεται, χρησιμοποιούμε +1
                 ld   a,1
@@ -544,26 +547,52 @@ hu_notlock:     ld   bc,(hero_x)        ; τηλεμεταφορά: κρίνετ
                 or   a
                 jr   nz,hu_drop
 
-                ld   a,(h_cell)         ; αλλιώς, σήκωσε ό,τι πατάς
+                ; ΑΠΟ ΤΟ ΚΕΛΙ ΤΟΥ ΣΩΜΑΤΟΣ: το κιβώτιο δεν είναι στερεό, οπότε
+                ; δεν στέκεσαι ποτέ πάνω του — στέκεσαι ΜΕΣΑ του.
+                ld   bc,(hero_x)
+                ld   de,(hero_y)
+                call cell_at
+                ld   (h_cell),a
                 cp   T_CRATE
-                ret  nz
+                jr   z,hu_take_ok
+                cp   T_PLATE_DOWN       ; από πλάκα: παίρνεις το κιβώτιο και
+                ret  nz                 ; η πλάκα ξαναγίνεται ελεύθερη
+hu_take_ok:
                 ld   a,1
                 ld   (hero_carry),a
                 ld   (hud_dirty),a
-                call h_support          ; ξανά, ώστε το cell_ptr να δείχνει στο
-                jp   hu_clear           ; κελί στήριξης (το χάλασε το cell_at)
-
-hu_clear:       ld   hl,(cell_ptr)      ; άδειασε το κελί και ξαναζωγράφισέ το
+                ; ΟΧΙ ξανά h_support εδώ: το cell_at που μόλις έγινε δείχνει
+                ; ήδη στο κελί ΤΟΥ ΣΩΜΑΤΟΣ, που είναι πια το σωστό. Η παλιά
+                ; γραμμή το ξανάστρεφε στο κελί στήριξης και άδειαζε το ΠΑΤΩΜΑ
+                ; αντί για το κιβώτιο.
+hu_clear:       ld   a,(h_cell)         ; κιβώτιο -> κενό· πλάκα -> ελεύθερη
+                cp   T_PLATE_DOWN
                 ld   a,T_EMPTY
+                jr   nz,hu_clr1
+                ld   a,T_PLATE
+hu_clr1:        ld   hl,(cell_ptr)
                 call cell_set
                 jp   hu_redraw
 
-hu_drop:        call h_ahead            ; άφημα: στο κελί μπροστά, αν είναι κενό
-                or   a                  ; (το κελί στήριξης είναι στερεό και το
-                ret  nz                 ; κελί του σώματος το πιάνει ο ήρωας)
-                ld   hl,(cell_ptr)
+                ; ΑΦΗΜΑ ΕΚΕΙ ΠΟΥ ΣΤΕΚΕΣΑΙ, όχι μπροστά: με τον ήρωα σε τοίχους
+                ; και ταβάνια το «μπροστά» δεν προβλέπεται εύκολα, το «εδώ που
+                ; είμαι» ναι. Και αφού το κιβώτιο δεν είναι στερεό, δεν σε
+                ; εμποδίζει να μείνεις εκεί.
+hu_drop:        ld   bc,(hero_x)
+                ld   de,(hero_y)
+                call cell_at
+                or   a
+                jr   z,hu_dcrate
+                cp   T_PLATE            ; ΠΑΝΩ ΣΕ ΠΛΑΚΑ: η πλάκα δεν χάνεται,
+                ret  nz                 ; γίνεται πατημένη — αλλιώς δεν θα
+                ld   hl,(cell_ptr)      ; υπήρχε τρόπος να πάρεις πίσω το
+                ld   a,T_PLATE_DOWN     ; κιβώτιο ούτε να ξαναδείς την πλάκα
+                call cell_set
+                jr   hu_dropped
+hu_dcrate:      ld   hl,(cell_ptr)
                 ld   a,T_CRATE
                 call cell_set
+hu_dropped:
                 xor  a
                 ld   (hero_carry),a
                 inc  a

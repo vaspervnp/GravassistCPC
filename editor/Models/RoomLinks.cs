@@ -66,13 +66,14 @@ public static class AttrGraph
     public static readonly (string Kind, char[] Symbols)[] Kinds =
     [
         ("sw", ['S']),
+        ("plate", ['p', 'd']),       // 'd' = πατημένη, με κιβώτιο από πάνω
         ("gate", ['G', 'g']),        // 'g' = ανοιγμένη· κρατά την καλωδίωσή της
         ("lock", ['K', '|']),
         ("key", ['k']),
     ];
 
     private static readonly Regex LinePattern = new(
-        @"^\s*(sw|gate|lock|key)\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
+        @"^\s*(sw|gate|lock|key|plate)\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static bool IsAttrLine(string line) => LinePattern.IsMatch(line);

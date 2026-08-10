@@ -207,17 +207,26 @@ def main():
           f"γραμμή 22 = {room.cells[22][2]}")
 
     # 11. Πλήκτρο ενεργοποίησης: κλειδαριά, τηλεμεταφορά, σήκωμα/άφημα κιβωτίου
-    # Το κιβώτιο σηκώνεται όταν το ΠΑΤΑΣ, όχι όταν το κοιτάς.
+    #
+    # ΤΟ ΚΙΒΩΤΙΟ ΔΕΝ ΕΙΝΑΙ ΣΤΕΡΕΟ: περνάς από μέσα, όπως στον teleporter. Δεν
+    # στέκεσαι πάνω του — στέκεσαι ΜΕΣΑ του, και από εκεί το σηκώνεις.
+    check("το κιβώτιο δεν είναι στερεό", not (P.PROPS[P.CRATE] & P.F_SOLID))
     room = fresh(strip=(P.CRATE,))
-    room.cells[22][5] = P.CRATE          # ελεύθερο σημείο στο πάτωμα
+    room.cells[21][5] = P.CRATE          # στη γραμμή πάνω από το πάτωμα
     h = P.Hero(room, 5 * 8 + 4, 8 + 18 * 8, 0)
-    for _ in range(80):                  # άφησέ τον να προσγειωθεί πάνω του
+    for _ in range(80):                  # πέφτει ΜΕΣΑ από το κιβώτιο, ως το πάτωμα
         h.update(0)
-    check("στέκεται πάνω στο κιβώτιο", h.support_type() == P.CRATE,
-          P.TYPE_NAMES[h.support_type()])
-    check("σήκωμα κιβωτίου από κάτω",
+    check("ο ήρωας περνά από μέσα και φτάνει στο πάτωμα",
+          h.support_type() == P.SOLID, P.TYPE_NAMES[h.support_type()])
+
+    room = fresh(strip=(P.CRATE,))
+    room.cells[22][5] = P.CRATE          # στο ίδιο κελί με το σώμα του
+    h = P.Hero(room, 5 * 8 + 4, P.GRID_Y0 + 22 * 8 + 4, 0)
+    h.update(0)
+    check("σήκωμα κιβωτίου από το κελί που στέκεσαι",
           h.use() and h.carry == 1 and room.cells[22][5] == P.EMPTY)
-    check("άφημα κιβωτίου", h.use() and h.carry == 0)
+    check("άφημα κιβωτίου ΕΚΕΙ ΠΟΥ ΣΤΕΚΕΣΑΙ",
+          h.use() and h.carry == 0 and room.cells[22][5] == P.CRATE)
 
     # Το ίδιο για την κλειδαριά: την πατάς.
     room = fresh(strip=(P.CRATE,))

@@ -523,6 +523,103 @@ def main():
         check(f"το κανάλι {name} κρατά ακριβώς 20 δευτερόλεπτα",
               total == GM.LOOP, f"{total / 100:.1f}s")
 
+    # 14. Πλάκα πίεσης -> πύλες. ΣΤΙΓΜΙΑΙΑ: ανοίγει όσο πατιέται και κλείνει
+    #     μόλις φύγεις. Το κιβώτιο πάνω της την κρατά πατημένη χωρίς εσένα —
+    #     αυτός είναι όλος ο λόγος που υπάρχει το PLATE_DOWN.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][10] = "p"                  # πλάκα, κανάλι 1
+    rows[8][20] = "G"                   # πύλη ίδιου καναλιού
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + "\n".join(
+        ["gravity 0", "plate 10 22 1", "gate 20 8 1"])
+    room = P.Room(text)
+    room.number, room.path = 1, ""
+    t.poke(set_buf, RF.build_set([room]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.poke(t.sym("SEALED"), bytes(32))
+    t.poke(t.sym("TRAIL_N"), b"\x00")
+    t.poke(t.sym("PLATE_PREV"), b"\x00")
+    t.call("ROOM_LOAD", a=1)
+    t.stub("CRATE_STEP")
+
+    def cell(c, r):
+        return t.peek(cell_buf + r * P.COLS + c)[0]
+
+    def stand(c, r):
+        t.poke16(t.sym("HERO_X"), c * P.CELL + P.CELL // 2)
+        t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + r * P.CELL + P.CELL // 2)
+        t.call("PLATE_STEP")
+
+    check("η πύλη ξεκινά κλειστή", cell(20, 8) == P.GATE,
+          P.TYPE_NAMES[cell(20, 8)])
+    stand(10, 22)
+    check("πατώντας την πλάκα, η πύλη ανοίγει",
+          cell(20, 8) == P.GATE_OPEN, P.TYPE_NAMES[cell(20, 8)])
+    stand(4, 22)
+    check("φεύγοντας, η πύλη ξανακλείνει",
+          cell(20, 8) == P.GATE, P.TYPE_NAMES[cell(20, 8)])
+
+    # Κιβώτιο πάνω στην πλάκα: μένει πατημένη χωρίς τον ήρωα.
+    t.poke(cell_buf + 22 * P.COLS + 10, bytes((P.PLATE_DOWN,)))
+    t.call("PLATE_STEP")
+    check("κιβώτιο στην πλάκα: η πύλη ανοίγει",
+          cell(20, 8) == P.GATE_OPEN, P.TYPE_NAMES[cell(20, 8)])
+    stand(4, 22)
+    check("…και ΜΕΝΕΙ ανοιχτή χωρίς τον ήρωα",
+          cell(20, 8) == P.GATE_OPEN, P.TYPE_NAMES[cell(20, 8)])
+    t.poke(cell_buf + 22 * P.COLS + 10, bytes((P.PLATE,)))
+    t.call("PLATE_STEP")
+    check("σηκώνοντας το κιβώτιο, η πύλη κλείνει",
+          cell(20, 8) == P.GATE, P.TYPE_NAMES[cell(20, 8)])
+
+    # 15. Το κιβώτιο ΔΕΝ είναι στερεό: περνάς από μέσα, το σηκώνεις από το
+    #     κελί που στέκεσαι, και το αφήνεις εκεί που στέκεσαι.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][10] = "B"
+    rows[22][20] = "p"
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\ngravity 0\nplate 20 22 1"
+    room = P.Room(text)
+    room.number, room.path = 1, ""
+    t.poke(set_buf, RF.build_set([room]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.poke(t.sym("SEALED"), bytes(32))
+    t.poke(t.sym("TRAIL_N"), b"\x00")
+    t.poke(t.sym("PLATE_PREV"), b"\x00")
+    t.call("ROOM_LOAD", a=1)
+
+    check("το κιβώτιο δεν είναι στερεό",
+          not (t.peek(t.sym("TILE_PROPS") + P.CRATE)[0] & P.F_SOLID))
+
+    def cell(c, r):
+        return t.peek(cell_buf + r * P.COLS + c)[0]
+
+    def at(c, r):
+        t.poke16(t.sym("HERO_X"), c * P.CELL + P.CELL // 2)
+        t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + r * P.CELL + P.CELL // 2)
+
+    t.poke(t.sym("HERO_CARRY"), b"\x00")
+    at(10, 22)
+    t.call("H_USE")
+    check("σηκώνεις το κιβώτιο από το κελί που στέκεσαι",
+          t.peek(t.sym("HERO_CARRY"))[0] == 1 and cell(10, 22) == P.EMPTY,
+          P.TYPE_NAMES[cell(10, 22)])
+
+    at(14, 22)
+    t.call("H_USE")
+    check("το αφήνεις ΕΚΕΙ ΠΟΥ ΣΤΕΚΕΣΑΙ",
+          t.peek(t.sym("HERO_CARRY"))[0] == 0 and cell(14, 22) == P.CRATE,
+          P.TYPE_NAMES[cell(14, 22)])
+
+    at(14, 22)
+    t.call("H_USE")                     # ξανασήκωσέ το
+    at(20, 22)
+    t.call("H_USE")                     # …και άσ' το πάνω στην πλάκα
+    check("πάνω σε πλάκα η πλάκα δεν χάνεται",
+          cell(20, 22) == P.PLATE_DOWN, P.TYPE_NAMES[cell(20, 22)])
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 
