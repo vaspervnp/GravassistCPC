@@ -179,16 +179,23 @@
     doWalk(d) {
       this.state = "WALK"; this.face = d;
       const ox = this.x, oy = this.y, og = this.g;
-      if (this.wallAhead(d)) { this.corner(-2 * d, d, ox, oy, og); return; }
+      // ΜΕΣΑ ΣΕ ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ ΚΑΜΙΑ ΣΤΡΟΦΗ: ο τοίχος σε σταματά, η άκρη σε
+      // ρίχνει, η βαρύτητα μένει κάτω.
+      const locked = this.noflip();
+      if (this.wallAhead(d)) {
+        if (locked) return;
+        this.corner(-2 * d, d, ox, oy, og); return;
+      }
       const rs = D.RSTEP[this.g];
       this.x += rs[0] * d; this.y += rs[1] * d;
       if (this.groundDepth(0) === null) {
+        if (locked) { this.doFall(); return; }
         this.x = ox; this.y = oy;
         this.corner(2 * d, d, ox, oy, og);
         return;
       }
       this.snap();
-      this.align(d);
+      if (!locked) this.align(d);
       // Αν μετά την ευθυγράμμιση ακόμα γλιστράει ΚΑΙ δεν είναι μετάβαση σε νέο
       // κελί στήριξης, δεν κούμπωσε πουθενά: πέφτει.
       if (this.slipping() && this.prevSupport === this.supportType()) this.doFall();
@@ -395,6 +402,9 @@
     // ερχόμασταν από ράμπα, που χρειάζεται το align.
     update(walk, run) {
       walk = walk | 0;
+      // ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται ΚΑΤΩ και μένει εκεί — νησίδα
+      // «κανονικού» παιχνιδιού μέσα στο δωμάτιο.
+      if (this.noflip() && this.g !== 0) { this.g = 0; this.state = "FALL"; }
       this.platesStep();
       this.crateStep();
       this.touchObjects();

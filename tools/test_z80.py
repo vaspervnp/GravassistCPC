@@ -686,6 +686,46 @@ def main():
     check("από την 11η και μετά, σιωπή", hint(5, 22) == "")
     t.poke(t.sym("CUR_ROOM"), bytes((1,)))
 
+    # 17. Ζώνη κλειδώματος: η βαρύτητα ΚΑΤΩ, καμία στροφή σε γωνίες — και
+    #     βήμα-βήμα ίδια με το μοντέλο, γιατί εδώ άλλαξε ΡΟΗ ΕΛΕΓΧΟΥ και όχι
+    #     πίνακας: ακριβώς το είδος αλλαγής που αποκλίνει σιωπηλά.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    for r in range(14, 23):
+        rows[r][20] = "#"
+    for r in range(10, 23):
+        for c in range(12, 20):
+            rows[r][c] = ":"
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\ngravity 0"
+    room = P.Room(text)
+    room.number, room.path = 1, ""
+    t.poke(set_buf, RF.build_set([room]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.poke(t.sym("SEALED"), bytes(32))
+    t.poke(t.sym("TRAIL_N"), b"\x00")
+    t.poke(t.sym("PLATE_PREV"), b"\x00")
+    t.call("ROOM_LOAD", a=1)
+
+    ref = P.Hero(P.Room(text), 14 * P.CELL + 4, P.GRID_Y0 + 21 * P.CELL + 4, 0)
+    t.poke16(t.sym("HERO_X"), 14 * P.CELL + 4)
+    t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + 21 * P.CELL + 4)
+    t.poke(t.sym("HERO_G"), b"\x00")
+    t.poke(t.sym("HERO_STATE"), b"\x02")
+    seen, diverged = set(), None
+    for i in range(200):
+        t.call("HERO_UPDATE", a=1)
+        ref.update(1)
+        z = (t.peek16(t.sym("HERO_X")), t.peek16(t.sym("HERO_Y")),
+             t.peek(t.sym("HERO_G"))[0])
+        if z != (ref.x, ref.y, ref.g) and diverged is None:
+            diverged = (i, z, (ref.x, ref.y, ref.g))
+        seen.add(z[2])
+    check("ζώνη κλειδώματος: η βαρύτητα μένει ΚΑΤΩ", seen == {0},
+          str(sorted(seen)))
+    check("ζώνη κλειδώματος: Z80 και μοντέλο ταυτίζονται 200 frames",
+          diverged is None, str(diverged))
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

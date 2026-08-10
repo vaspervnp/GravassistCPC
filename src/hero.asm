@@ -33,6 +33,23 @@ hero_update:    ld   (h_d),a
                 push af
                 call plate_step         ; οι πλάκες κρατούν τις πύλες τους
                 pop  af
+
+                ; ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται ΚΑΤΩ και μένει εκεί.
+                ; Δεν είναι «πάγωμα στην τιμή που είχες»: ο παίκτης πρέπει να
+                ; ξέρει τι θα βρει μπαίνοντας, όχι να εξαρτάται από το πώς
+                ; έτυχε να μπει.
+                push af
+                xor  a
+                call h_noflip
+                jr   nc,hu_nolock
+                ld   a,(hero_g)
+                or   a
+                jr   z,hu_nolock
+                xor  a
+                ld   (hero_g),a
+                ld   a,HST_FALL
+                ld   (hero_state),a
+hu_nolock:      pop  af
                 or   a                  ; κατεύθυνση για τη μέτρηση κλίσης:
                 jr   nz,hu_td           ; όταν στέκεται, χρησιμοποιούμε +1
                 ld   a,1
@@ -911,6 +928,7 @@ h_noflip:       ld   (h_nfa),a          ; ΟΧΙ push af: το pop θα επαν
                 ret
 
 h_nfa           db 0
+hw_lock         db 0
 
 ; h_take — αδειάζει το κελί που μόλις διάβασε το cell_at και το ξαναζωγραφίζει
 h_take:         ld   hl,(cell_ptr)
@@ -982,8 +1000,21 @@ h_walk:         ld   a,HST_WALK
                 ld   (hero_face),a
                 call h_save
 
+                ; ΜΕΣΑ ΣΕ ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ ΚΑΜΙΑ ΣΤΡΟΦΗ: ο τοίχος σε σταματά,
+                ; η άκρη σε ρίχνει, και η βαρύτητα μένει κάτω. Η ζώνη είναι
+                ; ακριβώς αυτό — νησίδα «κανονικού» παιχνιδιού.
+                xor  a
+                call h_noflip
+                ld   a,0
+                jr   nc,hw_free
+                inc  a
+hw_free:        ld   (hw_lock),a
+
                 call h_wall
                 jr   nc,hw_move
+                ld   a,(hw_lock)        ; τοίχος: στη ζώνη απλώς σταματάς
+                or   a
+                ret  nz
                 ld   a,(h_d)            ; ΚΟΙΛΗ: στρίψε αντίθετα
                 add  a,a
                 neg
@@ -998,6 +1029,9 @@ hw_move:        ld   a,(h_d)
                 call h_ground
                 cp   NO_GROUND
                 jr   nz,hw_ground
+                ld   a,(hw_lock)        ; χάθηκε το έδαφος: στη ζώνη σκέτη πτώση
+                or   a
+                jp   nz,h_fall
                 call h_restore          ; ΚΥΡΤΗ: τέλος πλατώματος
                 ld   a,(h_d)
                 add  a,a
@@ -1005,7 +1039,9 @@ hw_move:        ld   a,(h_d)
                 jp   h_corner
 
 hw_ground:      call h_snap
-                call h_align
+                ld   a,(hw_lock)
+                or   a
+                call z,h_align
                 call h_slipping
                 ret  nc
                 call h_support          ; δεν κούμπωσε και δεν είναι μετάβαση

@@ -549,6 +549,44 @@ def main():
     check("σφραγίζονται τα κελιά ΜΟΝΟ της σφραγισμένης πόρτας",
           sorted(cells) == [(5, 10), (5, 11)], str(sorted(cells)))
 
+    # 22. Ζώνη κλειδώματος: η βαρύτητα γίνεται ΚΑΤΩ και ΔΕΝ στρίβει σε γωνίες.
+    #     Είναι νησίδα «κανονικού» παιχνιδιού — ο παίκτης ξέρει τι θα βρει
+    #     μπαίνοντας, χωρίς να εξαρτάται από το πώς έτυχε να μπει.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    for r in range(14, 23):
+        rows[r][20] = "#"                       # κατακόρυφος τοίχος
+    for r in range(10, 23):
+        for c in range(12, 20):
+            rows[r][c] = ":"                    # ζώνη γύρω από τη γωνία
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\ngravity 0"
+    room = P.Room(text)
+    h = P.Hero(room, 14 * 8 + 4, P.GRID_Y0 + 21 * 8 + 4, 0)
+    seen = set()
+    for _ in range(300):
+        h.update(1)
+        seen.add(h.g)
+    check("μέσα στη ζώνη η βαρύτητα μένει ΚΑΤΩ", seen == {0}, str(sorted(seen)))
+
+    # Μπαίνοντας με άλλη φορά, η ζώνη την επαναφέρει σε κάτω.
+    h = P.Hero(room, 14 * 8 + 4, P.GRID_Y0 + 21 * 8 + 4, 6)
+    h.update(0)
+    check("μπαίνοντας με πλάγια φορά, γίνεται κάτω", h.g == 0, str(h.g))
+
+    # Εκτός ζώνης, η γωνία εξακολουθεί να γυρίζει κανονικά.
+    rows2 = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    for r in range(14, 23):
+        rows2[r][20] = "#"
+    room2 = P.Room(";\n" + "\n".join("".join(r) for r in rows2) + "\ngravity 0")
+    h2 = P.Hero(room2, 14 * 8 + 4, P.GRID_Y0 + 21 * 8 + 4, 0)
+    seen2 = set()
+    for _ in range(300):
+        h2.update(1)
+        seen2.add(h2.g)
+    check("ΕΚΤΟΣ ζώνης η γωνία γυρίζει κανονικά", len(seen2) > 1,
+          str(sorted(seen2)))
+
     # Γειτονικές έξοδοι με ΔΙΑΦΟΡΕΤΙΚΟΥΣ προορισμούς πρέπει να απορρίπτονται.
     bad = ";\n" + "\n".join(
         "#" * 40 if i in (0, 23) else "#" + ("X" * 2 if i == 5 else ".." ) + "." * 36 + "#"

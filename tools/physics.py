@@ -820,6 +820,13 @@ class Hero:
         γλίστρημα δεν θα συνέβαινε ποτέ.
         """
         self.moved_cells = []
+        # ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται ΚΑΤΩ και μένει εκεί. Δεν είναι
+        # «πάγωμα στην τιμή που είχες»: η ζώνη είναι νησίδα κανονικής
+        # βαρύτητας μέσα στο δωμάτιο, και ο παίκτης πρέπει να ξέρει τι θα βρει
+        # μπαίνοντας — όχι να εξαρτάται από το πώς έτυχε να μπει.
+        if self.noflip() and self.g != 0:
+            self.g = 0
+            self.state = "FALL"
         self.plates_step()
         self.crate_step()
         self.touch_objects()        # και στον αέρα: μαζεύεις πέφτοντας
@@ -908,12 +915,19 @@ class Hero:
              ανηφόρα 45       -> -1 βήμα
              κατηφόρα 45      -> +1 βήμα
              χάθηκε το έδαφος -> +2 βήματα (κυρτή γωνία, 90 μοίρες)
+
+        ΜΕΣΑ ΣΕ ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ ΤΙΠΟΤΑ ΑΠΟ ΑΥΤΑ: η βαρύτητα μένει κάτω, ο
+        τοίχος σε σταματά και η άκρη σε ρίχνει. Η ζώνη είναι ακριβώς αυτό —
+        ένα κομμάτι του δωματίου όπου το παιχνίδι παίζει «κανονικά».
         """
         self.state = "WALK"
         self.face = d
         ox, oy, og = self.x, self.y, self.g
+        locked = self.noflip()
 
         if self.wall_ahead(d):
+            if locked:
+                return                           # τοίχος: απλώς σταματάς
             self.corner(-2 * d, d, ox, oy, og)   # ΚΟΙΛΗ: ανεβαίνει στον τοίχο
             return
 
@@ -922,12 +936,16 @@ class Hero:
         self.y += ry * d
 
         if self.ground_depth(0) is None:            # ΚΥΡΤΗ: τέλος πλατώματος
+            if locked:
+                self.do_fall()                      # …ή σκέτη πτώση, στη ζώνη
+                return
             self.x, self.y = ox, oy
             self.corner(2 * d, d, ox, oy, og)
             return
 
         self.snap()
-        self.align(d)
+        if not locked:
+            self.align(d)
         if self.slipping() and self.prev_support == self.support_type():
             self.do_fall()          # δεν κούμπωσε και δεν είναι μετάβαση
 
