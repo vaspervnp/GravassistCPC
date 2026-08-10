@@ -1,0 +1,18 @@
+<!-- Έλεγχοι του προσωπικού φακέλου κάθε λογαριασμού.
+
+     ΓΙΑΤΙ ΞΕΧΩΡΙΣΤΟ PROJECT: το UserWorkspace καθαρίζει claims που έρχονται
+     από έξω και τα μετατρέπει σε ΔΙΑΔΡΟΜΗ ΑΡΧΕΙΟΥ. Ένα «..» που ξεφεύγει
+     γράφει εκτός του levels/. Αυτό δεν ελέγχεται με το μάτι. -->
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RootNamespace>GravassistEditor.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../editor/Services/UserWorkspace.cs" />
+  </ItemGroup>
+</Project>

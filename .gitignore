@@ -18,3 +18,7 @@ editor/obj/
 # παραγόμενα δεδομένα του test run (tools/genjs.py, tools/parity.py)
 editor/wwwroot/game/data.js
 editor/wwwroot/game/parity-expected.json
+
+# Οι προσωπικοί φάκελοι πιστών κάθε λογαριασμού. Φτιάχνονται από τον editor
+# και είναι η δουλειά του καθενός — δεν ανήκουν στο repo.
+levels/*/

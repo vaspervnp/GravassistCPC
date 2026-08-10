@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using GravassistEditor.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GravassistEditor.Controllers;
@@ -12,7 +13,8 @@ namespace GravassistEditor.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/build")]
-public sealed class BuildController(ILogger<BuildController> log) : ControllerBase
+public sealed class BuildController(
+    ILogger<BuildController> log, LevelStore store) : ControllerBase
 {
     // Η ρίζα του repo: ο editor τρέχει από τον υποφάκελο editor/.
     private static string RepoRoot =>
@@ -30,7 +32,9 @@ public sealed class BuildController(ILogger<BuildController> log) : ControllerBa
             ? $"python3 tools/genasm.py --start {req.Room} && make"
             : "python3 tools/genasm.py && make";
 
-        var (code, output) = await RunAsync(script);
+        // Το χτίσιμο γίνεται πάνω στις ΔΙΚΕΣ ΤΟΥ αίθουσες: χωρίς αυτό, ο
+        // καθένας θα έχτιζε τη δισκέτα κάποιου άλλου χωρίς να το καταλάβει.
+        var (code, output) = await RunAsync(script, store.RootPath);
         var dsk = Path.Combine(RepoRoot, "build", "gravassist.dsk");
         log.LogInformation("Build for room {Room}: exit code {Code}", req.Room, code);
 
@@ -44,7 +48,7 @@ public sealed class BuildController(ILogger<BuildController> log) : ControllerBa
         });
     }
 
-    private static async Task<(int, string)> RunAsync(string script)
+    private static async Task<(int, string)> RunAsync(string script, string levels)
     {
         var psi = new ProcessStartInfo("/bin/bash")
         {
@@ -52,6 +56,10 @@ public sealed class BuildController(ILogger<BuildController> log) : ControllerBa
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
+        // Περνιέται ως ΜΕΤΑΒΛΗΤΗ ΠΕΡΙΒΑΛΛΟΝΤΟΣ και όχι μέσα στην εντολή: η
+        // διαδρομή περιέχει το email του χρήστη και δεν έχει καμία δουλειά να
+        // περνά από φλοιό.
+        psi.Environment["GRAVASSIST_LEVELS"] = levels;
         psi.ArgumentList.Add("-lc");
         psi.ArgumentList.Add(script);
 

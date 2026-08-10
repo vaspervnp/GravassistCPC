@@ -1163,8 +1163,12 @@ def load_room(path=None):
     return r
 
 
-LEVELS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                      "levels")
+# Ο φάκελος πιστών. Ο editor δίνει τον ΠΡΟΣΩΠΙΚΟ φάκελο του συνδεδεμένου
+# χρήστη μέσω GRAVASSIST_LEVELS, ώστε το «Χτίσιμο .dsk» να χτίζει ΤΙΣ ΔΙΚΕΣ
+# ΤΟΥ αίθουσες. Χωρίς τη μεταβλητή ισχύει το κοινό levels/ του repo, που είναι
+# ό,τι θέλει το `make` από τη γραμμή εντολών.
+LEVELS = os.environ.get("GRAVASSIST_LEVELS") or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "levels")
 
 
 def all_rooms():

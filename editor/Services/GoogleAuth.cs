@@ -12,11 +12,13 @@ namespace GravassistEditor.Services;
 /// commit-άρεται κάποια στιγμή κατά λάθος και μετά ζει για πάντα στο ιστορικό
 /// του git.
 ///
-/// ΑΝ ΛΕΙΠΟΥΝ, Ο EDITOR ΤΡΕΧΕΙ ΟΠΩΣ ΠΡΙΝ, χωρίς σύνδεση και χωρίς έλεγχο
-/// πρόσβασης. Είναι τοπικό εργαλείο που χρησιμοποιείται καθημερινά· να
-/// σταματούσε να ανοίγει επειδή δεν έχεις ορίσει μεταβλητή θα ήταν χειρότερο
-/// από το να μην έχει καθόλου λογαριασμούς. Μόλις οριστούν και οι δύο, η
-/// σύνδεση γίνεται ΥΠΟΧΡΕΩΤΙΚΗ για όλες τις σελίδες και τα API.
+/// Η ΣΥΝΔΕΣΗ ΕΙΝΑΙ ΥΠΟΧΡΕΩΤΙΚΗ. Κάθε λογαριασμός δουλεύει στον δικό του
+/// υποφάκελο μέσα στο levels/, οπότε χωρίς λογαριασμό δεν υπάρχει καν φάκελος
+/// να δείξει ο editor.
+///
+/// Αν λείπουν οι μεταβλητές, ο editor ΔΕΝ ΞΕΚΙΝΑ — με μήνυμα που λέει τι
+/// λείπει. Το να ξεκινούσε ανοιχτός θα ήταν χειρότερο από το να μην ξεκινήσει
+/// καθόλου: θα νόμιζες ότι είναι προστατευμένος.
 /// </summary>
 public static class GoogleAuth
 {
@@ -31,11 +33,18 @@ public static class GoogleAuth
         !string.IsNullOrWhiteSpace(config[IdVar]) &&
         !string.IsNullOrWhiteSpace(config[SecretVar]);
 
-    /// <summary>Στήνει cookie + Google, ΜΟΝΟ αν υπάρχουν τα μυστικά.</summary>
-    public static bool Add(WebApplicationBuilder builder)
+    /// <summary>Στήνει cookie + Google. Χωρίς μυστικά, σταματά το ξεκίνημα.</summary>
+    public static void Add(WebApplicationBuilder builder)
     {
         var config = builder.Configuration;
-        if (!IsConfigured(config)) return false;
+        if (!IsConfigured(config))
+        {
+            throw new InvalidOperationException(
+                $"Λείπουν τα μυστικά της σύνδεσης Google. Όρισε τις μεταβλητές "
+                + $"περιβάλλοντος {IdVar} και {SecretVar}. Η διαδρομή "
+                + $"επιστροφής στο Google Cloud console πρέπει να είναι "
+                + $"<η διεύθυνσή σου>{CallbackPath}.");
+        }
 
         builder.Services
             .AddAuthentication(o =>
@@ -67,6 +76,5 @@ public static class GoogleAuth
             o.FallbackPolicy = new AuthorizationPolicyBuilder()
                 .RequireAuthenticatedUser()
                 .Build());
-        return true;
     }
 }

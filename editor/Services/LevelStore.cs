@@ -3,11 +3,12 @@ using GravassistEditor.Models;
 namespace GravassistEditor.Services;
 
 /// <summary>
-/// Πρόσβαση στον φάκελο <c>levels/</c> του repo.
+/// Πρόσβαση στις πίστες ΤΟΥ ΣΥΝΔΕΔΕΜΕΝΟΥ ΧΡΗΣΤΗ.
 ///
-/// Ο φάκελος βρίσκεται από τη ρύθμιση "LevelsPath" του appsettings.json· αν είναι
-/// σχετική διαδρομή, ερμηνεύεται ως προς τη ρίζα του project (editor/). Προεπιλογή
-/// "../levels", δηλαδή ο φάκελος πιστών του repo.
+/// Η ρίζα δεν είναι πια το κοινό <c>levels/</c> αλλά ο προσωπικός υποφάκελός
+/// του (<see cref="UserWorkspace"/>). Το αντικείμενο είναι scoped ανά αίτημα:
+/// singleton θα κλείδωνε τον πρώτο χρήστη που θα συνδεόταν και όλοι οι
+/// υπόλοιποι θα έγραφαν στα δικά του αρχεία.
 /// </summary>
 public sealed class LevelStore
 {
@@ -15,14 +16,11 @@ public sealed class LevelStore
 
     public string RootPath { get; }
 
-    public LevelStore(IConfiguration config, IWebHostEnvironment env)
+    public LevelStore(UserWorkspace workspace, IHttpContextAccessor http)
     {
-        var configured = config["LevelsPath"];
-        if (string.IsNullOrWhiteSpace(configured)) configured = "../levels";
-
-        RootPath = Path.GetFullPath(Path.IsPathRooted(configured)
-            ? configured
-            : Path.Combine(env.ContentRootPath, configured));
+        var user = http.HttpContext?.User
+            ?? throw new InvalidOperationException("Χωρίς αίτημα δεν υπάρχει χρήστης.");
+        RootPath = workspace.PathFor(user);
     }
 
     /// <summary>

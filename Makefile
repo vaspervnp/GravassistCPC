@@ -86,6 +86,12 @@ test:
 	$(PY) tools/verify_rotate.py
 	$(PY) tools/test_physics.py
 	$(PY) tools/test_z80.py
+	@# Ο έλεγχος του προσωπικού φακέλου θέλει .NET, που δεν είναι στο PATH.
+	@if [ -x "$$HOME/.dotnet/dotnet" ]; then \
+	    "$$HOME/.dotnet/dotnet" run --project editor.Tests -v q --nologo; \
+	else \
+	    echo "  ΠΑΡΑΛΕΙΨΗ editor.Tests: δεν βρέθηκε ~/.dotnet/dotnet"; \
+	fi
 
 # Δεδομένα και σενάριο ισοδυναμίας για το test run του editor.
 # Άνοιξε μετά το /game/parity.html: συγκρίνει JavaScript και μοντέλο frame

@@ -4,19 +4,19 @@ using GravassistEditor.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
-// Πρόσβαση στον φάκελο levels/ του repo.
-builder.Services.AddSingleton<LevelStore>();
+builder.Services.AddHttpContextAccessor();
+// Ο προσωπικός φάκελος κάθε λογαριασμού μέσα στο levels/.
+builder.Services.AddSingleton<UserWorkspace>();
+// SCOPED και όχι singleton: η ρίζα του εξαρτάται από ΠΟΙΟΣ ζητά. Ως singleton
+// θα κλείδωνε τον πρώτο χρήστη που θα συνδεόταν και όλοι οι υπόλοιποι θα
+// έγραφαν στα δικά του αρχεία.
+builder.Services.AddScoped<LevelStore>();
 
-// Σύνδεση με Google — ενεργή ΜΟΝΟ αν υπάρχουν τα μυστικά στο περιβάλλον.
-// Δες Services/GoogleAuth.cs για το γιατί δεν είναι υποχρεωτική.
-var authOn = GoogleAuth.Add(builder);
+// Η σύνδεση με Google είναι ΥΠΟΧΡΕΩΤΙΚΗ: χωρίς λογαριασμό δεν υπάρχει
+// προσωπικός φάκελος, άρα δεν υπάρχει τίποτα να δείξει ο editor.
+GoogleAuth.Add(builder);
 
 var app = builder.Build();
-
-app.Logger.LogInformation(authOn
-    ? "Google sign-in is ON; every page requires an account."
-    : "Google sign-in is OFF: set {Id} and {Secret} to enable it.",
-    GoogleAuth.IdVar, GoogleAuth.SecretVar);
 
 // Προειδοποίηση αν ο κατάλογος τύπων ξέφυγε από το CHARS του tools/physics.py.
 PhysicsCharsCheck.Run(
@@ -44,12 +44,8 @@ app.UseStaticFiles(new StaticFileOptions
     },
 });
 app.UseRouting();
-
-if (authOn)
-{
-    app.UseAuthentication();
-    app.UseAuthorization();
-}
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Τα API endpoints ([ApiController] + [Route]) και μετά η σελίδα του editor.
 app.MapControllers();
