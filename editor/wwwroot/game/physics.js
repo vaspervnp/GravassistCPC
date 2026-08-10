@@ -287,6 +287,19 @@
         this.spikeTick = 0;
       }
     }
+    /// Ανοίγει την κλειδαριά και ΟΛΕΣ όσες μοιράζονται την ταυτότητά της.
+    /// Η ταυτότητα 0 = ακαλωδίωτη και ανοίγει μόνη της, αλλιώς κάθε πίστα με
+    /// πολλές απλές κλειδαριές θα ξεκλείδωνε ολόκληρη με ένα κλειδί.
+    openLocks(cell, ident) {
+      this.room.cells[cell[1]][cell[0]] = T.LOCK_OPEN;
+      if (!ident) return;
+      for (const k in this.room.attrs) {
+        if (this.room.attrs[k] !== ident) continue;
+        const [c, r] = k.split(",").map(Number);
+        if (this.room.cell(c, r) === T.LOCK) this.room.cells[r][c] = T.LOCK_OPEN;
+      }
+    }
+
     toggleGates(channel) {
       for (const [c, r] of this.room.gateCells(channel)) {
         this.room.cells[r][c] = this.room.cells[r][c] === T.GATE ? T.GATE_OPEN : T.GATE;
@@ -309,7 +322,9 @@
 
       const kid = sc ? this.room.attr(sc[0], sc[1]) : 0;
       if (st === T.LOCK && this.keys[kid]) {
-        this.keys[kid]--; this.room.cells[sc[1]][sc[0]] = T.LOCK_OPEN; return true;
+        this.keys[kid]--;
+        this.openLocks(sc, kid);
+        return true;
       }
       const [col, row] = this.bodyCell();
       if (this.room.cell(col, row) === T.TELEPORT) return this.teleport(col, row);

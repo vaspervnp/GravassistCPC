@@ -521,12 +521,18 @@ hu_noexit:      call h_support          ; ΤΑ ΥΠΟΛΟΙΠΑ από το κε
                 or   a
                 jr   z,hu_notlock       ; λάθος κλειδί: συνέχισε στα υπόλοιπα
                 dec  (hl)
+                ld   a,e                ; E = η ταυτότητα, από το cell_attr
+                ld   (hu_kid),a
                 ld   a,1
                 ld   (hud_dirty),a
                 ld   hl,(cell_ptr)      ; ΔΕΝ εξαφανίζεται: γίνεται ανοιγμένη
                 ld   a,T_LOCK_OPEN      ; πόρτα. Ο παίκτης βλέπει τι ξεκλείδωσε
                 call cell_set
+                ld   a,(hu_kid)         ; …και μαζί ΟΛΕΣ όσες μοιράζονται την
+                call lock_open_all      ; ίδια ταυτότητα
                 jp   hu_redraw          ; και περνά από μέσα.
+
+hu_kid          db 0
 
 hu_notlock:     ld   bc,(hero_x)        ; τηλεμεταφορά: κρίνεται από το κελί του
                 ld   de,(hero_y)        ; ΣΩΜΑΤΟΣ, όχι των ποδιών

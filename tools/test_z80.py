@@ -421,6 +421,53 @@ def main():
     check("ο ήρωας κάνει τον γύρο: και οι τέσσερις ορθές φορές",
           {0, 2, 4, 6} <= seen, str(sorted(seen)))
 
+    # 12. Ένα κλειδί ανοίγει ΟΛΕΣ τις κλειδαριές της ταυτότητάς του — αλλά
+    #     μόνο όσες είναι ΚΑΛΩΔΙΩΜΕΝΕΣ. Η ταυτότητα 0 σημαίνει ακαλωδίωτη και
+    #     ανοίγει μόνη της, αλλιώς μια πίστα με πολλές απλές κλειδαριές θα
+    #     ξεκλείδωνε ολόκληρη με ένα κλειδί.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    for c in (5, 12, 20):
+        rows[22][c] = "K"               # ταυτότητα 2
+    rows[22][30] = "K"                  # άλλη ταυτότητα
+    rows[22][35] = "K"                  # ακαλωδίωτη
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + "\n".join(
+        ["gravity 0", "lock 5 22 2", "lock 12 22 2", "lock 20 22 2",
+         "lock 30 22 3"])
+    room = P.Room(text)
+    room.number, room.path = 1, ""
+    t.poke(set_buf, RF.build_set([room]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.poke(t.sym("SEALED"), bytes(32))
+    t.poke(t.sym("TRAIL_N"), b"\x00")
+    t.call("ROOM_LOAD", a=1)
+
+    t.poke(t.sym("HERO_KEYS"), bytes([0, 0, 1, 0, 0, 0, 0, 0]))
+    t.poke16(t.sym("HERO_X"), 5 * P.CELL + P.CELL // 2)
+    t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + 21 * P.CELL + P.CELL // 2)
+    t.poke(t.sym("HERO_G"), b"\x00")
+    t.stub("CRATE_STEP")
+    for _ in range(60):
+        t.call("HERO_UPDATE", a=0)
+    t.call("H_USE")
+
+    def cell(c, r):
+        return t.peek(cell_buf + r * P.COLS + c)[0]
+
+    check("η κλειδαριά που πάτησες ανοίγει",
+          cell(5, 22) == P.LOCK_OPEN, P.TYPE_NAMES[cell(5, 22)])
+    check("ανοίγουν ΟΛΕΣ όσες μοιράζονται την ταυτότητα",
+          cell(12, 22) == P.LOCK_OPEN and cell(20, 22) == P.LOCK_OPEN,
+          f"{P.TYPE_NAMES[cell(12, 22)]}, {P.TYPE_NAMES[cell(20, 22)]}")
+    check("άλλη ταυτότητα ΔΕΝ ανοίγει",
+          cell(30, 22) == P.LOCK, P.TYPE_NAMES[cell(30, 22)])
+    check("ακαλωδίωτη κλειδαριά ΔΕΝ ανοίγει",
+          cell(35, 22) == P.LOCK, P.TYPE_NAMES[cell(35, 22)])
+    check("καταναλώθηκε ΕΝΑ κλειδί",
+          t.peek(t.sym("HERO_KEYS"), 8)[2] == 0,
+          str(list(t.peek(t.sym("HERO_KEYS"), 8))))
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

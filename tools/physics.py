@@ -585,9 +585,7 @@ class Hero:
         kid = self.room.attr(*sc) if sc else 0
         if st == LOCK and self.keys[kid]:
             self.keys[kid] -= 1
-            # ΔΕΝ εξαφανίζεται: γίνεται ανοιγμένη πόρτα. Ο παίκτης βλέπει τι
-            # ξεκλείδωσε και περνά από μέσα.
-            self.room.cells[sc[1]][sc[0]] = LOCK_OPEN
+            self.open_locks(sc, kid)
             return True
 
         col, row = self.x // CELL, (self.y - GRID_Y0) // CELL
@@ -602,6 +600,26 @@ class Hero:
             self.carry = 1
             return True
         return False
+
+    def open_locks(self, cell, ident):
+        """Ανοίγει την κλειδαριά — και ΟΛΕΣ όσες μοιράζονται την ταυτότητά της.
+
+        Η κλειδαριά ΔΕΝ εξαφανίζεται: γίνεται ανοιγμένη και περνάς από μέσα.
+        Ο παίκτης πρέπει να βλέπει τι ξεκλείδωσε.
+
+        Η ταυτότητα 0 σημαίνει ΑΚΑΛΩΔΙΩΤΗ κλειδαριά και ανοίγει μόνη της. Αν
+        άνοιγε κι αυτή ομαδικά, κάθε πίστα με πολλές απλές κλειδαριές θα
+        ξεκλείδωνε ολόκληρη με ένα κλειδί — δηλαδή η προεπιλογή θα άλλαζε
+        νόημα σε όποιον δεν καλωδίωσε τίποτα.
+        """
+        self.room.cells[cell[1]][cell[0]] = LOCK_OPEN
+        self.moved_cells.append(cell)
+        if not ident:
+            return
+        for (c, r), v in self.room.attrs.items():
+            if v == ident and self.room.cells[r][c] == LOCK:
+                self.room.cells[r][c] = LOCK_OPEN
+                self.moved_cells.append((c, r))
 
     def toggle_gates(self, channel):
         """Γυρίζει ΟΛΕΣ τις πόρτες ενός καναλιού: κλειστή <-> ανοιχτή.
