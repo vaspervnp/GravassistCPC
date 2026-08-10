@@ -637,13 +637,45 @@ def main():
         got = hint(*args)
         check(f"μήνυμα σε {where}", got == want, f"«{got}» vs «{want}»")
 
+    # Κλειστή πύλη ΜΠΡΟΣΤΑ: το μήνυμα λέει ΤΙ την ανοίγει — το μόνο που δεν
+    # φαίνεται κοιτάζοντάς την.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][6] = rows[22][12] = rows[22][18] = rows[22][24] = "G"
+    rows[21][30] = rows[21][34] = "S"
+    rows[21][32] = rows[21][36] = "p"
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + "\n".join(
+        ["gravity 0", "gate 6 22 1", "gate 12 22 2", "gate 18 22 3",
+         "gate 24 22 4", "sw 30 21 1", "plate 32 21 2", "sw 34 21 3",
+         "plate 36 21 3"])
+    room = P.Room(text)
+    room.number, room.path = 1, ""
+    t.poke(set_buf, RF.build_set([room]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.poke(t.sym("SEALED"), bytes(32))
+    t.poke(t.sym("TRAIL_N"), b"\x00")
+    t.poke(t.sym("PLATE_PREV"), b"\x00")
+    t.call("ROOM_LOAD", a=1)
+    t.poke(t.sym("HERO_FACE"), b"\x01")
+
+    for col, what, want in (
+            (5, "διακόπτη", "Find its switch to open this"),
+            (11, "πλάκα", "Weigh down its plate to open"),
+            (17, "διακόπτη ΚΑΙ πλάκα", "A switch or a plate opens this"),
+            (23, "τίποτα", "This gate has nothing to open it")):
+        got = hint(col, 22)
+        check(f"κλειστή πύλη με {what}", got == want, f"«{got}»")
+
     # Τα μηνύματα είναι ΟΔΗΓΟΣ: σβήνουν μετά τις πρώτες αίθουσες, αλλιώς
     # γίνονται μόνιμος θόρυβος για παίκτη που ξέρει ήδη τα πλήκτρα.
+    # (Στο δωμάτιο των πυλών που μόλις φορτώθηκε· η πόρτα του προηγούμενου
+    # δεν υπάρχει πια εδώ.)
     t.poke(t.sym("CUR_ROOM"), bytes((10,)))
     check("στην 10η αίθουσα το μήνυμα ακόμα φαίνεται",
-          hint(26, 21) == "Up or down to exit room")
+          hint(5, 22) == "Find its switch to open this")
     t.poke(t.sym("CUR_ROOM"), bytes((11,)))
-    check("από την 11η και μετά, σιωπή", hint(26, 21) == "")
+    check("από την 11η και μετά, σιωπή", hint(5, 22) == "")
     t.poke(t.sym("CUR_ROOM"), bytes((1,)))
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")

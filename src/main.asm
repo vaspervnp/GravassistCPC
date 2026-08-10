@@ -121,6 +121,10 @@ MSG_DROP        equ  4
 MSG_TAKE        equ  5
 MSG_PLATE       equ  6
 MSG_GATE        equ  7
+MSG_GSW         equ  8          ; κλειστή πύλη με διακόπτη
+MSG_GPLATE      equ  9          ; …με πλάκα πίεσης
+MSG_GBOTH       equ  10         ; …και με τα δύο
+MSG_GDEAD       equ  11         ; …χωρίς τίποτα: λάθος του σχεδιαστή
 
 LINEBUF_W         equ  24     ; πλάτος buffer γραμμής σε bytes
 SCR_BASE        equ  #C000
@@ -1330,8 +1334,82 @@ hp_free:        ld   a,(hp_body)
                 cp   T_GATE_OPEN
                 ld   a,MSG_GATE
                 ret  z
-                ld   a,MSG_NONE
+
+                ; ΚΛΕΙΣΤΗ ΠΥΛΗ ΜΠΡΟΣΤΑ: είναι στερεή, οπότε δεν στέκεσαι ποτέ
+                ; μέσα της — την ΑΚΟΥΜΠΑΣ. Το μήνυμα λέει ΤΙ την ανοίγει, που
+                ; είναι το μόνο που δεν φαίνεται κοιτάζοντάς την.
+                call h_ahead
+                cp   T_GATE
+                jr   nz,hp_none
+                ld   a,(cell_col)
+                ld   b,a
+                ld   a,(cell_row)
+                ld   c,a
+                call cell_attr
+                call gate_drivers       ; A: bit0 = διακόπτης, bit1 = πλάκα
+                or   a
+                ld   a,MSG_GDEAD
+                ret  z
+                ld   a,b
+                cp   3
+                ld   a,MSG_GBOTH
+                ret  z
+                ld   a,b
+                dec  a
+                ld   a,MSG_GSW
+                ret  z
+                ld   a,MSG_GPLATE
                 ret
+
+hp_none:        ld   a,MSG_NONE
+                ret
+
+; gate_drivers — τι οδηγεί το κανάλι A
+;   OUT: B = A = bit0 διακόπτης, bit1 πλάκα· Z αν τίποτα
+;   ΑΛΛΟΙΩΝΕΙ: τα πάντα
+gate_drivers:   ld   (gd_chan),a
+                xor  a
+                ld   (gd_found),a
+                ld   hl,(room_attrs)
+gd_lp:          ld   a,(hl)
+                cp   #FF
+                jr   z,gd_done
+                ld   c,a
+                inc  hl
+                ld   b,(hl)
+                inc  hl
+                ld   a,(hl)
+                inc  hl
+                push hl
+                ld   hl,gd_chan
+                cp   (hl)
+                jr   nz,gd_next
+                push bc
+                call cell_addr
+                pop  bc
+                ld   a,(hl)
+                cp   T_SWITCH
+                jr   nz,gd_pl
+                ld   a,1
+                jr   gd_mark
+gd_pl:          cp   T_PLATE
+                jr   z,gd_plate
+                cp   T_PLATE_DOWN
+                jr   nz,gd_next
+gd_plate:       ld   a,2
+gd_mark:        ld   hl,gd_found
+                or   (hl)
+                ld   (hl),a
+gd_next:        pop  hl
+                jr   gd_lp
+
+gd_done:        ld   a,(gd_found)
+                ld   b,a
+                or   a
+                ret
+
+gd_chan         db 0
+gd_found        db 0
 
 ; hint_row — σε ποια γραμμή πλέγματος μπαίνει· ΜΑΚΡΙΑ από τον ήρωα, ώστε να
 ;   μη σκεπάζει αυτό που περιγράφει.
@@ -1420,6 +1498,7 @@ msg_len         db 0
 ; γέμισμα σε σταθερό πλάτος — τα μήκη διαφέρουν πολύ.
 hint_ptr:       dw hs_exit, hs_unlock, hs_nokey, hs_tp
                 dw hs_drop, hs_take, hs_plate, hs_gate
+                dw hs_gsw, hs_gplate, hs_gboth, hs_gdead
 
 ; Το μήκος το μετράει ο ASSEMBLER, όχι εγώ: μια χειρόγραφη αρίθμηση κατά ένα
 ; παραπάνω τυπώνει ένα byte σκουπίδι στο τέλος — και δεν φαίνεται με το μάτι.
@@ -1447,6 +1526,18 @@ hs_plate_e:
 hs_gate:        db hs_gate_e-hs_gate-1
                 db "This gate is open"
 hs_gate_e:
+hs_gsw:         db hs_gsw_e-hs_gsw-1
+                db "Find its switch to open this"
+hs_gsw_e:
+hs_gplate:      db hs_gplate_e-hs_gplate-1
+                db "Weigh down its plate to open"
+hs_gplate_e:
+hs_gboth:       db hs_gboth_e-hs_gboth-1
+                db "A switch or a plate opens this"
+hs_gboth_e:
+hs_gdead:       db hs_gdead_e-hs_gdead-1
+                db "This gate has nothing to open it"
+hs_gdead_e:
 
 ;---------------------------------------------------------------------
 ; scr_addr — διεύθυνση οθόνης για (στήλη byte, scanline)

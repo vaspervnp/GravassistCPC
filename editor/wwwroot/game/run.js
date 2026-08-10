@@ -64,6 +64,26 @@
       return "Up or down to pick up crate";
     if (bt === T.indexOf("PLATE")) return "A crate here keeps gates opened";
     if (bt === T.indexOf("GATE_OPEN")) return "This gate is open";
+
+    // ΚΛΕΙΣΤΗ ΠΥΛΗ ΜΠΡΟΣΤΑ: είναι στερεή, δεν στέκεσαι μέσα της — την
+    // ακουμπάς. Το μήνυμα λέει ΤΙ την ανοίγει, που είναι το μόνο που δεν
+    // φαίνεται κοιτάζοντάς την.
+    const [ac, ar] = h.aheadCell();
+    if (h.room.cell(ac, ar) === T.indexOf("GATE")) {
+      const ch = h.room.attr(ac, ar);
+      let sw = false, plate = false;
+      for (const k in h.room.attrs) {
+        if (h.room.attrs[k] !== ch) continue;
+        const [c, r] = k.split(",").map(Number);
+        const v = h.room.cell(c, r);
+        if (v === T.indexOf("SWITCH")) sw = true;
+        if (v === T.indexOf("PLATE") || v === T.indexOf("PLATE_DOWN")) plate = true;
+      }
+      if (sw && plate) return "A switch or a plate opens this";
+      if (sw) return "Find its switch to open this";
+      if (plate) return "Weigh down its plate to open";
+      return "This gate has nothing to open it";
+    }
     return "";
   }
 
