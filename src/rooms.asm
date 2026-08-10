@@ -272,11 +272,11 @@ tile_gfx:
                 db #00,#00
                 db #00,#00
                 ; 29 PLATE_DOWN
-                db #00,#00
-                db #00,#00
-                db #00,#00
-                db #00,#00
-                db #00,#00
+                db #FF,#FF
+                db #8C,#13
+                db #89,#19
+                db #89,#19
+                db #8C,#13
                 db #FF,#FF
                 db #FF,#FF
                 db #04,#02

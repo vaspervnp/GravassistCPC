@@ -331,13 +331,17 @@ public static class TileCatalog
             """),
 
         // Κατάσταση εκτέλεσης: προκύπτει όταν αφήσεις κιβώτιο πάνω στην πλάκα.
-        new TileType('d', "plate_down", MechGroup, "Plate pressed",
+        new TileType('d', "plate_down", MechGroup, "Plate with crate",
             "A crate is holding this plate down, so its gates stay open.",
             Palette.Material, Palette.EdgeColor,
             """
-            <rect x="1" y="4.4" width="6" height="2.2" fill="var(--fill)"/>
-            <rect x="2" y="2.6" width="4" height="1.8" fill="none"
-                  stroke="var(--edge)" stroke-width="0.7"/>
+            <rect x="0.4" y="0.4" width="7.2" height="5.2" fill="none"
+                  stroke="var(--edge)" stroke-width="0.8"/>
+            <path d="M1.6,1.6 L6.4,4.4 M6.4,1.6 L1.6,4.4"
+                  stroke="var(--fill)" stroke-width="0.6"/>
+            <rect x="0.4" y="6" width="7.2" height="1" fill="var(--edge)"/>
+            <path d="M1.8,7 L1.8,8 M6.2,7 L6.2,8"
+                  stroke="var(--fill)" stroke-width="0.6"/>
             """),
 
         new TileType('@', "start", MechGroup, "Start position",

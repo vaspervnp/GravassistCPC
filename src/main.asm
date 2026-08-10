@@ -105,11 +105,22 @@ LOW_ENERGY      equ  3          ; κάτω από αυτό, η μπάρα κοκ
 ; Η ΘΕΣΗ ΑΠΟΦΕΥΓΕΙ ΤΗΝ ΠΟΡΤΑ: αν ο ήρωας είναι στο πάνω μισό, το μήνυμα πάει
 ; χαμηλά, αλλιώς ψηλά. Έτσι δεν σκεπάζει ποτέ αυτό που περιγράφει, όπου κι αν
 ; έχει βάλει την πόρτα ο σχεδιαστής.
-MSG_COL         equ  9          ; (40 - μήκος) / 2, σε χαρακτήρες
 MSG_ROW_HI      equ  7          ; γραμμή πλέγματος όταν ο ήρωας είναι χαμηλά
 MSG_ROW_LO      equ  16         ; …και όταν είναι ψηλά
-MSG_LEN         equ  msg_door_end-msg_door
 MSG_NONE        equ  #FF        ; δεν φαίνεται μήνυμα
+HINT_ROOMS      equ  10         ; ως ποια αίθουσα δείχνονται τα μηνύματα
+
+; Δείκτες στον hint_ptr. Η σειρά τους ΔΕΝ είναι αυθαίρετη: είναι η σειρά
+; προτεραιότητας του h_use, ώστε το μήνυμα να μην υπόσχεται κάτι άλλο από
+; αυτό που θα κάνει το πλήκτρο.
+MSG_EXIT        equ  0
+MSG_UNLOCK      equ  1
+MSG_NOKEY       equ  2
+MSG_TP          equ  3
+MSG_DROP        equ  4
+MSG_TAKE        equ  5
+MSG_PLATE       equ  6
+MSG_GATE        equ  7
 
 LINEBUF_W         equ  24     ; πλάτος buffer γραμμής σε bytes
 SCR_BASE        equ  #C000
@@ -210,7 +221,7 @@ ml_anim:        call anim_frame
                 call MC_WAIT_FLYBACK
                 call draw_hero          ; μόνο εγγραφές στην οθόνη
                 call draw_hud
-                call door_msg
+                call hint_msg
 
                 ; Η αλλαγή αίθουσας γίνεται στο ΤΕΛΟΣ του frame, όχι μέσα στην
                 ; ενημέρωση: το render_room ξαναζωγραφίζει όλη την οθόνη και δεν
@@ -1206,86 +1217,236 @@ dga_src         dw 0
 dga_col         db 0
 
 ;---------------------------------------------------------------------
-; door_msg — δείχνει «Up or down to exit room» όσο ο ήρωας πατάει πόρτα
+; hint_msg — μήνυμα για ΟΤΙ έχει ο ήρωας κάτω/γύρω του
 ;
-;   Δεν εμποδίζει τίποτα: είναι σκέτη σχεδίαση στο τέλος του frame. Σβήνει
-;   ξαναζωγραφίζοντας τα πλακίδια της γραμμής του, γιατί από κάτω μπορεί να
-;   υπάρχει οτιδήποτε — δεν αρκεί να γράψεις κενά.
+;   Ο παίκτης δεν έχει εγχειρίδιο. Κάθε αντικείμενο λέει μόνο του τι κάνει,
+;   τη στιγμή που το πατάς — και σβήνει μόλις φύγεις.
 ;
+;   Η ΣΕΙΡΑ ΕΙΝΑΙ Η ΙΔΙΑ με του h_use, αλλιώς το μήνυμα θα υποσχόταν κάτι που
+;   το πλήκτρο δεν κάνει: πάνω σε τηλεμεταφορά με γεμάτα χέρια, το h_use
+;   τηλεμεταφέρει και ΔΕΝ αφήνει το κιβώτιο.
+;
+;   Το μήνυμα δεν εμποδίζει τίποτα: είναι σκέτη σχεδίαση στο τέλος του frame.
+;   Σβήνει ξαναζωγραφίζοντας τα πλακίδια από κάτω του, γιατί εκεί μπορεί να
+;   υπάρχει οτιδήποτε — γράψιμο κενών δεν αρκεί.
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-door_msg:       ld   bc,(hero_x)        ; πατάει πόρτα; κρίνεται από το κελί
-                ld   de,(hero_y)        ; του ΣΩΜΑΤΟΣ, όπως και το h_use
-                call cell_at
-                cp   T_EXIT
-                jr   z,dm_want
-
-                ld   a,(msg_row)        ; δεν πατάει: σβήσε ό,τι φαίνεται
-                cp   MSG_NONE
+hint_msg:       ld   a,(cur_room)       ; ΟΔΗΓΟΣ, όχι μόνιμο HUD: μετά τις πρώτες
+                cp   HINT_ROOMS+1       ; αίθουσες ο παίκτης τα ξέρει και τα
+                jr   c,hm_on            ; μηνύματα γίνονται θόρυβος
+                ld   a,MSG_NONE
+                jr   hm_have
+hm_on:          call hint_pick
+hm_have:
+                ld   b,a                ; B = ποιο μήνυμα θέλουμε τώρα
+                ld   a,(msg_cur)
+                cp   b
+                jr   nz,hm_change
+                cp   MSG_NONE           ; ίδιο μήνυμα: μήπως άλλαξε μισό οθόνης;
                 ret  z
-                jp   dm_erase
-
-                ; Ποια γραμμή; Μακριά από τον ήρωα, ώστε να μη σκεπάζει την
-                ; πόρτα που περιγράφει.
-dm_want:        ld   a,(cell_row)
-                cp   12
-                ld   a,MSG_ROW_LO
-                jr   c,dm_row
-                ld   a,MSG_ROW_HI
-dm_row:         ld   b,a
+                call hint_row
+                ld   b,a
                 ld   a,(msg_row)
                 cp   b
-                ret  z                  ; ήδη εκεί: μην ξαναγράφεις κάθε frame
-                cp   MSG_NONE
-                jr   z,dm_show
-                push bc                 ; άλλαξε μισό: σβήσε το παλιό πρώτα
-                call dm_erase
+                ret  z
+                ld   a,(msg_cur)
+                ld   b,a
+hm_change:      push bc
+                call hint_erase
                 pop  bc
+                ld   a,b
+                ld   (msg_cur),a
+                cp   MSG_NONE
+                ret  z
+                jp   hint_draw
 
-dm_show:        ld   a,b
+; hint_pick — ποιο μήνυμα ταιριάζει· A = δείκτης ή MSG_NONE
+hint_pick:      call h_support          ; τι ΠΑΤΑΜΕ (η κλειδαριά είναι στερεή)
+                ld   (hp_sup),a
+                ld   a,(cell_col)       ; ΦΥΛΑΞΕ ΤΟ ΤΩΡΑ: το cell_at από κάτω
+                ld   (hp_scol),a        ; ξαναγράφει τα cell_col/cell_row με το
+                ld   a,(cell_row)       ; κελί του ΣΩΜΑΤΟΣ, και η ταυτότητα της
+                ld   (hp_srow),a        ; κλειδαριάς θα διαβαζόταν από λάθος κελί
+                ld   bc,(hero_x)        ; τι μας ΠΕΡΙΒΑΛΛΕΙ
+                ld   de,(hero_y)
+                call cell_at
+                ld   (hp_body),a
+
+                cp   T_EXIT
+                ld   a,MSG_EXIT
+                ret  z
+
+                ld   a,(hp_sup)         ; κλειδαριά: με ή χωρίς το κλειδί της
+                cp   T_LOCK
+                jr   nz,hp_notlock
+                ld   a,(hp_scol)
+                ld   b,a
+                ld   a,(hp_srow)
+                ld   c,a
+                call cell_attr
+                ld   e,a
+                ld   d,0
+                ld   hl,hero_keys
+                add  hl,de
+                ld   a,(hl)
+                or   a
+                ld   a,MSG_UNLOCK
+                ret  nz
+                ld   a,MSG_NOKEY
+                ret
+
+hp_notlock:     ld   a,(hp_body)
+                cp   T_TELEPORT
+                ld   a,MSG_TP
+                ret  z
+
+                ; ΜΕ ΓΕΜΑΤΑ ΧΕΡΙΑ μήνυμα μόνο πάνω σε ΠΛΑΚΑ: εκεί το άφημα
+                ; κάνει κάτι ορατό (κρατά τις πύλες ανοιχτές). Παντού αλλού το
+                ; πλήκτρο αφήνει κι αυτό το κιβώτιο, αλλά μια μόνιμη υπενθύμιση
+                ; σε κάθε βήμα είναι θόρυβος, όχι οδηγία.
+                ld   a,(hero_carry)
+                or   a
+                jr   z,hp_free
+                ld   a,(hp_body)
+                cp   T_PLATE
+                ld   a,MSG_DROP
+                ret  z
+                ld   a,MSG_NONE
+                ret
+
+hp_free:        ld   a,(hp_body)
+                cp   T_CRATE
+                ld   a,MSG_TAKE
+                ret  z
+                ld   a,(hp_body)
+                cp   T_PLATE_DOWN
+                ld   a,MSG_TAKE
+                ret  z
+                ld   a,(hp_body)
+                cp   T_PLATE
+                ld   a,MSG_PLATE
+                ret  z
+                ld   a,(hp_body)
+                cp   T_GATE_OPEN
+                ld   a,MSG_GATE
+                ret  z
+                ld   a,MSG_NONE
+                ret
+
+; hint_row — σε ποια γραμμή πλέγματος μπαίνει· ΜΑΚΡΙΑ από τον ήρωα, ώστε να
+;   μη σκεπάζει αυτό που περιγράφει.
+hint_row:       ld   a,(hero_y)
+                sub  LVL_Y0
+                rrca                    ; /8 -> γραμμή πλέγματος
+                rrca
+                rrca
+                and  #1F
+                cp   12
+                ld   a,MSG_ROW_LO
+                ret  c
+                ld   a,MSG_ROW_HI
+                ret
+
+; hint_erase — ξαναζωγραφίζει τα πλακίδια κάτω από το μήνυμα που φαίνεται
+hint_erase:     ld   a,(msg_cur)
+                cp   MSG_NONE
+                ret  z
+                ld   a,(msg_row)
+                ld   b,a
+                ld   a,(msg_col)
+                dec  a                  ; οι στήλες κειμένου ξεκινούν από 1
+                ld   c,a
+                ld   a,(msg_len)
+                ld   (hm_n),a
+he_lp:          push bc
+                call draw_tile
+                pop  bc
+                inc  c
+                ld   hl,hm_n
+                dec  (hl)
+                jr   nz,he_lp
+                ld   a,MSG_NONE
+                ld   (msg_cur),a
+                ret
+
+; hint_draw — τυπώνει το μήνυμα (msg_cur), κεντραρισμένο
+hint_draw:      ld   a,(msg_cur)        ; δείκτης -> διεύθυνση κειμένου
+                add  a,a
+                ld   l,a
+                ld   h,0
+                ld   de,hint_ptr
+                add  hl,de
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                ld   a,(de)             ; πρώτο byte = μήκος
+                ld   (msg_len),a
+                inc  de
+                ld   (hm_txt),de
+
+                ld   b,a                ; στήλη = (40 - μήκος) / 2 + 1
+                ld   a,40
+                sub  b
+                srl  a
+                inc  a
+                ld   (msg_col),a
+                call hint_row
                 ld   (msg_row),a
+
                 ld   a,INK_HERO_PEN
                 call TXT_SET_PEN
                 ld   a,(msg_row)
                 add  a,2                ; γραμμή πλέγματος -> γραμμή κειμένου
-                ld   l,a                ; (το HUD πιάνει την πρώτη)
-                ld   h,MSG_COL
-                call TXT_SET_CURSOR
-                ld   hl,msg_door
-                ld   b,MSG_LEN
-dm_lp:          ld   a,(hl)
-                push hl
-                push bc
-                call TXT_OUTPUT
-                pop  bc
-                pop  hl
-                inc  hl
-                djnz dm_lp
-                ret
-
-                ; Σβήσιμο: ξαναζωγράφισε τα πλακίδια κάτω από το κείμενο.
-dm_erase:       ld   a,(msg_row)
-                cp   MSG_NONE
-                ret  z
+                ld   l,a
+                ld   a,(msg_col)
+                ld   h,a
+                ld   de,(hm_txt)
+                ld   a,(msg_len)
                 ld   b,a
-                ld   c,MSG_COL-1        ; οι στήλες κειμένου ξεκινούν από 1
-                ld   a,MSG_LEN
-                ld   (dm_n),a
-dm_elp:         push bc
-                call draw_tile
-                pop  bc
-                inc  c
-                ld   hl,dm_n
-                dec  (hl)
-                jr   nz,dm_elp
-                ld   a,MSG_NONE
-                ld   (msg_row),a
-                ret
+                jp   menu_puts          ; ίδια ρουτίνα με το μενού
 
-dm_n            db 0
-msg_row         db MSG_NONE     ; σε ποια γραμμή πλέγματος φαίνεται· #FF = πουθενά
-msg_door        db "Up or down to exit room"
-msg_door_end:
+hm_n            db 0
+hm_txt          dw 0
+hp_sup          db 0
+hp_scol         db 0
+hp_srow         db 0
+hp_body         db 0
+msg_cur         db MSG_NONE     ; ποιο μήνυμα φαίνεται· #FF = κανένα
+msg_row         db 0
+msg_col         db 0
+msg_len         db 0
+
+; Τα μηνύματα. Πρώτο byte το μήκος, ώστε να μη χρειάζεται τερματικό ούτε
+; γέμισμα σε σταθερό πλάτος — τα μήκη διαφέρουν πολύ.
+hint_ptr:       dw hs_exit, hs_unlock, hs_nokey, hs_tp
+                dw hs_drop, hs_take, hs_plate, hs_gate
+
+; Το μήκος το μετράει ο ASSEMBLER, όχι εγώ: μια χειρόγραφη αρίθμηση κατά ένα
+; παραπάνω τυπώνει ένα byte σκουπίδι στο τέλος — και δεν φαίνεται με το μάτι.
+hs_exit:        db hs_exit_e-hs_exit-1
+                db "Up or down to exit room"
+hs_exit_e:
+hs_unlock:      db hs_unlock_e-hs_unlock-1
+                db "Up or down to unlock"
+hs_unlock_e:
+hs_nokey:       db hs_nokey_e-hs_nokey-1
+                db "You need the matching key"
+hs_nokey_e:
+hs_tp:          db hs_tp_e-hs_tp-1
+                db "Up or down to teleport"
+hs_tp_e:
+hs_drop:        db hs_drop_e-hs_drop-1
+                db "Up or down to drop crate"
+hs_drop_e:
+hs_take:        db hs_take_e-hs_take-1
+                db "Up or down to pick up crate"
+hs_take_e:
+hs_plate:       db hs_plate_e-hs_plate-1
+                db "A crate here keeps gates opened"
+hs_plate_e:
+hs_gate:        db hs_gate_e-hs_gate-1
+                db "This gate is open"
+hs_gate_e:
 
 ;---------------------------------------------------------------------
 ; scr_addr — διεύθυνση οθόνης για (στήλη byte, scanline)

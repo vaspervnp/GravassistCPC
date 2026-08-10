@@ -99,7 +99,6 @@ PLACEHOLDER = {
     P.EXIT: ("EXIT", 0), P.ENERGY: ("ENERGY", 0), P.PARACHUTE: ("PARACHUTE", 0),
     P.LOCK_OPEN: ("LOCK", 0, True),   # η "ενεργή" εκδοχή του placeholder
     P.GATE_OPEN: ("GATE", 0, True),   # ανοιγμένη: φαίνεται, αλλά περνάς
-    P.PLATE_DOWN: ("PLATE", 0, True), # πατημένη, με κιβώτιο από πάνω
     P.KEY: ("KEY", 0), P.LOCK: ("LOCK", 0), P.GATE: ("GATE", 0),
     P.SWITCH: ("SWITCH", 0), P.PLATE: ("PLATE", 0), P.TELEPORT: ("TELEPORT", 0),
     P.CRATE: ("CRATE", 0), P.CRUMBLE: ("CRUMBLE", 0), P.GRAVLOCK: ("GRAVLOCK", 0),
@@ -280,11 +279,28 @@ def rot90(g, times):
     return g
 
 
+def plate_down_pixels():
+    """Πλάκα ΜΕ ΤΟ ΚΙΒΩΤΙΟ ΠΑΝΩ ΤΗΣ, σε ένα κελί 8x8.
+
+    Δεν αρκεί «πατημένη πλάκα»: ο παίκτης πρέπει να βλέπει ΠΟΥ άφησε το
+    κιβώτιο, αλλιώς ψάχνει στο δωμάτιο κάτι που κρατάει ήδη μια πύλη ανοιχτή.
+    Το κιβώτιο στριμώχνεται σε έξι γραμμές (φεύγει η μεσαία διακόσμηση, μένει
+    το περίγραμμα) και οι δύο τελευταίες γίνονται η πατημένη πλάκα.
+    """
+    import placeholders
+    crate = placeholders._frame("CRATE", False)
+    plate = placeholders._frame("PLATE", True)
+    return [crate[0], crate[1], crate[3], crate[4], crate[6], crate[7],
+            plate[6], plate[7]]
+
+
 def tile_pixels(t):
     """8x8 pixels (pen ανά θέση) για κάθε τύπο κελιού."""
     g = [[0] * 8 for _ in range(8)]
     if t in (P.EMPTY, P.START):     # ο δείκτης εκκίνησης δεν ζωγραφίζεται ποτέ
         return g
+    if t == P.PLATE_DOWN:
+        return plate_down_pixels()
     if t in PLACEHOLDER:
         import placeholders
         entry = PLACEHOLDER[t]

@@ -313,45 +313,8 @@ def main():
               rooms == ref.rooms and sealed == sorted(ref.sealed),
               f"Z80 {rooms}/{sealed} vs {ref.rooms}/{sorted(ref.sealed)}")
 
-    # 10. Μήνυμα πόρτας: εμφανίζεται μόνο όσο πατάς πόρτα, σε γραμμή ΜΑΚΡΙΑ
-    #     από τον ήρωα (για να μη σκεπάζει την πόρτα), και σβήνει μόλις φύγεις.
-    t.call("INIT_LINETAB")
-    # ΚΑΘΑΡΗ ΔΙΑΔΡΟΜΗ: το τεστ 9 άφησε σφραγισμένα δωμάτια, οπότε το
-    # seal_doors θα μετέτρεπε την πόρτα σε τοίχο και δεν θα υπήρχε τίποτα να
-    # δείξει το μήνυμα. (Σωστή συμπεριφορά — λάθος αφετηρία για ΑΥΤΟ το τεστ.)
-    t.poke(t.sym("SEALED"), bytes(32))
-    t.poke(t.sym("TRAIL_N"), b"\x00")
-    door = next((r for r in P.all_rooms() if r.exit_groups()), None)
-    if door is not None:
-        index = RF.set_of(door.number)
-        t.poke(set_buf, dict((i, d) for i, _, d in RF.all_sets())[index])
-        t.poke(t.sym("SET_CUR"), bytes((index,)))
-        t.poke(t.sym("JR_COUNT"), b"\x00")
-        t.call("ROOM_LOAD", a=door.number)
-        (col, row), _dest, _tw, _cs = door.exit_groups()[0]
-
-        def msg_row():
-            return t.peek(t.sym("MSG_ROW"))[0]
-
-        def stand(c, r):
-            t.poke16(t.sym("HERO_X"), c * P.CELL + P.CELL // 2)
-            t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + r * P.CELL + P.CELL // 2)
-            t.call("DOOR_MSG")
-
-        stand(20, 5)
-        check("χωρίς πόρτα δεν υπάρχει μήνυμα", msg_row() == 0xFF, str(msg_row()))
-        stand(col, row)
-        want = 7 if row >= 12 else 16
-        check("πάνω στην πόρτα εμφανίζεται, στο άλλο μισό της οθόνης",
-              msg_row() == want, f"{msg_row()} vs {want}")
-        check("η γραμμή του μηνύματος απέχει από τον ήρωα",
-              abs(msg_row() - row) >= 4, f"μήνυμα {msg_row()}, ήρωας {row}")
-        before = msg_row()
-        t.call("DOOR_MSG")
-        check("δεν ξαναγράφεται σε κάθε frame", msg_row() == before)
-        stand(20, 5)
-        check("σβήνει μόλις φύγεις από την πόρτα", msg_row() == 0xFF,
-              str(msg_row()))
+    # 10. (Το παλιό τεστ του door_msg αντικαταστάθηκε από το 16: το μήνυμα
+    #     δεν αφορά πια μόνο την πόρτα.)
 
     # 11. Οθόνη μενού: ο τίτλος σε δύο χρώματα και ο ήρωας που κάνει τον γύρο
     #     της αρένας. Ο γύρος ΔΕΝ είναι animation — τρέχει η πραγματική φυσική,
@@ -619,6 +582,69 @@ def main():
     t.call("H_USE")                     # …και άσ' το πάνω στην πλάκα
     check("πάνω σε πλάκα η πλάκα δεν χάνεται",
           cell(20, 22) == P.PLATE_DOWN, P.TYPE_NAMES[cell(20, 22)])
+
+    # 16. Μήνυμα ανά αντικείμενο. Η σειρά προτεραιότητας πρέπει να είναι Η
+    #     ΙΔΙΑ με του h_use, αλλιώς το μήνυμα υπόσχεται κάτι που το πλήκτρο
+    #     δεν κάνει — π.χ. «άσε το κιβώτιο» ενώ πατάς τηλεμεταφορά.
+    t.call("INIT_LINETAB")
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][5] = "K"                   # κλειδαριά (στερεή: την πατάς)
+    rows[21][10] = "T"
+    rows[21][14] = "B"
+    rows[21][18] = "p"
+    rows[21][22] = "g"
+    rows[21][26] = "X"
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + "\n".join(
+        ["gravity 0", "lock 5 22 1", "tp 10 21 30 21", "exit 26 21 2"])
+    room = P.Room(text)
+    room.number, room.path = 1, ""
+    t.poke(set_buf, RF.build_set([room]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.poke(t.sym("SEALED"), bytes(32))
+    t.poke(t.sym("TRAIL_N"), b"\x00")
+    t.poke(t.sym("PLATE_PREV"), b"\x00")
+    t.call("ROOM_LOAD", a=1)
+
+    def hint(c, r, carry=0, keys=(0,) * 8):
+        t.poke(t.sym("HERO_CARRY"), bytes((carry,)))
+        t.poke(t.sym("HERO_KEYS"), bytes(keys))
+        t.poke16(t.sym("HERO_X"), c * P.CELL + P.CELL // 2)
+        t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + r * P.CELL + P.CELL // 2)
+        t.poke(t.sym("MSG_CUR"), b"\xFF")
+        t.call("HINT_MSG")
+        i = t.peek(t.sym("MSG_CUR"))[0]
+        if i == 0xFF:
+            return ""
+        ptr = t.peek16(t.sym("HINT_PTR") + i * 2)
+        return t.peek(ptr + 1, t.peek(ptr)[0]).decode()
+
+    for where, args, want in (
+            ("πόρτα", (26, 21, 0, (0,) * 8), "Up or down to exit room"),
+            ("τηλεμεταφορά", (10, 21, 0, (0,) * 8), "Up or down to teleport"),
+            ("κιβώτιο", (14, 21, 0, (0,) * 8), "Up or down to pick up crate"),
+            ("γεμάτα χέρια πάνω σε πλάκα", (18, 21, 1, (0,) * 8),
+             "Up or down to drop crate"),
+            ("γεμάτα χέρια αλλού: σιωπή", (14, 21, 1, (0,) * 8), ""),
+            ("πλάκα", (18, 21, 0, (0,) * 8), "A crate here keeps gates opened"),
+            ("ανοιχτή πύλη", (22, 21, 0, (0,) * 8), "This gate is open"),
+            ("κλειδαριά χωρίς κλειδί", (5, 21, 0, (0,) * 8),
+             "You need the matching key"),
+            ("κλειδαριά με κλειδί", (5, 21, 0, (0, 1, 0, 0, 0, 0, 0, 0)),
+             "Up or down to unlock"),
+            ("κενό", (35, 21, 0, (0,) * 8), "")):
+        got = hint(*args)
+        check(f"μήνυμα σε {where}", got == want, f"«{got}» vs «{want}»")
+
+    # Τα μηνύματα είναι ΟΔΗΓΟΣ: σβήνουν μετά τις πρώτες αίθουσες, αλλιώς
+    # γίνονται μόνιμος θόρυβος για παίκτη που ξέρει ήδη τα πλήκτρα.
+    t.poke(t.sym("CUR_ROOM"), bytes((10,)))
+    check("στην 10η αίθουσα το μήνυμα ακόμα φαίνεται",
+          hint(26, 21) == "Up or down to exit room")
+    t.poke(t.sym("CUR_ROOM"), bytes((11,)))
+    check("από την 11η και μετά, σιωπή", hint(26, 21) == "")
+    t.poke(t.sym("CUR_ROOM"), bytes((1,)))
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0

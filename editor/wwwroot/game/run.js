@@ -36,9 +36,36 @@
   // που ΞΕΧΕΙΛΙΣΕ = μπλοκ. Πόρτα προς δωμάτιο που δεν έχεις δει = ανοιχτή.
   const trail = { rooms: [], sealed: new Set() };
 
-  // Ίδιο κείμενο και ίδια στήλη με το src/main.asm.
-  const DOOR_MSG = "Up or down to exit room";
-  const MSG_COL = 9;
+  // ΙΔΙΑ μηνύματα και ΙΔΙΑ σειρά προτεραιότητας με το hint_pick του
+  // src/main.asm — αλλιώς το μήνυμα υπόσχεται κάτι που το πλήκτρο δεν κάνει.
+  // Είναι ΟΔΗΓΟΣ: σβήνουν μετά την HINT_ROOMS-οστή αίθουσα.
+  const HINT_ROOMS = 10;
+
+  function hintFor(h) {
+    if (roomNumberOf(curName) > HINT_ROOMS) return "";
+    const T = D.TYPE_NAMES;
+    const sc = h.supportCell();
+    const st = sc ? h.room.cell(sc[0], sc[1]) : 0;
+    const [bc, br] = h.bodyCell();
+    const bt = h.room.cell(bc, br);
+
+    if (bt === T.indexOf("EXIT")) return "Up or down to exit room";
+    if (st === T.indexOf("LOCK")) {
+      const kid = h.room.attr(sc[0], sc[1]);
+      return h.keys[kid] ? "Up or down to unlock"
+                         : "You need the matching key";
+    }
+    if (bt === T.indexOf("TELEPORT")) return "Up or down to teleport";
+    // Με γεμάτα χέρια, μήνυμα ΜΟΝΟ πάνω σε πλάκα: εκεί το άφημα κάνει κάτι
+    // ορατό. Παντού αλλού θα ήταν μόνιμη υπενθύμιση, δηλαδή θόρυβος.
+    if (h.carry)
+      return bt === T.indexOf("PLATE") ? "Up or down to drop crate" : "";
+    if (bt === T.indexOf("CRATE") || bt === T.indexOf("PLATE_DOWN"))
+      return "Up or down to pick up crate";
+    if (bt === T.indexOf("PLATE")) return "A crate here keeps gates opened";
+    if (bt === T.indexOf("GATE_OPEN")) return "This gate is open";
+    return "";
+  }
 
   function trailEnter(current, entering) {
     const at = trail.rooms.indexOf(entering);
@@ -187,12 +214,15 @@
     screen.hud(hero);
     screen.flush();
 
-    // ΜΗΝΥΜΑ ΠΟΡΤΑΣ: μόνο όσο πατάς πόρτα, και στο ΑΛΛΟ μισό της οθόνης ώστε
-    // να μη σκεπάζει αυτό που περιγράφει. Είναι σκέτη σχεδίαση μετά το frame:
-    // δεν αγγίζει τη φυσική και δεν εμποδίζει την κίνηση.
-    const [dc, dr] = hero.bodyCell();
-    if (room.cell(dc, dr) === D.TYPE_NAMES.indexOf("EXIT"))
-      screen.text(DOOR_MSG, dr < 12 ? 16 : 7, MSG_COL);
+    // ΜΗΝΥΜΑ ΓΙΑ Ο,ΤΙ ΠΑΤΑΣ, στο ΑΛΛΟ μισό της οθόνης ώστε να μη σκεπάζει
+    // αυτό που περιγράφει. Σκέτη σχεδίαση μετά το frame: δεν αγγίζει τη
+    // φυσική και δεν εμποδίζει την κίνηση.
+    const hint = hintFor(hero);
+    if (hint) {
+      const [, dr] = hero.bodyCell();
+      screen.text(hint, dr < 12 ? 16 : 7,
+                  Math.floor((40 - hint.length) / 2) + 1);
+    }
     requestAnimationFrame(frame);
   }
 
