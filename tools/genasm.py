@@ -391,6 +391,8 @@ def defs_asm(rooms=()):
             f"NTYPES          equ {P.NTYPES}",
             f"ATTR_MAX        equ {P.ATTR_MAX}   ; κανάλια διακοπτών / "
             "ταυτότητες κλειδιών",
+            f"T_LOCK_AUTO     equ {P.LOCK_AUTO}    ; bit: η κλειδαριά ανοίγει "
+            "μόλις την ακουμπήσεις",
             f"SPIKE_TICKS     equ {P.SPIKE_TICKS}",
             f"ENERGY_MAX      equ {P.ENERGY_MAX}",
             f"ENERGY_PICK     equ {P.ENERGY_PICK}",

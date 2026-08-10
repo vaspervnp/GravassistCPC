@@ -82,6 +82,7 @@ sprites-init:
 
 # Επαληθεύσεις: αλγόριθμος περιστροφής + μοντέλο φυσικής
 test:
+	$(PY) tools/check_names.py
 	$(PY) tools/verify_rotate.py
 	$(PY) tools/test_physics.py
 	$(PY) tools/test_z80.py

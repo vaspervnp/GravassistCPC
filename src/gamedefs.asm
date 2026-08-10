@@ -37,7 +37,7 @@ T_PLATE_DOWN     equ 29
 
 ; Αίθουσα εκκίνησης. Ο editor τη γράφει με --start ώστε να δοκιμάζεις
 ; οποιαδήποτε αίθουσα χωρίς να πειράζεις τα αρχεία των πιστών.
-START_ROOM      equ 3
+START_ROOM      equ 1
 
 ; Γεωμετρία πινάκων — εδώ ώστε να είναι ορατή σε assert του main.asm
 TAB_ROW         equ 64
@@ -60,6 +60,7 @@ MEM_CEIL        equ #A67B
 
 NTYPES          equ 30
 ATTR_MAX        equ 8   ; κανάλια διακοπτών / ταυτότητες κλειδιών
+T_LOCK_AUTO     equ 8    ; bit: η κλειδαριά ανοίγει μόλις την ακουμπήσεις
 SPIKE_TICKS     equ 10
 ENERGY_MAX      equ 8
 ENERGY_PICK     equ 2

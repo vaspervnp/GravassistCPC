@@ -176,7 +176,9 @@ skip_attr:      ld   a,(hl)
 ;   έλεγχο στερεότητας. Εδώ ο πίνακας διαβάζεται μόνο όταν πατάς κάτι.
 ;
 ; IN:  B = col, C = row
-; OUT: A = τιμή (0 αν δεν έχει δηλωθεί)
+; OUT: A = ΩΜΗ τιμή (0 αν δεν έχει δηλωθεί)
+;      Τα χαμηλά 3 bits είναι η ταυτότητα/κανάλι, το bit 3 η σημαία «ανοίγει
+;      μόνη της». Ο καλών κάνει το AND που του χρειάζεται.
 ; ΑΛΛΟΙΩΝΕΙ: AF, HL
 ;---------------------------------------------------------------------
 cell_attr:      ld   hl,(room_attrs)
@@ -225,7 +227,8 @@ gt_lp:          ld   a,(hl)
                 inc  hl
                 ld   a,(hl)             ; κανάλι της εγγραφής
                 inc  hl
-                push hl
+                and  7                  ; ΜΟΝΟ η ταυτότητα: το bit 3 είναι η
+                push hl                 ; σημαία «ανοίγει μόνη της»
                 ld   hl,gt_chan
                 cp   (hl)
                 jr   nz,gt_next
@@ -278,6 +281,7 @@ lo_lp:          ld   a,(hl)
                 inc  hl
                 ld   a,(hl)
                 inc  hl
+                and  7
                 push hl
                 ld   hl,lo_id
                 cp   (hl)
@@ -332,6 +336,7 @@ ps_lp:          ld   a,(hl)
                 inc  hl
                 ld   a,(hl)             ; κανάλι
                 inc  hl
+                and  7
                 ld   (ps_chan),a
                 push hl
 
@@ -430,6 +435,7 @@ gs_lp:          ld   a,(hl)
                 inc  hl
                 ld   a,(hl)
                 inc  hl
+                and  7
                 push hl
                 ld   hl,gs_chan
                 cp   (hl)

@@ -68,7 +68,7 @@ def build():
               "ENERGY_MAX": P.ENERGY_MAX, "ENERGY_PICK": P.ENERGY_PICK,
               "SPIKE_DMG": P.SPIKE_DMG, "CRATE_TICKS": P.CRATE_TICKS,
               "SPIKE_TICKS": P.SPIKE_TICKS, "ATTR_MAX": P.ATTR_MAX,
-              "TRAIL_MAX": P.TRAIL_MAX},
+              "TRAIL_MAX": P.TRAIL_MAX, "LOCK_AUTO": P.LOCK_AUTO},
 
         # Γραφικά: τιμές pen ανά pixel, ίδια πηγή με τα tiles του Amstrad.
         "PALETTE": ["#000080", "#FFFFFF", "#00FF00", "#FF8000"],

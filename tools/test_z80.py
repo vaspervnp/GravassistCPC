@@ -726,6 +726,59 @@ def main():
     check("ζώνη κλειδώματος: Z80 και μοντέλο ταυτίζονται 200 frames",
           diverged is None, str(diverged))
 
+    # 18. Αυτόματη κλειδαριά: ανοίγει με ΤΗΝ ΕΠΑΦΗ, χωρίς πλήκτρο. Η σημαία
+    #     ζει στο bit 3 της ίδιας τιμής, οπότε κάθε σύγκριση ταυτότητας
+    #     πρέπει να κάνει AND 7 — αλλιώς η αυτόματη κλειδαριά «2» δεν
+    #     ταιριάζει με το κλειδί «2».
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][5] = "K"                   # αυτόματη, ταυτότητα 2
+    rows[22][12] = "K"                  # χειροκίνητη, ταυτότητα 3
+    rows[21][20] = "k"
+    rows[21][26] = "k"
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + "\n".join(
+        ["gravity 0", "lock 5 22 10", "lock 12 22 3", "key 20 21 2",
+         "key 26 21 3"])
+    room = P.Room(text)
+    room.number, room.path = 1, ""
+    t.poke(set_buf, RF.build_set([room]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.poke(t.sym("SEALED"), bytes(32))
+    t.poke(t.sym("TRAIL_N"), b"\x00")
+    t.poke(t.sym("PLATE_PREV"), b"\x00")
+    t.poke(t.sym("MSG_LEFT"), b"\x00")
+    t.poke(t.sym("HERO_KEYS"), bytes(8))
+    t.call("ROOM_LOAD", a=1)
+
+    def cell(c, r):
+        return t.peek(cell_buf + r * P.COLS + c)[0]
+
+    def stand(c, r):
+        t.poke16(t.sym("HERO_X"), c * P.CELL + P.CELL // 2)
+        t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + r * P.CELL + P.CELL // 2)
+        t.call("H_TOUCH")
+
+    stand(20, 21)
+    check("μαζεύοντας το κλειδί αυτόματης κλειδαριάς βγαίνει μήνυμα",
+          t.peek(t.sym("MSG_LEFT"))[0] > 0
+          and t.peek(t.sym("MSG_FORCE"))[0] == 12,
+          f"hold={t.peek(t.sym('MSG_LEFT'))[0]}")
+    stand(5, 21)
+    check("η αυτόματη κλειδαριά ανοίγει με ΤΗΝ ΕΠΑΦΗ",
+          cell(5, 22) == P.LOCK_OPEN, P.TYPE_NAMES[cell(5, 22)])
+    check("…και καταναλώνει το κλειδί",
+          t.peek(t.sym("HERO_KEYS"), 8)[2] == 0)
+
+    t.poke(t.sym("MSG_LEFT"), b"\x00")
+    stand(26, 21)
+    check("κλειδί ΧΕΙΡΟΚΙΝΗΤΗΣ κλειδαριάς δεν βγάζει μήνυμα",
+          t.peek(t.sym("MSG_LEFT"))[0] == 0)
+    for _ in range(5):
+        stand(12, 21)
+    check("η χειροκίνητη ΔΕΝ ανοίγει με την επαφή",
+          cell(12, 22) == P.LOCK, P.TYPE_NAMES[cell(12, 22)])
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

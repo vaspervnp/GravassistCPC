@@ -194,7 +194,7 @@ h_touch:        ld   bc,(hero_x)
                 inc  (hl)
                 ld   a,1
                 ld   (hud_dirty),a
-                jr   ht_spikes
+                jp   ht_spikes
 ht_np1:         cp   T_KEY
                 jr   nz,ht_np2
                 ld   a,(cell_col)
@@ -202,14 +202,27 @@ ht_np1:         cp   T_KEY
                 ld   a,(cell_row)
                 ld   c,a
                 call cell_attr
+                and  7
+                ld   (ht_kid),a
                 ld   e,a
                 ld   d,0
                 ld   hl,hero_keys
                 add  hl,de
                 inc  (hl)
+                ; ΤΟ ΜΗΝΥΜΑ ΒΓΑΙΝΕΙ ΜΑΖΕΥΟΝΤΑΣ ΤΟ ΚΛΕΙΔΙ, γιατί εκεί μαθαίνεις
+                ; ότι δεν θα χρειαστεί να πατήσεις τίποτα. Πάνω στην κλειδαριά
+                ; θα ήταν ήδη αργά — θα είχε ανοίξει.
+                ld   a,(ht_kid)
+                call has_auto_lock
+                jr   nc,ht_np1e
+                ld   a,MSG_AUTOKEY
+                ld   (msg_force),a
+                ld   a,MSG_HOLD
+                ld   (msg_left),a       ; ΟΧΙ msg_hold: case-insensitive
+ht_np1e:
                 ld   a,1
                 ld   (hud_dirty),a
-                jr   ht_spikes
+                jp   ht_spikes
 ht_np2:         ld   a,(hero_energy)    ; ενέργεια
                 add  a,ENERGY_PICK
                 cp   ENERGY_MAX+1
@@ -218,7 +231,7 @@ ht_np2:         ld   a,(hero_energy)    ; ενέργεια
 ht_esave:       ld   (hero_energy),a
                 ld   a,1
                 ld   (hud_dirty),a
-                jr   ht_spikes
+                jp   ht_spikes
 
                 ; Η ΠΟΡΤΑ ΔΕΝ ΑΝΟΙΓΕΙ ΜΕ ΤΗΝ ΕΠΑΦΗ: μπαίνεις μόνο πατώντας
                 ; ΠΑΝΩ ή ΚΑΤΩ (h_use). Με αυτόματο πέρασμα κάθε άφιξη ήταν
@@ -242,7 +255,7 @@ ht_nosw:        cp   T_SWITCH
                 inc  hl
                 ld   a,c
                 cp   (hl)
-                jr   z,ht_spikes        ; ναι: μη ξαναπυροδοτήσεις
+                jp   z,ht_spikes        ; ναι: μη ξαναπυροδοτήσεις
 ht_swfire:      ld   a,b
                 ld   (sw_prev),a
                 ld   a,c
@@ -251,9 +264,41 @@ ht_swfire:      ld   a,b
                 call cell_attr          ; A = κανάλι του διακόπτη
                 call gate_toggle
                 pop  bc
-                jr   ht_spikes
+                jp   ht_spikes
 ht_swclr:       ld   a,#FF              ; έφυγες από τον διακόπτη
                 ld   (sw_prev),a
+
+                ; ΑΥΤΟΜΑΤΗ ΚΛΕΙΔΑΡΙΑ: ανοίγει μόλις την πατήσεις με το
+                ; κλειδί της, χωρίς πλήκτρο.
+                call h_support
+                cp   T_LOCK
+                jp   nz,ht_spikes
+                ld   a,(cell_col)
+                ld   b,a
+                ld   a,(cell_row)
+                ld   c,a
+                call cell_attr
+                ld   (ht_raw),a
+                and  T_LOCK_AUTO
+                jp   z,ht_spikes
+                ld   a,(ht_raw)
+                and  7
+                ld   (ht_kid),a
+                ld   e,a
+                ld   d,0
+                ld   hl,hero_keys
+                add  hl,de
+                ld   a,(hl)
+                or   a
+                jp   z,ht_spikes
+                dec  (hl)
+                ld   a,1
+                ld   (hud_dirty),a
+                ld   hl,(cell_ptr)
+                ld   a,T_LOCK_OPEN
+                call cell_set
+                ld   a,(ht_kid)
+                call lock_open_all
 
 ht_spikes:      call h_support          ; αγκάθια: μόνο από τη μύτη
                 ld   e,a
@@ -533,6 +578,7 @@ hu_noexit:      call h_support          ; ΤΑ ΥΠΟΛΟΙΠΑ από το κε
                 ld   a,(cell_row)
                 ld   c,a
                 call cell_attr
+                and  7                  ; ταυτότητα· το bit 3 είναι άλλο πράγμα
                 ld   e,a
                 ld   d,0
                 ld   hl,hero_keys
@@ -928,6 +974,51 @@ h_noflip:       ld   (h_nfa),a          ; ΟΧΙ push af: το pop θα επαν
                 ret
 
 h_nfa           db 0
+ht_kid          db 0
+ht_raw          db 0
+
+;---------------------------------------------------------------------
+; has_auto_lock — υπάρχει κλειδαριά αυτής της ταυτότητας που ανοίγει μόνη της;
+; IN:  A = ταυτότητα      OUT: CF=1 ναι
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+has_auto_lock:  ld   (hal_id),a
+                ld   hl,(room_attrs)
+hal_lp:         ld   a,(hl)
+                cp   #FF
+                jr   z,hal_no
+                ld   c,a
+                inc  hl
+                ld   b,(hl)
+                inc  hl
+                ld   a,(hl)
+                inc  hl
+                ld   (hal_raw),a
+                and  T_LOCK_AUTO
+                jr   z,hal_next
+                ld   a,(hal_raw)
+                and  7
+                push hl
+                ld   hl,hal_id
+                cp   (hl)
+                pop  hl
+                jr   nz,hal_next
+                push hl                 ; ταιριάζει: είναι όντως κλειδαριά;
+                call cell_addr
+                ld   a,(hl)
+                pop  hl
+                cp   T_LOCK
+                jr   z,hal_yes
+                cp   T_LOCK_OPEN
+                jr   z,hal_yes
+hal_next:       jr   hal_lp
+hal_no:         or   a
+                ret
+hal_yes:        scf
+                ret
+
+hal_id          db 0
+hal_raw         db 0
 hw_lock         db 0
 
 ; h_take — αδειάζει το κελί που μόλις διάβασε το cell_at και το ξαναζωγραφίζει

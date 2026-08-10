@@ -898,14 +898,36 @@
                     pos.textContent = "col " + g.col + " row " + g.row +
                         " · " + g.cells.length + " cells";
 
+                    // Το bit 3 της τιμής είναι η σημαία «ανοίγει μόνη της»·
+                    // τα χαμηλά 3 bits η ταυτότητα. Το πεδίο δείχνει ΜΟΝΟ την
+                    // ταυτότητα, αλλιώς θα έβλεπες «10» και θα αναρωτιόσουν.
+                    const ident = g.value & 7, auto = !!(g.value & 8);
                     const input = coordInput(
-                        kind === "sw" || kind === "gate"
+                        kind === "sw" || kind === "gate" || kind === "plate"
                             ? "channel (0 = unwired)" : "identity (0 = unwired)",
-                        g.value ? String(g.value) : "", 7);
+                        ident ? String(ident) : "", 7);
                     input.addEventListener("change", function () {
                         const n = parseCoord(input.value);
-                        setAttrValue(kind, i, (n === null || n < 0) ? 0 : n);
+                        const v = (n === null || n < 0) ? 0 : (n & 7);
+                        setAttrValue(kind, i, v | (auto ? 8 : 0));
                     });
+
+                    let autoBox = null;
+                    if (kind === "lock") {
+                        const lbl = document.createElement("label");
+                        lbl.className = "link-two";
+                        lbl.title = "Opens the moment you step on it with the "
+                                  + "matching key, without pressing anything.";
+                        autoBox = document.createElement("input");
+                        autoBox.type = "checkbox";
+                        autoBox.checked = auto;
+                        autoBox.addEventListener("change", function () {
+                            setAttrValue(kind, i,
+                                         ident | (autoBox.checked ? 8 : 0));
+                        });
+                        lbl.append(autoBox, document.createTextNode("auto"));
+                        row.appendChild(lbl);
+                    }
 
                     row.addEventListener("mouseenter", function () {
                         attrHighlight = [kind, i];
@@ -916,7 +938,9 @@
                         renderAttrLinks();
                     });
 
-                    row.append(tag, pos, input);
+                    row.insertBefore(input, row.firstChild);
+                    row.insertBefore(pos, row.firstChild);
+                    row.insertBefore(tag, row.firstChild);
                     el.appendChild(row);
                 });
             }

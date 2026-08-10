@@ -291,13 +291,30 @@ class Room:
         return out
 
     def attr(self, col, row):
-        """Κανάλι διακόπτη/πόρτας ή ταυτότητα κλειδιού/κλειδαριάς. 0 = προεπιλογή."""
-        return self.attrs.get((col, row), 0)
+        """Κανάλι διακόπτη/πόρτας ή ταυτότητα κλειδιού/κλειδαριάς. 0 = προεπιλογή.
+
+        ΜΟΝΟ τα χαμηλά 3 bits: το bit 3 είναι η σημαία «ανοίγει μόνη της» και
+        δεν πρέπει ποτέ να μπερδευτεί με την ταυτότητα.
+        """
+        return self.attrs.get((col, row), 0) & 7
+
+    def auto_lock(self, col, row):
+        """Ανοίγει αυτή η κλειδαριά μόλις την ακουμπήσεις με το κλειδί της;"""
+        return bool(self.attrs.get((col, row), 0) & LOCK_AUTO)
+
+    def has_auto_lock(self, ident):
+        """Υπάρχει στο δωμάτιο κλειδαριά αυτής της ταυτότητας που ανοίγει μόνη
+        της; Το χρειάζεται το μήνυμα που βγαίνει μαζεύοντας το κλειδί."""
+        for (c, r), v in self.attrs.items():
+            if (v & 7) == ident and (v & LOCK_AUTO) and \
+                    self.cells[r][c] in (LOCK, LOCK_OPEN):
+                return True
+        return False
 
     def gate_cells(self, channel):
         """Τα κελιά πόρτας του καναλιού — και ανοιχτά και κλειστά."""
         return [(c, r) for (c, r), v in self.attrs.items()
-                if v == channel and self.cells[r][c] in (GATE, GATE_OPEN)]
+                if (v & 7) == channel and self.cells[r][c] in (GATE, GATE_OPEN)]
 
     def exit_groups(self):
         """[(πάνω-αριστερό κελί, αίθουσα, διπλής;, [κελιά])] ανά ομάδα εξόδου."""
@@ -403,6 +420,11 @@ SPIKE_TICKS = 10
 # Πόσα διαφορετικά κανάλια διακοπτών και ταυτότητες κλειδιών. Ένα byte θα
 # χωρούσε 256, αλλά 8 φτάνουν για puzzle και κρατούν το inventory μικρό.
 ATTR_MAX = 8
+# Η κλειδαριά μπορεί να ανοίγει ΜΟΛΙΣ ΤΗΝ ΑΚΟΥΜΠΗΣΕΙΣ με το κλειδί της, αντί
+# να περιμένει το πλήκτρο. Η σημαία μπαίνει στο bit 3 της ίδιας τιμής: οι
+# ταυτότητες θέλουν μόνο 0..7, οπότε το bit είναι ελεύθερο και η μορφή του
+# αρχείου δεν αλλάζει καθόλου.
+LOCK_AUTO = 8
 ENERGY_PICK = 2
 WALK_V = 512        # 2.0 px/frame· το τρέξιμο είναι διπλάσιο -> 4.0
 CRATE_TICKS = 4     # frames ανά κελί πτώσης κιβωτίου (8 px / 4 = 2 px/frame)
@@ -462,6 +484,7 @@ class Hero:
         self.walk_acc = 0
         self.spike_tick = 0
         self.plate_on = {}      # κανάλι -> πατημένο; (για ΑΚΜΗ, όχι κάθε frame)
+        self.key_auto_msg = False   # μόλις μάζεψες κλειδί αυτόματης κλειδαριάς
         # Το κελί ΣΤΗΡΙΞΗΣ του προηγούμενου frame. Το εύθραυστο καταρρέει όταν
         # το ΑΦΗΝΕΙΣ, όχι όταν το πατάς: έτσι το περνάς ακριβώς μία φορά.
         self.prev_cell = None
@@ -633,7 +656,7 @@ class Hero:
         if not ident:
             return
         for (c, r), v in self.room.attrs.items():
-            if v == ident and self.room.cells[r][c] == LOCK:
+            if (v & 7) == ident and self.room.cells[r][c] == LOCK:
                 self.room.cells[r][c] = LOCK_OPEN
                 self.moved_cells.append((c, r))
 
@@ -653,6 +676,7 @@ class Hero:
             t = self.room.cells[r][c]
             if t not in (PLATE, PLATE_DOWN):
                 continue
+            v &= 7
             chans.add(v)
             if t == PLATE_DOWN or (c, r) == body:
                 held.add(v)
@@ -739,7 +763,13 @@ class Hero:
             elif t == PARACHUTE:
                 self.parachute += 1
             elif t == KEY:
-                self.keys[self.room.attr(col, row)] += 1
+                kid = self.room.attr(col, row)
+                self.keys[kid] += 1
+                # Το μήνυμα βγαίνει ΜΑΖΕΥΟΝΤΑΣ το κλειδί, γιατί εκεί μαθαίνεις
+                # ότι δεν θα χρειαστεί να πατήσεις τίποτα. Αν το έλεγε πάνω
+                # στην κλειδαριά, θα ήταν ήδη αργά — θα είχε ανοίξει.
+                if self.room.has_auto_lock(kid):
+                    self.key_auto_msg = True
         # Η ΠΟΡΤΑ ΔΕΝ ΑΝΟΙΓΕΙ ΜΕ ΤΗΝ ΕΠΑΦΗ. Περνώντας από μπροστά της δεν
         # συμβαίνει τίποτα — μπαίνεις μόνο πατώντας ΠΑΝΩ ή ΚΑΤΩ (βλ. use).
         # Με αυτόματο πέρασμα κάθε άφιξη ήταν λεπτή ισορροπία: ένα γλίστρημα
@@ -753,6 +783,14 @@ class Hero:
 
         # Τα αγκάθια πονάνε μόνο αν πέφτεις ΠΑΝΩ στις μύτες: η βαρύτητα πρέπει
         # να δείχνει αντίθετα από την όψη τους. Από πίσω είναι απλό πάτωμα.
+        # ΑΥΤΟΜΑΤΗ ΚΛΕΙΔΑΡΙΑ: ανοίγει μόλις την πατήσεις με το κλειδί της.
+        asc = self.support_cell()
+        if asc and self.room.cell(*asc) == LOCK and self.room.auto_lock(*asc):
+            kid = self.room.attr(*asc)
+            if self.keys[kid]:
+                self.keys[kid] -= 1
+                self.open_locks(asc, kid)
+
         # ΕΥΘΡΑΥΣΤΟ: καταρρέει μόλις φύγεις από πάνω του.
         sc = self.support_cell()
         if self.prev_cell is not None and sc != self.prev_cell:

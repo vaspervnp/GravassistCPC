@@ -125,6 +125,8 @@ MSG_GSW         equ  8          ; κλειστή πύλη με διακόπτη
 MSG_GPLATE      equ  9          ; …με πλάκα πίεσης
 MSG_GBOTH       equ  10         ; …και με τα δύο
 MSG_GDEAD       equ  11         ; …χωρίς τίποτα: λάθος του σχεδιαστή
+MSG_AUTOKEY     equ  12         ; μάζεψες κλειδί που ανοίγει με την επαφή
+MSG_HOLD        equ  150        ; frames = 3 δευτερόλεπτα
 
 LINEBUF_W         equ  24     ; πλάτος buffer γραμμής σε bytes
 SCR_BASE        equ  #C000
@@ -1235,7 +1237,19 @@ dga_col         db 0
 ;   υπάρχει οτιδήποτε — γράψιμο κενών δεν αρκεί.
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-hint_msg:       ld   a,(cur_room)       ; ΟΔΗΓΟΣ, όχι μόνιμο HUD: μετά τις πρώτες
+                ; ΜΗΝΥΜΑ ΜΕ ΧΡΟΝΟΜΕΤΡΟ: το μάζεμα κλειδιού είναι ΓΕΓΟΝΟΣ, όχι
+                ; κατάσταση — δεν υπάρχει κελί να το «κρατά» ενόσω φαίνεται.
+                ; Δείχνεται ΠΑΝΤΑ, ανεξάρτητα από το όριο των αιθουσών: είναι η
+                ; μόνη φορά που μαθαίνεις ότι δεν θα χρειαστεί να πατήσεις.
+hint_msg:       ld   hl,msg_left
+                ld   a,(hl)
+                or   a
+                jr   z,hm_normal
+                dec  (hl)
+                ld   a,(msg_force)
+                jr   hm_have
+
+hm_normal:      ld   a,(cur_room)       ; ΟΔΗΓΟΣ, όχι μόνιμο HUD: μετά τις πρώτες
                 cp   HINT_ROOMS+1       ; αίθουσες ο παίκτης τα ξέρει και τα
                 jr   c,hm_on            ; μηνύματα γίνονται θόρυβος
                 ld   a,MSG_NONE
@@ -1503,12 +1517,15 @@ msg_cur         db MSG_NONE     ; ποιο μήνυμα φαίνεται· #FF =
 msg_row         db 0
 msg_col         db 0
 msg_len         db 0
+msg_force       db 0            ; μήνυμα-γεγονός που δείχνεται με χρονόμετρο
+msg_left        db 0            ; frames που του μένουν
 
 ; Τα μηνύματα. Πρώτο byte το μήκος, ώστε να μη χρειάζεται τερματικό ούτε
 ; γέμισμα σε σταθερό πλάτος — τα μήκη διαφέρουν πολύ.
 hint_ptr:       dw hs_exit, hs_unlock, hs_nokey, hs_tp
                 dw hs_drop, hs_take, hs_plate, hs_gate
                 dw hs_gsw, hs_gplate, hs_gboth, hs_gdead
+                dw hs_autokey
 
 ; Το μήκος το μετράει ο ASSEMBLER, όχι εγώ: μια χειρόγραφη αρίθμηση κατά ένα
 ; παραπάνω τυπώνει ένα byte σκουπίδι στο τέλος — και δεν φαίνεται με το μάτι.
@@ -1548,6 +1565,9 @@ hs_gboth_e:
 hs_gdead:       db hs_gdead_e-hs_gdead-1
                 db "This gate has nothing to open it"
 hs_gdead_e:
+hs_autokey:     db hs_autokey_e-hs_autokey-1
+                db "This key unlocks on touch"
+hs_autokey_e:
 
 ;---------------------------------------------------------------------
 ; scr_addr — διεύθυνση οθόνης για (στήλη byte, scanline)

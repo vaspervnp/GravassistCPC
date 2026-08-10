@@ -35,11 +35,23 @@
       this.attrs = attrs || {};           // "c,r" -> 0..ATTR_MAX-1
       this.teleports = teleports || {};   // "c,r" -> [dc, dr]
     }
-    attr(c, r) { return this.attrs[c + "," + r] || 0; }
+    // ΜΟΝΟ τα χαμηλά 3 bits: το bit 3 είναι η σημαία «ανοίγει μόνη της».
+    attr(c, r) { return (this.attrs[c + "," + r] || 0) & 7; }
+    autoLock(c, r) { return !!((this.attrs[c + "," + r] || 0) & K.LOCK_AUTO); }
+    hasAutoLock(ident) {
+      for (const k in this.attrs) {
+        const v = this.attrs[k];
+        if ((v & 7) !== ident || !(v & K.LOCK_AUTO)) continue;
+        const [c, r] = k.split(",").map(Number);
+        const cv = this.cell(c, r);
+        if (cv === T.LOCK || cv === T.LOCK_OPEN) return true;
+      }
+      return false;
+    }
     gateCells(channel) {
       const out = [];
       for (const k in this.attrs) {
-        if (this.attrs[k] !== channel) continue;
+        if ((this.attrs[k] & 7) !== channel) continue;
         const [c, r] = k.split(",").map(Number);
         const v = this.cell(c, r);
         if (v === T.GATE || v === T.GATE_OPEN) out.push([c, r]);
@@ -71,6 +83,7 @@
       this.keys = new Array(K.ATTR_MAX).fill(0);
       this.spikeTick = 0; this.prevCell = null; this.prevBody = null;
       this.plateOn = {};                // κανάλι -> πατημένο; (ΑΚΜΗ)
+      this.keyAutoMsg = false;
       this.parachute = 0; this.paraOpen = 0; this.won = false;
       this.crateTick = 0; this.walkAcc = 0; this.worldG = g; this.cratesOn = false;
       this.face = 1; this.carry = 0; this.warp = false;
@@ -264,7 +277,13 @@
         this.room.cells[row][col] = T.EMPTY;
         if (t === T.ENERGY) this.energy = Math.min(K.ENERGY_MAX, this.energy + K.ENERGY_PICK);
         else if (t === T.PARACHUTE) this.parachute++;
-        else if (t === T.KEY) this.keys[this.room.attr(col, row)]++;
+        else if (t === T.KEY) {
+          const kid = this.room.attr(col, row);
+          this.keys[kid]++;
+          // Το μήνυμα βγαίνει ΜΑΖΕΥΟΝΤΑΣ το κλειδί: εκεί μαθαίνεις ότι δεν θα
+          // χρειαστεί να πατήσεις τίποτα.
+          if (this.room.hasAutoLock(kid)) this.keyAutoMsg = true;
+        }
       } else if (t === T.SWITCH && (col + "," + row) !== this.prevBody) {
         // ΤΟ ΠΑΤΑΣ, ΔΕΝ ΤΟ ΞΟΔΕΥΕΙΣ: γυρίζει κάθε πόρτα του καναλιού του και
         // μένει εκεί. Ακμή και όχι κράτημα, αλλιώς οι πόρτες ανοιγοκλείνουν
@@ -272,6 +291,14 @@
         this.toggleGates(this.room.attr(col, row));
       }
       this.prevBody = col + "," + row;
+
+      // ΑΥΤΟΜΑΤΗ ΚΛΕΙΔΑΡΙΑ: ανοίγει μόλις την πατήσεις με το κλειδί της.
+      const asc = this.supportCell();
+      if (asc && this.room.cell(asc[0], asc[1]) === T.LOCK &&
+          this.room.autoLock(asc[0], asc[1])) {
+        const kid = this.room.attr(asc[0], asc[1]);
+        if (this.keys[kid]) { this.keys[kid]--; this.openLocks(asc, kid); }
+      }
 
       // ΕΥΘΡΑΥΣΤΟ: καταρρέει μόλις φύγεις από πάνω του, ώστε να το περνάς
       // ακριβώς μία φορά. Το F_FRAGILE υπήρχε αλλά κανείς δεν το κοιτούσε.
@@ -302,7 +329,7 @@
       this.room.cells[cell[1]][cell[0]] = T.LOCK_OPEN;
       if (!ident) return;
       for (const k in this.room.attrs) {
-        if (this.room.attrs[k] !== ident) continue;
+        if ((this.room.attrs[k] & 7) !== ident) continue;
         const [c, r] = k.split(",").map(Number);
         if (this.room.cell(c, r) === T.LOCK) this.room.cells[r][c] = T.LOCK_OPEN;
       }
@@ -317,7 +344,7 @@
         const [c, r] = k.split(",").map(Number);
         const v = this.room.cell(c, r);
         if (v !== T.PLATE && v !== T.PLATE_DOWN) continue;
-        const ch = this.room.attrs[k];
+        const ch = this.room.attrs[k] & 7;
         chans.add(ch);
         if (v === T.PLATE_DOWN || (c === bc && r === br)) held.add(ch);
       }

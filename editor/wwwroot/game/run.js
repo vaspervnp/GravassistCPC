@@ -40,6 +40,7 @@
   // src/main.asm — αλλιώς το μήνυμα υπόσχεται κάτι που το πλήκτρο δεν κάνει.
   // Είναι ΟΔΗΓΟΣ: σβήνουν μετά την HINT_ROOMS-οστή αίθουσα.
   const HINT_ROOMS = 10;
+  let msgLeft = 0;                    // frames που μένουν σε μήνυμα-γεγονός
 
   function hintFor(h) {
     if (roomNumberOf(curName) > HINT_ROOMS) return "";
@@ -239,7 +240,11 @@
     // ΜΗΝΥΜΑ ΓΙΑ Ο,ΤΙ ΠΑΤΑΣ, στο ΑΛΛΟ μισό της οθόνης ώστε να μη σκεπάζει
     // αυτό που περιγράφει. Σκέτη σχεδίαση μετά το frame: δεν αγγίζει τη
     // φυσική και δεν εμποδίζει την κίνηση.
-    const hint = hintFor(hero);
+    // Μήνυμα-ΓΕΓΟΝΟΣ: δείχνεται ΠΑΝΤΑ, ακόμα και μετά το όριο αιθουσών —
+    // είναι η μόνη φορά που μαθαίνεις ότι δεν θα χρειαστεί να πατήσεις.
+    if (hero.keyAutoMsg) { hero.keyAutoMsg = false; msgLeft = 150; }
+    if (msgLeft) msgLeft--;
+    const hint = msgLeft ? "This key unlocks on touch" : hintFor(hero);
     if (hint) {
       const [, dr] = hero.bodyCell();
       screen.text(hint, dr < 12 ? 16 : 7,
