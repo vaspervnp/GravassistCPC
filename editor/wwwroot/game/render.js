@@ -119,29 +119,48 @@
       this.ctx.drawImage(this.tmp, 0, 0, W * this.scale, H * this.scale);
     }
 
-    /// Ο τίτλος του μενού. Ο Amstrad τον ζωγραφίζει pixel-pixel από δική του
-    /// γραμματοσειρά· εδώ αρκεί canvas text στα ίδια χρώματα και στην ίδια
-    /// θέση — το ζητούμενο είναι να δεις τη διάταξη χωρίς emulator.
+    /// Ο τίτλος του μενού με ΤΑ ΙΔΙΑ pixel που ζωγραφίζει ο Amstrad: οι
+    /// μάσκες των γραμμάτων έρχονται από την ίδια πηγή (tools/genasm.py) και
+    /// γράφονται στον ίδιο buffer με τα πλακίδια. Καλείται ΠΡΙΝ το flush.
     title() {
-      const s = this.scale;
-      this.ctx.textAlign = "center";
-      this.ctx.font = "bold " + (26 * s) + "px monospace";
-      const cx = (W / 2) * s, y = 34 * s;
-      const grav = "GRAV", assist = "ASSIST";
-      const wg = this.ctx.measureText(grav).width;
-      const wa = this.ctx.measureText(assist).width;
-      this.ctx.textAlign = "left";
-      this.ctx.fillStyle = "#FF8000";
-      this.ctx.fillText(grav, cx - (wg + wa) / 2, y);
-      this.ctx.fillStyle = "#00FF00";
-      this.ctx.fillText(assist, cx - (wg + wa) / 2 + wg, y);
+      const T = D.TITLE, f = T.frame;
+      // Οι οριζόντιες πλευρές ξεκινούν ΕΝΑ byte μέσα από τη γωνία και οι
+      // κάθετες δύο scanlines χαμηλότερα: οι γωνίες βγαίνουν κομμένες, όπως
+      // στο concept art. Το χρώμα αλλάζει στη μέση, μαζί με τα γράμματα.
+      const fpen = x => (x < f.mid ? T.pens[0] : T.pens[1]);
+      for (let x = f.x0 + 4; x < f.x1; x++)
+        for (const y of [f.y0, f.y0 + 1, f.y1 - 1, f.y1]) this.px(x, y, fpen(x));
+      for (let y = f.y0 + 2; y < f.y1 - 1; y++)
+        for (let k = 0; k < 4; k++) {
+          this.px(f.x0 + k, y, T.pens[0]);
+          this.px(f.x1 + k, y, T.pens[1]);
+        }
 
-      this.ctx.textAlign = "center";
-      this.ctx.fillStyle = "#FFFFFF";
+      let x = T.x;
+      for (let i = 0; i < T.text.length; i++) {
+        const rows = T.glyphs[T.text[i]];
+        const pen = T.pens[i < T.split ? 0 : 1];
+        for (let v = 0; v < rows.length; v++)
+          for (let u = 0; u < 8; u++) {
+            if (rows[v][u] !== "#") continue;
+            for (let dy = 0; dy < T.scale; dy++)
+              for (let dx = 0; dx < T.scale; dx++)
+                this.px(x + u * T.scale + dx, T.y + v * T.scale + dy, pen);
+          }
+        x += 8 * T.scale;
+      }
+    }
+
+    /// Οι γραμμές κειμένου του μενού. Αυτές ο Amstrad τις τυπώνει με τη
+    /// γραμματοσειρά του firmware, που δεν την έχουμε — canvas text, ίδιες
+    /// θέσεις. Καλείται ΜΕΤΑ το flush.
+    menuText(lines) {
+      const s = this.scale;
       this.ctx.font = (8 * s) + "px monospace";
-      this.ctx.fillText("Press Space to start game", cx, 160 * s);
-      this.ctx.fillText("REVIVE8BIT - 2026 - VASPER", cx, 184 * s);
-      this.ctx.textAlign = "left";
+      this.ctx.textBaseline = "alphabetic";
+      this.ctx.fillStyle = "#FFFFFF";
+      for (const [col, row, text] of lines)
+        this.ctx.fillText(text, (col - 1) * 8 * s, (row * 8 - 1) * s);
     }
 
     /// Κείμενο σε γραμμή ΠΛΕΓΜΑΤΟΣ, μετά το flush.

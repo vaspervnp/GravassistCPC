@@ -21,6 +21,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import physics as P
+import genasm as GA
 from genasm import arrow_pixels, tile_pixels
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -72,6 +73,21 @@ def build():
         # Γραφικά: τιμές pen ανά pixel, ίδια πηγή με τα tiles του Amstrad.
         "PALETTE": ["#000080", "#FFFFFF", "#00FF00", "#FF8000"],
         "TILE_PX": [tile_pixels(t) for t in range(P.NTYPES)],
+        # Ο τίτλος του μενού: ΤΑ ΙΔΙΑ pixel με τον Amstrad. Ο browser τα
+        # ζωγραφίζει μέσα από τον ίδιο buffer με τα πλακίδια, ώστε αυτό που
+        # βλέπεις εδώ να είναι αυτό που θα δεις στην οθόνη του CPC.
+        "TITLE": {
+            "text": GA.TITLE_TEXT,
+            "glyphs": {c: GA.TITLE_GLYPHS[c] for c in GA.TITLE_ORDER},
+            "x": 80, "y": 14, "scale": 2, "split": 4,
+            "pens": [3, 2],
+            # Ίδιες τιμές με τα FRAME_* του src/menu.asm: x σε pixel (byte*4),
+            # y σε scanlines. Το x1 είναι η ΑΡΙΣΤΕΡΗ ακμή του δεξιού byte.
+            # Ίδιες τιμές με τα FRAME_* του src/menu.asm: x σε pixel (byte*4),
+            # y σε scanlines. Το x1 είναι η ΑΡΙΣΤΕΡΗ ακμή του δεξιού byte, και
+            # το mid το σημείο όπου αλλάζει χρώμα — όπως στο concept art.
+            "frame": {"x0": 72, "x1": 244, "y0": 8, "y1": 43, "mid": 144},
+        },
         # Βελάκια βαρύτητας του HUD — ίδια πηγή με τον Amstrad, ώστε η δοκιμή
         # στον browser να δείχνει ακριβώς ό,τι θα δεις στην οθόνη του CPC.
         "GRAV_PX": [[arrow_pixels(g, 3) for g in range(8)],

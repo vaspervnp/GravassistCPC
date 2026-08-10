@@ -359,6 +359,7 @@ def main():
     t.call("INIT_LINETAB")
     for a in range(0xC000, 0x10000):
         t.m.memory[a] = 0
+    t.call("DRAW_FRAME")
     t.call("DRAW_TITLE")
 
     def pen(v, s):
@@ -378,6 +379,18 @@ def main():
     right = {p for p, b in pens if b >= 36}     # ASSIST
     check("GRAV και ASSIST σε ΔΙΑΦΟΡΕΤΙΚΑ χρώματα, όπως στο concept art",
           left == {3} and right == {2}, f"{left} vs {right}")
+
+    # Το πλαίσιο: τέσσερις πλευρές γύρω από τα γράμματα, όπως τα panels του
+    # concept art. Ελέγχεται ότι υπάρχει και πάνω και κάτω και στα δύο πλάγια.
+    def lit_at(x, y):
+        base = 0xC000 + (y % 8) * 0x800 + (y // 8) * 80
+        return pen(t.m.memory[base + (x >> 2)], x & 3) != 0
+
+    check("το πλαίσιο έχει πάνω και κάτω πλευρά",
+          lit_at(160, 8) and lit_at(160, 43))
+    check("το πλαίσιο έχει αριστερή και δεξιά πλευρά",
+          lit_at(72, 25) and lit_at(244, 25))
+    check("το εσωτερικό του πλαισίου δεν είναι γεμάτο", not lit_at(160, 11))
 
     # Η αρένα και ο γύρος του ήρωα.
     t.stub("DRAW_TILE")

@@ -14,7 +14,14 @@
 ;=====================================================================
 
 TITLE_X         equ 20          ; στήλη byte· (80 - 10 γράμματα x 4) / 2
-TITLE_Y         equ 16          ; scanline
+TITLE_Y         equ 14          ; scanline
+
+; Το πλαίσιο, με περιθώριο γύρω από τα γράμματα.
+FRAME_X0        equ TITLE_X-2
+FRAME_X1        equ TITLE_X+TITLE_LEN*4+1
+FRAME_Y0        equ TITLE_Y-6
+FRAME_Y1        equ TITLE_Y+TITLE_H*2+5
+FRAME_MID       equ TITLE_X+4*4         ; εκεί που τελειώνει το GRAV
 
 ARENA_C         equ 15          ; πάνω-αριστερό κελί της αρένας
 ARENA_R         equ 9
@@ -23,6 +30,7 @@ ARENA_H         equ 5
 
 MENU_TXT_ROW    equ 20          ; γραμμές κειμένου του firmware (από 1)
 MENU_SIG_ROW    equ 23
+MENU_PAGE       equ 500         ; frames ανά σελίδα πλήκτρων = 10 δευτερόλεπτα
 
 ;---------------------------------------------------------------------
 ; menu_show — δείχνει το μενού και γυρίζει όταν πατηθεί SPACE
@@ -31,9 +39,11 @@ MENU_SIG_ROW    equ 23
 menu_show:      ld   a,1
                 call SCR_SET_MODE       ; καθαρίζει την οθόνη
                 call set_palette
+                call draw_frame
                 call draw_title
                 call menu_arena
                 call menu_text
+                call menu_keys
 
                 ; Ο ήρωας ξεκινά μέσα στην αρένα και περπατάει για πάντα.
                 ld   hl,(ARENA_C+3)*LVL_CELL+LVL_CELL/2
@@ -53,7 +63,22 @@ menu_show:      ld   a,1
                 xor  a
                 ld   (last_valid),a
 
-menu_loop:      ld   a,1                ; ΠΑΝΤΑ μπροστά: ο γύρος βγαίνει μόνος
+menu_loop:      ld   hl,(menu_tick)     ; κάθε MENU_PAGE frames, άλλαξε σελίδα
+                inc  hl
+                ld   (menu_tick),hl
+                ld   a,h
+                cp   MENU_PAGE/256
+                jr   nz,mk_no
+                ld   a,l
+                cp   MENU_PAGE&255
+                jr   nz,mk_no
+                ld   hl,0
+                ld   (menu_tick),hl
+                ld   a,(key_page)
+                xor  1
+                ld   (key_page),a
+                call menu_keys
+mk_no:          ld   a,1                ; ΠΑΝΤΑ μπροστά: ο γύρος βγαίνει μόνος
                 call hero_update
                 call anim_frame
                 call prep_hero
@@ -138,19 +163,41 @@ menu_term       db #FF
 ;---------------------------------------------------------------------
 menu_text:      ld   a,INK_HERO_PEN
                 call TXT_SET_PEN
-                ld   h,(40-(msg_start_end-msg_start))/2+1
-                ld   l,MENU_TXT_ROW
-                ld   de,msg_start
-                ld   b,msg_start_end-msg_start
-                call menu_puts
-                ld   h,(40-(msg_sig_end-msg_sig))/2+1
-                ld   l,MENU_SIG_ROW
-                ld   de,msg_sig
-                ld   b,msg_sig_end-msg_sig
-                ; πέφτει μέσα
+                ld   hl,menu_lines
+mt_lp:          ld   a,(hl)             ; στήλη· 0 = τέλος του πίνακα
+                or   a
+                ret  z
+                ld   d,a
+                inc  hl
+                ld   e,(hl)             ; γραμμή
+                inc  hl
+                ld   b,(hl)             ; μήκος
+                inc  hl
+                ex   de,hl              ; HL = θέση (H=στήλη, L=γραμμή),
+                call menu_puts          ; DE = κείμενο· γυρίζει DE μετά το τέλος
+                ex   de,hl              ; …που είναι η επόμενη εγγραφή
+                jr   mt_lp
+
+; menu_keys — γράφει τη σελίδα πλήκτρων που ισχύει τώρα
+menu_keys:      ld   a,INK_HERO_PEN
+                call TXT_SET_PEN
+                ld   hl,menu_keys_a
+                ld   a,(key_page)
+                or   a
+                jr   z,mk_go
+                ld   hl,menu_keys_b
+mk_go:          jr   mt_lp
+
+; ΟΧΙ 'menu_page': το rasm είναι case-insensitive και θα
+; συγκρουόταν με τη σταθερά MENU_PAGE.
+key_page        db 0
+menu_tick       dw 0
 
 ; menu_puts — τυπώνει B χαρακτήρες από το DE στη θέση (H,L)
-menu_puts:      call TXT_SET_CURSOR
+;   OUT: DE = ένα byte μετά το κείμενο
+menu_puts:      push de
+                call TXT_SET_CURSOR
+                pop  de
 mp_lp:          ld   a,(de)
                 push de
                 push bc
@@ -161,10 +208,109 @@ mp_lp:          ld   a,(de)
                 djnz mp_lp
                 ret
 
-msg_start:      db "Press Space to start game"
-msg_start_end:
-msg_sig:        db "REVIVE8BIT - 2026 - VASPER"
-msg_sig_end:
+; Πίνακας: στήλη, γραμμή, μήκος, κείμενο. Στήλη 0 = τέλος.
+;
+; Τα χειριστήρια πλαισιώνουν την αρένα — αριστερά η βαρύτητα σε πλέγμα 3x3
+; όπου η ΘΕΣΗ του πλήκτρου είναι η κατεύθυνση, δεξιά τα υπόλοιπα. Η αρένα
+; πιάνει τις στήλες χαρακτήρων 16..25, οπότε τα δύο μπλοκ δεν την αγγίζουν.
+; Ό,τι ΔΕΝ αλλάζει: γράφεται μία φορά.
+menu_lines:     db 2,11,7
+                db "GRAVITY"
+                db 28,12,9
+                db "SHIFT run"
+                db 28,14,9
+                db "UP/DOWN ="
+                db 28,15,9
+                db "use  door"
+                db 8,MENU_TXT_ROW,25
+                db "Press Space to start game"
+                db 8,MENU_SIG_ROW,26
+                db "REVIVE8BIT - 2026 - VASPER"
+                db 0
+
+; Οι δύο σελίδες πλήκτρων. Τα ΙΔΙΑ πλάτη και στις δύο (8 και 9 χαρακτήρες),
+; ώστε η μία να γράφει ακριβώς πάνω στην άλλη και να μη χρειάζεται σβήσιμο —
+; το σβήσιμο με κενά θα άφηνε τρεμόπαιγμα κάθε δέκα δευτερόλεπτα.
+menu_keys_a:    db 3,12,8
+                db "Q W E   "
+                db 3,13,8
+                db "A . D   "
+                db 3,14,8
+                db "Z X C   "
+                db 28,11,9
+                db "M N  walk"
+                db 0
+
+menu_keys_b:    db 3,12,8
+                db "F7 F8 F9"
+                db 3,13,8
+                db "F4 .  F6"
+                db 3,14,8
+                db "F1 F2 F3"
+                db 28,11,9
+                db "< >  walk"
+                db 0
+
+;---------------------------------------------------------------------
+; draw_frame — το πλαίσιο γύρω από τον τίτλο
+;
+;   Τα panels του concept art έχουν κυανό περίγραμμα. Το MODE 1 δεν έχει
+;   κυανό· μπαίνει πράσινο, το ίδιο που παίρνει και το ASSIST — στο concept
+;   το περίγραμμα και το ASSIST μοιράζονται κι εκεί το ίδιο χρώμα.
+;
+;   Οριζόντια το πάχος είναι ΕΝΑ byte (4 pixel) και κάθετα ΔΥΟ scanlines. Στην
+;   οθόνη του CPC το pixel του MODE 1 είναι περίπου διπλάσιο σε ύψος παρά σε
+;   πλάτος, οπότε οι δύο πλευρές βγαίνουν οπτικά ίδιες.
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+draw_frame:     ld   b,FRAME_Y0         ; πάνω και κάτω πλευρά
+                call df_bar
+                ld   b,FRAME_Y0+1
+                call df_bar
+                ld   b,FRAME_Y1-1
+                call df_bar
+                ld   b,FRAME_Y1
+                call df_bar
+
+                ld   b,FRAME_Y0+2       ; οι δύο κάθετες πλευρές
+df_side:        push bc
+                ld   c,FRAME_X0
+                call scr_addr
+                ld   (hl),BYTE_PEN3     ; αριστερά: το χρώμα του GRAV
+                pop  bc
+                push bc
+                ld   c,FRAME_X1
+                call scr_addr
+                ld   (hl),BYTE_PEN2     ; δεξιά: το χρώμα του ASSIST
+                pop  bc
+                inc  b
+                ld   a,b
+                cp   FRAME_Y1-1
+                jr   c,df_side
+                ret
+
+; df_bar — οριζόντια πλευρά στη scanline B.
+;
+;   Ξεκινά ΕΝΑ byte μέσα από τη γωνία και σταματά ένα byte πριν την άλλη: μαζί
+;   με τις κάθετες πλευρές που αρχίζουν δύο scanlines χαμηλότερα, οι γωνίες
+;   βγαίνουν ΚΟΜΜΕΝΕΣ — όπως το πλαίσιο του concept art, που δεν έχει ορθές
+;   γωνίες αλλά λοξοτομή.
+df_bar:         push bc
+                ld   c,FRAME_X0+1
+                call scr_addr
+                ld   b,FRAME_X1-FRAME_X0-1
+                ld   c,FRAME_X0+1
+df_blp:         ld   a,c                ; το χρώμα αλλάζει στη μέση, μαζί με
+                cp   FRAME_MID          ; τα γράμματα: GRAV | ASSIST
+                ld   a,BYTE_PEN3
+                jr   c,df_bp
+                ld   a,BYTE_PEN2
+df_bp:          ld   (hl),a
+                inc  hl
+                inc  c
+                djnz df_blp
+                pop  bc
+                ret
 
 ;---------------------------------------------------------------------
 ; draw_title — «GRAVASSIST» σε διπλό μέγεθος pixel
@@ -206,15 +352,18 @@ tt_pen:         ld   (dt_tab),hl
 ; IN: A = δείκτης γράμματος, (dt_col) = στήλη byte, (dt_row) = scanline,
 ;     (dt_tab) = πίνακας επέκτασης του χρώματος
 ;---------------------------------------------------------------------
-draw_glyph:     ld   l,a
+draw_glyph:     ld   l,a                ; *TITLE_H bytes ανά γράμμα (12 = 8+4)
                 ld   h,0
                 add  hl,hl
-                add  hl,hl
-                add  hl,hl              ; *8 bytes ανά γράμμα
+                add  hl,hl              ; x4
+                ld   d,h
+                ld   e,l
+                add  hl,hl              ; x8
+                add  hl,de              ; x12
                 ld   de,font_glyphs
                 add  hl,de
                 ld   (dt_src),hl
-                ld   a,8
+                ld   a,TITLE_H
                 ld   (dt_n),a
 
 dg_row:         ld   hl,(dt_src)        ; κάθε γραμμή πηγής -> ΔΥΟ scanlines

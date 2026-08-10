@@ -201,6 +201,23 @@
   // πραγματική φυσική με walk=1 μονίμως, όπως και στον Amstrad.
   const ARENA_C = 15, ARENA_R = 9, ARENA_W = 10, ARENA_H = 5;
 
+  // Ίδιες θέσεις με τον πίνακα menu_lines του src/menu.asm (στήλη, γραμμή).
+  const MENU_LINES = [
+    [2, 11, "GRAVITY"], [28, 12, "SHIFT run"],
+    [28, 14, "UP/DOWN ="], [28, 15, "use  door"],
+    [8, 20, "Press Space to start game"],
+    [8, 23, "REVIVE8BIT - 2026 - VASPER"],
+  ];
+  // Δύο σελίδες πλήκτρων που εναλλάσσονται· ίδιες με τα menu_keys_* του
+  // src/menu.asm, ίδιου πλάτους ώστε η μία να γράφει πάνω στην άλλη.
+  const MENU_KEYS = [
+    [[3, 12, "Q W E   "], [3, 13, "A . D   "], [3, 14, "Z X C   "],
+     [28, 11, "M N  walk"]],
+    [[3, 12, "F7 F8 F9"], [3, 13, "F4 .  F6"], [3, 14, "F1 F2 F3"],
+     [28, 11, "< >  walk"]],
+  ];
+  const MENU_PAGE = 500;              // frames ανά σελίδα = 10 δευτερόλεπτα
+
   function menu(firstRoom) {
     const SOLID = D.TYPE_NAMES.indexOf("SOLID");
     const cells = [];
@@ -231,11 +248,13 @@
       mtick++;
       screen.clear();
       screen.tiles(mroom);
+      screen.title();                   // ΠΡΙΝ το flush: ίδια pixel με τον CPC
       screen.sprite(R.heroSprite(mhero.g,
         mhero.state === "WALK" ? 2 + ((mtick >> 2) & 7) : (mtick >> 5) & 1),
         mhero.x, mhero.y);
       screen.flush();
-      screen.title();
+      screen.menuText(MENU_LINES);      // …και το firmware κείμενο από πάνω
+      screen.menuText(MENU_KEYS[Math.floor(mtick / MENU_PAGE) % 2]);
       requestAnimationFrame(menuFrame);
     })();
   }
