@@ -56,6 +56,8 @@ public sealed class AccountsController : Controller
     [HttpGet("pending")]
     public IActionResult Pending([FromServices] AccountStore accounts)
     {
+        // Ασύνδετος ή ήδη εγκεκριμένος: δεν έχει τίποτα να περιμένει εδώ.
+        if (User.Identity?.IsAuthenticated != true) return Redirect("/");
         var email = User.FindFirstValue(ClaimTypes.Email) ?? "";
         if (accounts.IsAllowed(email)) return Redirect("/");
         ViewData["Email"] = email;
