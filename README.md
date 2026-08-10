@@ -255,6 +255,7 @@ teleporter στην άλλη άκρη της οθόνης). Γι' αυτό το 
 | Έγγραφο | Περιεχόμενο |
 |---|---|
 | [plan.md](plan.md) | Σχεδιασμός παιχνιδιού, τεχνικές αποφάσεις, milestones |
+| [docs/editor-manual.md](docs/editor-manual.md) | **Εγχειρίδιο του editor πιστών** (στα αγγλικά, όπως το UI) |
 | [docs/concept-art.md](docs/concept-art.md) | Το concept art και τι δεσμεύει |
 | [docs/sprites.md](docs/sprites.md) | Μορφή sprites, PNG round-trip, περιστροφή |
 | [docs/level-elements.md](docs/level-elements.md) | Τα στοιχεία πίστας και γιατί επιλέχθηκαν |

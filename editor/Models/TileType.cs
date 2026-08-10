@@ -291,7 +291,7 @@ public static class TileCatalog
             """),
 
         new TileType('B', "crate", ItemGroup, "Crate",
-            "Solid that can be pushed and also falls with gravity.",
+            "Not solid: you walk through it, pick it up and drop it where you stand. Falls with gravity.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0.6" y="0.6" width="6.8" height="6.8" fill="var(--fill)"/>
