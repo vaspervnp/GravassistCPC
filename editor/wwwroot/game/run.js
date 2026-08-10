@@ -37,11 +37,20 @@
     return (tick >> 5) & 1;
   }
 
-  function start(name, cells, startPos) {
+  function start(name, cells, startPos, keep) {
     curName = name;
     room = new G.Room(cells, (rooms[name] || {}).teleports,
                      (rooms[name] || {}).attrs);
     hero = new G.Hero(room, startPos[0], startPos[1], startPos[2]);
+    // Ο ΠΑΙΚΤΗΣ ΚΡΑΤΑΕΙ Ο,ΤΙ ΚΟΥΒΑΛΑΕΙ. Ο νέος ήρωας ξεκινούσε με γεμάτη
+    // ενέργεια και άδεια χέρια, οπότε κάθε πόρτα ήταν και μια δωρεάν γέμιση —
+    // και το κιβώτιο που κρατούσες εξαφανιζόταν.
+    if (keep) {
+      hero.energy = keep.energy;
+      hero.keys = keep.keys.slice();
+      hero.parachute = keep.parachute;
+      hero.carry = keep.carry;
+    }
     tick = 0; hist = []; paraFrame = 0; paraTick = 0;
     note.textContent = "";
   }
@@ -98,8 +107,16 @@
         sel.value = "room_" + dest + ".txt";
         // Το αν υπάρχει σημείο άφιξης το κρίνει η πόρτα από την οποία ΒΓΑΙΝΕΙΣ
         // — όχι αυτή από την οποία μπήκες, που ζει σε άλλο αρχείο.
+        // Η ΑΙΘΟΥΣΑ ΘΥΜΑΤΑΙ. Το Room αντιγράφει το πλέγμα, οπότε ό,τι
+        // άλλαζε ο παίκτης ζούσε μόνο στο αντίγραφο και χανόταν με την πόρτα:
+        // τα pickups αναγεννιόνταν σε κάθε επίσκεψη. Ο Amstrad το λύνει με
+        // ημερολόγιο· εδώ αρκεί να κρατήσουμε το πλέγμα.
+        rooms[curName].cells = room.cells;
         const arr = arrivalIn(nr, from);
-        start(sel.value, nr.cells, arr || nr.start);
+        start(sel.value, nr.cells, arr || nr.start, {
+            energy: hero.energy, keys: hero.keys,
+            parachute: hero.parachute, carry: hero.carry,
+        });
         note.textContent = "Room " + dest + (arr ? " (door arrival point)" : "");
       } else if (dest) {
         note.textContent = "Room " + dest + " does not exist";
@@ -209,7 +226,8 @@
       spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("GATE"));
       spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("LOCK"));
       spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("KEY"));
-      rooms[name] = { cells, start, exits, teleports, twoWay, arrive, arriveG, attrs };
+      rooms[name] = { cells, start, exits, teleports, twoWay, arrive, arriveG,
+                      attrs, pristine: cells.map(r => r.slice()) };
       const o = document.createElement("option");
       o.value = name; o.textContent = name;
       sel.appendChild(o);
@@ -253,7 +271,9 @@
   });
   document.getElementById("restart").addEventListener("click", () => {
     const m = rooms[curName];
-    if (m) start(curName, m.cells, m.start);
+    if (!m) return;
+    m.cells = m.pristine.map(r => r.slice());   // καθαρή αίθουσα, όχι μισοπαιγμένη
+    start(curName, m.cells, m.start);
   });
 
   load();

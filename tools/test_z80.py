@@ -239,6 +239,35 @@ def main():
               t.peek(t.sym("PENDING_ROOM"))[0] == dest,
               f"{t.peek(t.sym('PENDING_ROOM'))[0]} vs {dest}")
 
+    # 8. Ο παίκτης κρατάει ό,τι κουβαλάει περνώντας πόρτα. Το room_load
+    #    μηδένιζε το hero_carry και το κιβώτιο εξαφανιζόταν στην πόρτα.
+    if rooms_all:
+        r0 = rooms_all[0]
+        index = RF.set_of(r0.number)
+        t.poke(set_buf, dict((i, d) for i, _, d in RF.all_sets())[index])
+        t.poke(t.sym("SET_CUR"), bytes((index,)))
+        t.poke(t.sym("JR_COUNT"), b"\x00")
+
+        t.poke(t.sym("HERO_ENERGY"), b"\x03")
+        t.poke(t.sym("HERO_CARRY"), b"\x01")
+        t.poke(t.sym("HERO_PARA"), b"\x02")
+        t.poke(t.sym("HERO_KEYS"), bytes([0, 1, 0, 2, 0, 0, 0, 0]))
+        t.call("ROOM_LOAD", a=r0.number)
+
+        for name, want in (("HERO_ENERGY", 3), ("HERO_CARRY", 1),
+                           ("HERO_PARA", 2)):
+            got = t.peek(t.sym(name))[0]
+            check(f"το {name.lower()} επιβιώνει της πόρτας", got == want,
+                  f"{got} vs {want}")
+        keys = list(t.peek(t.sym("HERO_KEYS"), P.ATTR_MAX))
+        check("τα κλειδιά επιβιώνουν της πόρτας",
+              keys == [0, 1, 0, 2, 0, 0, 0, 0], str(keys))
+        # …ενώ ό,τι ανήκει στην ΑΙΘΟΥΣΑ μηδενίζει.
+        check("το αλεξίπτωτο κλείνει στη νέα αίθουσα",
+              t.peek(t.sym("HERO_PARAOPEN"))[0] == 0)
+        check("τα κιβώτια ξεκινούν ακίνητα στη νέα αίθουσα",
+              t.peek(t.sym("CRATES_ON"))[0] == 0)
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 
