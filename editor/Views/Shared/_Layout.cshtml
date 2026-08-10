@@ -70,12 +70,33 @@
             background: #33204a;
             color: var(--edge);
         }
+
+        .account {
+            margin-left: auto;
+            font-size: 12px;
+            color: #8a8ac0;
+        }
+
+        .account a {
+            color: var(--edge);
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
     <header>
         <h1>GRAVASSIST — LEVEL EDITOR</h1>
         <span class="path">@ViewData["LevelsPath"]</span>
+        @* Ο λογαριασμός φαίνεται μόνο όταν η σύνδεση είναι ρυθμισμένη· χωρίς
+           μυστικά στο περιβάλλον ο editor δουλεύει όπως πάντα και ένα κουμπί
+           «Sign in» θα ήταν σκέτο ψέμα. *@
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <span class="account">
+                @User.Identity.Name
+                <a href="/accounts/logout">Sign out</a>
+            </span>
+        }
     </header>
     <main>
         @RenderBody()

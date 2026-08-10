@@ -7,7 +7,16 @@ builder.Services.AddControllersWithViews();
 // Πρόσβαση στον φάκελο levels/ του repo.
 builder.Services.AddSingleton<LevelStore>();
 
+// Σύνδεση με Google — ενεργή ΜΟΝΟ αν υπάρχουν τα μυστικά στο περιβάλλον.
+// Δες Services/GoogleAuth.cs για το γιατί δεν είναι υποχρεωτική.
+var authOn = GoogleAuth.Add(builder);
+
 var app = builder.Build();
+
+app.Logger.LogInformation(authOn
+    ? "Google sign-in is ON; every page requires an account."
+    : "Google sign-in is OFF: set {Id} and {Secret} to enable it.",
+    GoogleAuth.IdVar, GoogleAuth.SecretVar);
 
 // Προειδοποίηση αν ο κατάλογος τύπων ξέφυγε από το CHARS του tools/physics.py.
 PhysicsCharsCheck.Run(
@@ -35,6 +44,12 @@ app.UseStaticFiles(new StaticFileOptions
     },
 });
 app.UseRouting();
+
+if (authOn)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
 
 // Τα API endpoints ([ApiController] + [Route]) και μετά η σελίδα του editor.
 app.MapControllers();
