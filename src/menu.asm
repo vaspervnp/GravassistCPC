@@ -234,7 +234,7 @@ menu_lines:     db 2,11,7
 menu_keys_a:    db 3,12,8
                 db "Q W E   "
                 db 3,13,8
-                db "A . D   "
+                db "A   D   "
                 db 3,14,8
                 db "Z X C   "
                 db 28,11,9
@@ -244,7 +244,7 @@ menu_keys_a:    db 3,12,8
 menu_keys_b:    db 3,12,8
                 db "F7 F8 F9"
                 db 3,13,8
-                db "F4 .  F6"
+                db "F4    F6"
                 db 3,14,8
                 db "F1 F2 F3"
                 db 28,11,9
