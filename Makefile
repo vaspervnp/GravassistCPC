@@ -15,6 +15,10 @@ BAS   = src/loader.bas
 BIN   = build/main.bin
 BASD  = build/grav.bas
 DSK   = build/gravassist.dsk
+# Ένα ROOMSnn.BIN ανά 40 αίθουσες. Τα ονόματα προκύπτουν από τους αριθμούς
+# των αιθουσών, οπότε ρωτάμε το ίδιο εργαλείο που τα γράφει.
+SETS  = $(shell $(PY) -c "import sys;sys.path.insert(0,'tools');import roomfile;\
+        print(' '.join('build/'+n for _,n,_ in roomfile.all_sets()))" 2>/dev/null)
 
 all: $(DSK)
 
@@ -36,11 +40,21 @@ $(BASD): $(BAS) | build
 	sed 's/$$/\r/' $(BAS) > $(BASD)
 	printf '\032' >> $(BASD)
 
-$(DSK): $(BIN) $(BASD)
+# Τα σετ αιθουσών. Δικός τους κανόνας και δικός τους παραγωγός: αν κρέμονταν
+# από το src/rooms.asm, ένα `make clean` θα έσβηνε τα .BIN χωρίς να τα
+# ξαναφτιάξει — το rooms.asm θα ήταν ήδη ενημερωμένο — και η δισκέτα θα
+# έβγαινε ΧΩΡΙΣ αίθουσες.
+$(SETS): tools/roomfile.py tools/physics.py $(ROOMS) | build
+	$(PY) tools/roomfile.py
+
+$(DSK): $(BIN) $(BASD) $(SETS)
 	rm -f $(DSK)
 	$(DISK) $(DSK) -n
 	$(DISK) $(DSK) -i $(BIN)  -t 1 -c 4000 -e 4000 -f
 	$(DISK) $(DSK) -i $(BASD) -t 0 -f
+	@for s in $(SETS); do \
+	    $(DISK) $(DSK) -i $$s -t 1 -c 0000 -e 0000 -f; \
+	done
 	@echo "----------------------------------------------"
 	@echo "  Έτοιμο: $(DSK)"
 	@echo "  Στον emulator:  RUN\"GRAV\""
@@ -57,6 +71,7 @@ sprites-init:
 test:
 	$(PY) tools/verify_rotate.py
 	$(PY) tools/test_physics.py
+	$(PY) tools/test_z80.py
 
 # Δεδομένα και σενάριο ισοδυναμίας για το test run του editor.
 # Άνοιξε μετά το /game/parity.html: συγκρίνει JavaScript και μοντέλο frame

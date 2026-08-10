@@ -273,33 +273,36 @@ exit_two        db 0
 
 ;---------------------------------------------------------------------
 ; room_load — φορτώνει την αίθουσα με αριθμό A
-;   Οι αίθουσες είναι ήδη στη μνήμη: "φόρτωση" σημαίνει αλλαγή δείκτη,
-;   ξαναζωγράφισμα και τοποθέτηση του ήρωα στο σημείο εκκίνησής της.
+;
+;   Η αίθουσα ζει συμπιεσμένη μέσα σε ένα σετ των 40 (ROOMSnn.BIN). Αν το
+;   σωστό σετ είναι ήδη στη μνήμη — δηλαδή σχεδόν πάντα — η «φόρτωση» είναι
+;   σκέτο ξεδίπλωμα του RLE στον cell_buf· αλλιώς προηγείται ανάγνωση από τη
+;   δισκέτα.
+;
+;   Οι τρεις πίνακες (έξοδοι, αφίξεις, τηλεμεταφορές) ΔΕΝ αντιγράφονται: οι
+;   δείκτες δείχνουν μέσα στο ίδιο το σετ, που μένει στη μνήμη.
 ;---------------------------------------------------------------------
 room_load:      ld   (cur_room),a
-                ld   b,a
-                ld   hl,room_numbers
-                ld   c,0
-rl_find:        ld   a,c
-                cp   ROOM_COUNT
-                ret  nc                 ; άγνωστη αίθουσα: μην κάνεις τίποτα
-                ld   a,(hl)
-                cp   b
-                jr   z,rl_got
-                inc  hl
-                inc  c
-                jr   rl_find
+                push af
 
-rl_got:         ld   a,c
-                add  a,a
-                ld   e,a
-                ld   d,0
-                ld   hl,room_index
-                add  hl,de
-                ld   e,(hl)
-                inc  hl
-                ld   d,(hl)
-                ex   de,hl              ; HL = εγγραφή αίθουσας
+                dec  a                  ; ποιο σετ; (αίθουσα-1)/SET_ROOMS + 1
+                ld   b,0
+rl_set:         inc  b
+                sub  SET_ROOMS
+                jr   nc,rl_set
+                ld   a,(set_cur)
+                cp   b
+                jr   z,rl_have          ; ήδη φορτωμένο: ούτε άγγιγμα στον δίσκο
+                ld   a,b
+                call set_load
+                jr   c,rl_have
+
+                pop  af                 ; ο δίσκος απέτυχε: κράτα ό,τι παίζει
+                ret                     ; αντί να δείξεις σκουπίδια
+
+rl_have:        pop  af
+                call room_find
+                ret  nc                 ; το σετ δεν έχει τέτοια αίθουσα
 
                 ld   e,(hl)
                 inc  hl
@@ -315,25 +318,21 @@ rl_got:         ld   a,c
                 inc  hl
                 ld   (hero_g),a
                 ld   (world_g),a
-                ld   e,(hl)
-                inc  hl
-                ld   d,(hl)
-                inc  hl
-                ld   (level_ptr),de
-                ld   e,(hl)
-                inc  hl
-                ld   d,(hl)
-                inc  hl
-                ld   (room_exits),de
-                ld   e,(hl)
-                inc  hl
-                ld   d,(hl)
-                inc  hl
-                ld   (room_tps),de
-                ld   e,(hl)
-                inc  hl
-                ld   d,(hl)
-                ld   (room_arr),de
+
+                ld   (room_exits),hl    ; οι τρεις πίνακες είναι στη σειρά, ο
+                call skip_tab           ; καθένας ως το #FF του
+                ld   (room_arr),hl
+                call skip_tab
+                ld   (room_tps),hl
+                call skip_tab
+
+                push hl                 ; HL -> τα RLE κελιά
+                pop  ix
+                ld   de,cell_buf
+                call rle_unpack
+                ld   hl,cell_buf
+                ld   (level_ptr),hl
+                call jr_apply           ; ξαναφέρε ό,τι είχε αλλάξει ο παίκτης
 
                 ; Πόρτα διπλής κατεύθυνσης: ο ήρωας εμφανίζεται στο σημείο
                 ; άφιξης της πόρτας που γυρίζει πίσω, όχι στο σημείο εκκίνησης
@@ -383,7 +382,8 @@ h_use:          call h_support          ; ΟΛΑ κρίνονται από το 
                 ld   a,1
                 ld   (hud_dirty),a
                 ld   hl,(cell_ptr)      ; ΔΕΝ εξαφανίζεται: γίνεται ανοιγμένη
-                ld   (hl),T_LOCK_OPEN   ; πόρτα. Ο παίκτης βλέπει τι ξεκλείδωσε
+                ld   a,T_LOCK_OPEN      ; πόρτα. Ο παίκτης βλέπει τι ξεκλείδωσε
+                call cell_set
                 jp   hu_redraw          ; και περνά από μέσα.
 
 hu_notlock:     ld   bc,(hero_x)        ; τηλεμεταφορά: κρίνεται από το κελί του
@@ -406,14 +406,16 @@ hu_notlock:     ld   bc,(hero_x)        ; τηλεμεταφορά: κρίνετ
                 jp   hu_clear           ; κελί στήριξης (το χάλασε το cell_at)
 
 hu_clear:       ld   hl,(cell_ptr)      ; άδειασε το κελί και ξαναζωγράφισέ το
-                ld   (hl),T_EMPTY
+                ld   a,T_EMPTY
+                call cell_set
                 jp   hu_redraw
 
 hu_drop:        call h_ahead            ; άφημα: στο κελί μπροστά, αν είναι κενό
                 or   a                  ; (το κελί στήριξης είναι στερεό και το
                 ret  nz                 ; κελί του σώματος το πιάνει ο ήρωας)
                 ld   hl,(cell_ptr)
-                ld   (hl),T_CRATE
+                ld   a,T_CRATE
+                call cell_set
                 xor  a
                 ld   (hero_carry),a
                 inc  a
@@ -590,13 +592,15 @@ cs_collp:       ld   a,(cs_row)
                 ld   a,(hl)
                 or   a
                 jr   nz,cs_blocked      ; ο δρόμος κλειστός
-                ld   (hl),T_CRATE
+                ld   a,T_CRATE
+                call cell_set
                 pop  bc
                 push bc
                 call draw_tile
                 pop  bc
                 pop  hl
-                ld   (hl),T_EMPTY
+                ld   a,T_EMPTY
+                call cell_set
                 ld   a,(cs_row)
                 ld   b,a
                 ld   a,(cs_col)
@@ -733,7 +737,8 @@ h_nfa           db 0
 
 ; h_take — αδειάζει το κελί που μόλις διάβασε το cell_at και το ξαναζωγραφίζει
 h_take:         ld   hl,(cell_ptr)
-                ld   (hl),T_EMPTY
+                ld   a,T_EMPTY
+                call cell_set
                 ld   a,(cell_col)
                 ld   c,a
                 ld   a,(cell_row)

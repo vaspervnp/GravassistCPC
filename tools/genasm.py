@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import physics as P
+import roomfile as RF
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -190,6 +191,22 @@ def defs_asm(rooms=()):
             f"RTAB_OFF        equ {RTAB_OFF}",
             f"GTAB_OFF        equ {GTAB_OFF}",
             "",
+            "; --- σετ αιθουσών σε αρχείο (tools/roomfile.py) --------------",
+            f"SET_ROOMS       equ {RF.SET_ROOMS}",
+            f"SET_NUMBERS     equ {3 + 1 + 1}          ; offset του numbers[] "
+            "στην κεφαλή",
+            f"SET_OFFS        equ {3 + 1 + 1 + RF.SET_ROOMS}         ; offset "
+            "του offs[]",
+            f"SET_MAX         equ {RF.SET_MAX}       ; χωρητικότητα του set_buf",
+            f"LVL_CELLS       equ {P.COLS * P.ROWS}",
+            "; Πόσες αλλαγές κελιών θυμάται το παιχνίδι συνολικά. Κάθε εγγραφή",
+            "; είναι 4 bytes· γεμάτο ημερολόγιο σημαίνει ότι οι παλιότερες",
+            "; αλλαγές δεν επιβιώνουν όταν ξαναμπείς στην αίθουσα.",
+            "JOURNAL_MAX     equ 64",
+            "",
+            "; Ταβάνι μνήμης με ενεργό AMSDOS — δες την assert στο main.asm.",
+            "MEM_CEIL        equ #A67B",
+            "",
             f"NTYPES          equ {P.NTYPES}",
             f"ENERGY_MAX      equ {P.ENERGY_MAX}",
             f"ENERGY_PICK     equ {P.ENERGY_PICK}",
@@ -255,7 +272,6 @@ def rooms_asm(rooms):
            f"LVL_ROWS        equ {P.ROWS}",
            f"LVL_CELL        equ {P.CELL}",
            f"LVL_Y0          equ {P.GRID_Y0}",
-           f"ROOM_COUNT      equ {len(rooms)}",
            "",
            f"; Γραφικά: {P.NTYPES} τύποι x 8 γραμμές x 2 bytes (MODE 1)",
            "tile_gfx:"]
@@ -274,47 +290,11 @@ def rooms_asm(rooms):
             "tile_facing:    db " + ",".join(
                 str(P.FACING.get(i, 255)) for i in range(P.NTYPES)),
             "",
-            "; --- Ευρετήριο αιθουσών (ταξινομημένο αριθμητικά) ---------------",
-            "room_numbers:   db " + ",".join(str(r.number) for r in rooms),
-            "room_index:     dw " + ",".join(f"room_{r.number}_rec" for r in rooms),
+            "; Οι ΑΙΘΟΥΣΕΣ δεν είναι πια εδώ. Ασυμπίεστες κόστιζαν 960 bytes",
+            "; η καθεμία και χωρούσαν ~10 συνολικά· τώρα ζουν RLE μέσα στα",
+            "; build/ROOMSnn.BIN, σετ των 40. Δες tools/roomfile.py.",
             ""]
 
-    for r in rooms:
-        out += [f"; --- αίθουσα {r.number} " + "-" * 45,
-                f"room_{r.number}_rec:",
-                f"                dw {r.start_x}          ; αρχικό X",
-                f"                dw {r.start_y}          ; αρχικό Y",
-                f"                db {r.start_g}           ; αρχική φορά βαρύτητας",
-                f"                dw room_{r.number}_cells",
-                f"                dw room_{r.number}_exits",
-                f"                dw room_{r.number}_tps",
-                f"                dw room_{r.number}_arr",
-                "",
-                f"room_{r.number}_exits:   ; col, row, αίθουσα, διπλής; ... #FF"]
-        for (c, rr), dest, two, cells in r.exit_groups():
-            for cc, cr in cells:
-                out.append(f"                db {cc},{cr},{dest},{1 if two else 0}")
-        out += ["                db #FF", "",
-                f"room_{r.number}_arr:     ; αίθουσα προέλευσης, col, row, "
-                f"βαρύτητα ... #FF",
-                ]
-        for other in rooms:
-            a = r.arrival_for(other.number)
-            if a:
-                out.append(
-                    f"                db {other.number},{a[0]},{a[1]},{a[2]}")
-        out += ["                db #FF", "",
-                f"room_{r.number}_tps:     ; col, row, dcol, drow ... #FF = τέλος"]
-        for (c, rr), dest, cells in r.teleport_groups():
-            if dest is None:
-                continue        # αδήλωτη: δεν μπαίνει, άρα δεν κάνει τίποτα
-            for cc, cr in cells:
-                out.append(f"                db {cc},{cr},{dest[0]},{dest[1]}")
-        out += ["                db #FF", "",
-                f"room_{r.number}_cells:"]
-        for row in r.cells:
-            out.append("                db " + ",".join(str(v) for v in row))
-        out.append("")
     return "\n".join(out)
 
 
@@ -331,3 +311,6 @@ if __name__ == "__main__":
         with open(path, "w") as f:
             f.write(text)
         print(f"  {name}: {len(text.splitlines())} γραμμές")
+
+    # Τα δεδομένα των αιθουσών τα γράφει το tools/roomfile.py, με δικό του
+    # κανόνα στο Makefile — ένας παραγωγός ανά αρχείο.

@@ -1162,6 +1162,7 @@ linetab         ds   400, 0
                 include "tables.asm"
                 include "level.asm"
                 include "hero.asm"
+                include "roomfile.asm"
 
 ;--- δεδομένα ---------------------------------------------------------
                 include "gfx_hero.asm"
@@ -1173,3 +1174,17 @@ linetab         ds   400, 0
 
 prog_end
                 save 'build/main.bin', #4000, prog_end-#4000
+
+;--- buffers ΜΟΝΟ στη μνήμη -------------------------------------------
+; Δηλώνονται ΜΕΤΑ το save, οπότε δεν μπαίνουν στο MAIN.BIN: είναι ~10 KB
+; μηδενικών που δεν έχει νόημα να ταξιδεύουν στη δισκέτα και να φορτώνονται.
+set_buf         ds   SET_MAX            ; το τρέχον σετ αιθουσών, όπως ήρθε
+cell_buf        ds   LVL_CELLS          ; το ξεδιπλωμένο πλέγμα που παίζεται
+journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi, τύπος)
+mem_end
+
+; Με ενεργό AMSDOS η μνήμη ΔΕΝ φτάνει ως το firmware: ο δίσκος κρατά δικό του
+; χώρο εργασίας και το ταβάνι πέφτει στο #A67B. Αν το build το περάσει, το
+; παιχνίδι θα έγραφε πάνω στα δεδομένα του AMSDOS και θα κρεμούσε στον
+; πραγματικό υπολογιστή — ενώ στον assembler όλα θα έμοιαζαν εντάξει.
+                assert mem_end <= MEM_CEIL

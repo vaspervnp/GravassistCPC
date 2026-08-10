@@ -42,6 +42,20 @@ TAB_ROW         equ 64
 RTAB_OFF        equ 16
 GTAB_OFF        equ 15
 
+; --- σετ αιθουσών σε αρχείο (tools/roomfile.py) --------------
+SET_ROOMS       equ 40
+SET_NUMBERS     equ 5          ; offset του numbers[] στην κεφαλή
+SET_OFFS        equ 45         ; offset του offs[]
+SET_MAX         equ 6400       ; χωρητικότητα του set_buf
+LVL_CELLS       equ 960
+; Πόσες αλλαγές κελιών θυμάται το παιχνίδι συνολικά. Κάθε εγγραφή
+; είναι 4 bytes· γεμάτο ημερολόγιο σημαίνει ότι οι παλιότερες
+; αλλαγές δεν επιβιώνουν όταν ξαναμπείς στην αίθουσα.
+JOURNAL_MAX     equ 64
+
+; Ταβάνι μνήμης με ενεργό AMSDOS — δες την assert στο main.asm.
+MEM_CEIL        equ #A67B
+
 NTYPES          equ 28
 ENERGY_MAX      equ 8
 ENERGY_PICK     equ 2
