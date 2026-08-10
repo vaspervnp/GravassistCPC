@@ -1,10 +1,10 @@
 @model ErrorViewModel
 @{
-    ViewData["Title"] = "Σφάλμα";
+    ViewData["Title"] = "Error";
 }
 
-<h2 style="color:#ff5050">Παρουσιάστηκε σφάλμα</h2>
-<p>Κάτι πήγε στραβά κατά την επεξεργασία του αιτήματος.</p>
+<h2 style="color:#ff5050">An error occurred</h2>
+<p>Something went wrong while processing the request.</p>
 
 @if (Model.ShowRequestId)
 {
@@ -12,6 +12,6 @@
 }
 
 <p>
-    Για αναλυτικό μήνυμα, τρέξε τον editor με <code>ASPNETCORE_ENVIRONMENT=Development</code>.
+    For a detailed message, run the editor with <code>ASPNETCORE_ENVIRONMENT=Development</code>.
 </p>
-<p><a href="/" style="color:#ff8000">Επιστροφή στον επεξεργαστή</a></p>
+<p><a href="/" style="color:#ff8000">Back to the editor</a></p>

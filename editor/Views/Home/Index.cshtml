@@ -1,7 +1,7 @@
 @using System.Text.Json
 @model EditorViewModel
 @{
-    ViewData["Title"] = "Επεξεργαστής πιστών";
+    ViewData["Title"] = "Level editor";
     ViewData["LevelsPath"] = Model.LevelsPath;
 
     // Τα σχήματα των κελιών γράφονται στο TileType με τα σύμβολα var(--fill)/var(--edge)·
@@ -32,7 +32,7 @@
 
     // Ετικέτα αρχείου στη λίστα: οι αίθουσες δείχνουν τον αριθμό τους.
     Func<LevelFileInfo, string> fileLabel = f =>
-        f.Room is null ? f.Name : $"Αίθουσα {f.Room} — {f.Name}";
+        f.Room is null ? f.Name : $"Room {f.Room} — {f.Name}";
 }
 
 <style>
@@ -205,10 +205,23 @@
     .link-row {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: 6px;
         padding: 4px 0;
         border-bottom: 1px solid var(--line);
         font-size: 11px;
+    }
+
+    /* Η πόρτα έχει τέσσερα χειριστήρια (αίθουσα, διπλή, δύο συντεταγμένες
+       άφιξης) και δεν χωράνε σε μία σειρά στη στήλη του πάνελ. Η άφιξη πάει
+       πάντα σε δική της γραμμή αντί να στριμώχνεται όπου τύχει. */
+    .link-arr {
+        flex: 1 0 100%;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding-left: 26px;
+        color: #8a8ac0;
     }
 
     .link-row:last-child { border-bottom: none; }
@@ -222,7 +235,7 @@
         color: var(--edge);
     }
 
-    .link-pos { flex: 1 1 auto; color: #8a8ac0; }
+    .link-pos { flex: 1 1 auto; color: #8a8ac0; white-space: nowrap; }
 
     .link-row input[type=number] {
         flex: 0 0 62px;
@@ -272,89 +285,89 @@
 <div class="workbench">
     <div class="toolcols">
         <div class="panel">
-            <h2>Αρχείο</h2>
+            <h2>File</h2>
             <div class="filebar">
-                <select id="file-list" title="Πίστες στον φάκελο levels/">
+                <select id="file-list" title="Levels in the levels/ folder">
                     @foreach (var f in Model.Files)
                     {
                         <option value="@f.Name">@fileLabel(f)</option>
                     }
                 </select>
-                <button id="btn-open" type="button">Άνοιγμα</button>
-                <button id="btn-new" type="button">Νέα</button>
+                <button id="btn-open" type="button">Open</button>
+                <button id="btn-new" type="button">New</button>
                 <button id="btn-new-room" type="button"
-                        title="Δημιουργεί levels/room_&lt;N&gt;.txt με τον επόμενο ελεύθερο αριθμό">
-                    Νέα αίθουσα
+                        title="Creates levels/room_&lt;N&gt;.txt with the next free number">
+                    New room
                 </button>
                 <button id="btn-copy-room" type="button"
-                        title="Αντιγράφει την ανοιχτή αίθουσα στον επόμενο ελεύθερο αριθμό">
-                    Αντιγραφή
+                        title="Copies the open room to the next free number">
+                    Copy
                 </button>
                 <input type="number" id="room-target" min="1" max="9999" step="1"
-                       placeholder="σε #" title="Νέος αριθμός αίθουσας για τη Μετακίνηση" />
+                       placeholder="to #" title="New room number for Move" />
                 <button id="btn-move-room" type="button"
-                        title="Αλλάζει τον αριθμό της αίθουσας και ενημερώνει όλες τις πόρτες που δείχνουν σε αυτήν">
-                    Μετακίνηση
+                        title="Changes the room number and updates every door that points to it">
+                    Move
                 </button>
                 <button id="btn-play" type="button"
-                        title="Τρέχει την αίθουσα στον browser, με την ίδια φυσική">
-                    Δοκιμή
+                        title="Runs the room in the browser, with the same physics">
+                    Test
                 </button>
                 <button id="btn-dsk" type="button"
-                        title="Χτίζει το build/gravassist.dsk ξεκινώντας από αυτή την αίθουσα">
-                    Χτίσιμο .dsk
+                        title="Builds build/gravassist.dsk starting from this room">
+                    Build .dsk
                 </button>
-                <input type="text" id="file-name" placeholder="όνομα.txt" />
-                <button id="btn-save" type="button">Αποθήκευση</button>
+                <input type="text" id="file-name" placeholder="name.txt" />
+                <button id="btn-save" type="button">Save</button>
             </div>
-            <div class="hintline">Ο φάκελος πιστών είναι το <code>levels/</code> του repo.
-                Οι αίθουσες είναι αρχεία <code>room_&lt;N&gt;.txt</code>.</div>
+            <div class="hintline">The levels folder is the repo's <code>levels/</code>.
+                Rooms are <code>room_&lt;N&gt;.txt</code> files.</div>
         </div>
 
         <div class="panel">
-            <h2>Έξοδοι</h2>
+            <h2>Exits</h2>
             <div id="exit-list"></div>
             <div class="link-note" id="exit-note"></div>
             <div class="hintline">
-                Γειτονικά κελιά <code>X</code> (πάνω/κάτω/αριστερά/δεξιά) μετράνε ως ΜΙΑ
-                έξοδος και οδηγούν στην ίδια αίθουσα. Κάθε ομάδα γράφει μία γραμμή
-                <code>exit &lt;col&gt; &lt;row&gt; &lt;room&gt;</code> στην ουρά του αρχείου.
+                Adjacent <code>X</code> cells (up/down/left/right) count as ONE
+                exit and lead to the same room. Each group writes one
+                <code>exit &lt;col&gt; &lt;row&gt; &lt;room&gt;</code> line in the file footer.
             </div>
         </div>
 
         <div class="panel">
-            <h2>Τηλεμεταφορές</h2>
+            <h2>Teleporters</h2>
             <div id="tp-list"></div>
             <div class="link-note" id="tp-note"></div>
             <div class="hintline">
-                Γειτονικά κελιά <code>T</code> μετράνε ως ΜΙΑ τηλεμεταφορά και βγάζουν
-                στο ίδιο κελί της ΙΔΙΑΣ αίθουσας. «Ορισμός» = διάλεξε το κελί προορισμού
-                με κλικ στο πλέγμα (<kbd>Esc</kbd> ακυρώνει)· τα πεδία στ./γρ. δέχονται
-                και πληκτρολόγηση. Κάθε ομάδα γράφει μία γραμμή
-                <code>tp &lt;col&gt; &lt;row&gt; &lt;dcol&gt; &lt;drow&gt;</code>.
-                Τηλεμεταφορά χωρίς προορισμό δεν κάνει τίποτα στο παιχνίδι.
+                Adjacent <code>T</code> cells count as ONE teleporter and lead
+                to the same cell of the SAME room. "Set" = pick the destination cell
+                by clicking on the grid (<kbd>Esc</kbd> cancels); the col/row fields
+                also accept typing. Each group writes one
+                <code>tp &lt;col&gt; &lt;row&gt; &lt;dcol&gt; &lt;drow&gt;</code> line.
+                A teleporter with no destination does nothing in the game.
             </div>
         </div>
 
         <div class="panel">
-            <h2>Εργαλεία</h2>
+            <h2>Tools</h2>
             <div class="toolbar">
-                <button type="button" class="tool-btn" data-tool="brush">Πινέλο</button>
-                <button type="button" class="tool-btn" data-tool="eraser">Γόμα</button>
-                <button type="button" class="tool-btn" data-tool="fill">Γέμισμα</button>
+                <button type="button" class="tool-btn" data-tool="brush">Brush</button>
+                <button type="button" class="tool-btn" data-tool="eraser">Eraser</button>
+                <button type="button" class="tool-btn" data-tool="fill">Fill</button>
             </div>
             <div class="toolbar" style="margin-top:6px">
-                <button type="button" id="btn-border">Πλαίσιο</button>
-                <button type="button" id="btn-clear">Καθαρισμός</button>
-                <button type="button" id="btn-undo">Αναίρεση</button>
-                <button type="button" id="btn-redo">Επανάληψη</button>
+                <button type="button" id="btn-border">Border</button>
+                <button type="button" id="btn-clear">Clear</button>
+                <button type="button" id="btn-undo">Undo</button>
+                <button type="button" id="btn-redo">Redo</button>
             </div>
             <div class="toolbar" style="margin-top:6px">
-                <button type="button" id="btn-gridlines" class="active">Πλέγμα</button>
+                <button type="button" id="btn-gridlines" class="active">Grid</button>
             </div>
             <div class="hintline">
-                Δεξί κλικ = σβήσιμο. Πατώντας τον ίδιο τον χαρακτήρα (π.χ. <code>#</code>,
-                <code>/</code>, <code>k</code>) επιλέγεται ο τύπος. Ctrl+Z / Ctrl+Y = αναίρεση.
+                Right click = erase. Pressing the character itself (e.g. <code>#</code>,
+                <code>/</code>, <code>k</code>) selects that type. Ctrl+Z / Ctrl+Y = undo / redo.
             </div>
         </div>
     </div>
@@ -363,7 +376,7 @@
     <div class="stage">
         <svg id="grid" viewBox="0 0 @(Model.Cols * 8) @(Model.Rows * 8)"
              preserveAspectRatio="xMidYMid meet" role="img"
-             aria-label="Πλέγμα πίστας @Model.Cols επί @Model.Rows">
+             aria-label="Level grid @Model.Cols by @Model.Rows">
             <defs>
                 @* Ένα <symbol> ανά τύπο κελιού, σε συντεταγμένες 8x8 = ένα tile του CPC. *@
                 @foreach (var t in Model.Tiles)
@@ -399,13 +412,13 @@
                   stroke="#ffffff" stroke-width="0.4" pointer-events="none" visibility="hidden"></rect>
         </svg>
 
-        <div class="status info" id="status">Έτοιμο.</div>
+        <div class="status info" id="status">Ready.</div>
         <div class="readout" id="readout">—</div>
 
     </div>
 
         <div class="panel tilebox">
-            <h2>Τύποι κελιών</h2>
+            <h2>Cell types</h2>
             @foreach (var group in Model.Tiles.GroupBy(t => t.Group))
             {
                 <h3 class="group">@group.Key</h3>
@@ -413,7 +426,7 @@
                     @foreach (var t in group)
                     {
                         <button type="button" class="tile-btn" data-symbol="@t.Symbol"
-                                title="@t.Name — @t.Hint (χαρακτήρας '@t.Symbol')">
+                                title="@t.Name — @t.Hint (character '@t.Symbol')">
                             <svg viewBox="0 0 8 8" width="26" height="26" aria-hidden="true">
                                 <use href="#t-@t.Id" width="8" height="8"></use>
                             </svg>
@@ -426,7 +439,7 @@
     </div>
 
     <details class="source" open>
-        <summary>Πηγαίο κείμενο πίστας</summary>
+        <summary>Level source text</summary>
         <pre id="source-view"></pre>
     </details>
 </div>
@@ -670,7 +683,7 @@
                 const p = document.createElement("div");
                 p.className = "hintline";
                 p.style.marginTop = "0";
-                p.textContent = "Καμία έξοδος. Ζωγράφισε κελιά «Έξοδος» (X) στο πλέγμα.";
+                p.textContent = "No exits. Paint \"Exit\" (X) cells on the grid.";
                 exitListEl.appendChild(p);
                 renderExitNote();
                 return;
@@ -688,14 +701,14 @@
 
                 const pos = document.createElement("span");
                 pos.className = "link-pos";
-                pos.textContent = "στ." + g.col + " γρ." + g.row + " · " + g.cells.length + " κελ.";
+                pos.textContent = "col " + g.col + " row " + g.row + " · " + g.cells.length + " cells";
 
                 const input = document.createElement("input");
                 input.type = "number";
                 input.min = "1";
                 input.step = "1";
-                input.placeholder = "αίθ.";
-                input.title = "Αριθμός αίθουσας προορισμού (αρχείο room_<N>.txt)";
+                input.placeholder = "room";
+                input.title = "Destination room number (file room_<N>.txt)";
                 input.value = g.room === null ? "" : String(g.room);
                 input.addEventListener("change", function () {
                     const raw = input.value.trim();
@@ -717,24 +730,24 @@
                 // Διπλής κατεύθυνσης: υπάρχει πόρτα επιστροφής από την άλλη αίθουσα.
                 const twoLbl = document.createElement("label");
                 twoLbl.className = "link-two";
-                twoLbl.title = "Διπλής κατεύθυνσης: η άλλη αίθουσα έχει πόρτα που "
-                             + "γυρίζει εδώ.";
+                twoLbl.title = "Two-way: the other room has a door that "
+                             + "leads back here.";
                 const twoBox = document.createElement("input");
                 twoBox.type = "checkbox";
                 twoBox.checked = !!g.twoWay;
                 twoBox.addEventListener("change", function () {
                     setGroupTwoWay(i, twoBox.checked);
                 });
-                twoLbl.append(twoBox, document.createTextNode("διπλή"));
+                twoLbl.append(twoBox, document.createTextNode("two-way"));
 
                 // ΣΗΜΕΙΟ ΑΦΙΞΗΣ: πού στέκεται ο παίκτης ΒΓΑΙΝΟΝΤΑΣ από αυτή την
                 // πόρτα. Ανήκει στην πόρτα και όχι στην αίθουσα, γιατί κάθε
                 // πόρτα βγάζει αλλού. Κενό = να το βρει μόνο του το παιχνίδι
                 // (πρώτο ελεύθερο διπλανό κελί) — που φτάνει μόνο όταν η πόρτα
                 // δεν κολλάει σε γωνία.
-                const acol = coordInput("στήλη άφιξης (0.." + (COLS - 1) + ")",
+                const acol = coordInput("arrival column (0.." + (COLS - 1) + ")",
                     g.arrive === null ? "" : String(g.arrive[0]), COLS - 1);
-                const arow = coordInput("γραμμή άφιξης (0.." + (ROWS - 1) + ")",
+                const arow = coordInput("arrival row (0.." + (ROWS - 1) + ")",
                     g.arrive === null ? "" : String(g.arrive[1]), ROWS - 1);
                 function commitArrive() {
                     const c = parseCoord(acol.value), r = parseCoord(arow.value);
@@ -748,16 +761,20 @@
                 pick.type = "button";
                 pick.className = "pick";
                 const picking = pickKind === "exit" && pickIndex === i;
-                pick.textContent = picking ? "Άκυρο" : "Άφιξη";
-                pick.title = "Διάλεξε με κλικ στο πλέγμα πού εμφανίζεται ο παίκτης "
-                           + "βγαίνοντας από αυτή την πόρτα (Esc ακυρώνει)";
+                pick.textContent = picking ? "Cancel" : "Arrival";
+                pick.title = "Click on the grid to pick where the player appears "
+                           + "coming out of this door (Esc cancels)";
                 pick.addEventListener("click", function () {
                     if (picking) cancelPick(); else startPick("exit", i);
                 });
 
                 if (picking) row.classList.add("picking");
 
-                row.append(tag, pos, input, twoLbl, acol, arow, pick);
+                const arrBox = document.createElement("span");
+                arrBox.className = "link-arr";
+                arrBox.append(document.createTextNode("arrival"), acol, arow, pick);
+
+                row.append(tag, pos, input, twoLbl, arrBox);
                 exitListEl.appendChild(row);
             });
 
@@ -988,7 +1005,7 @@
                 const p = document.createElement("div");
                 p.className = "hintline";
                 p.style.marginTop = "0";
-                p.textContent = "Καμία τηλεμεταφορά. Ζωγράφισε κελιά «Τηλεμεταφορά» (T) στο πλέγμα.";
+                p.textContent = "No teleporters. Paint \"Teleporter\" (T) cells on the grid.";
                 teleListEl.appendChild(p);
                 renderTeleNote();
                 return;
@@ -1007,13 +1024,13 @@
 
                 const pos = document.createElement("span");
                 pos.className = "link-pos";
-                pos.textContent = "στ." + g.col + " γρ." + g.row + " · " + g.cells.length + " κελ.";
+                pos.textContent = "col " + g.col + " row " + g.row + " · " + g.cells.length + " cells";
 
                 // Χειροκίνητη πληκτρολόγηση για ακρίβεια — αλλάζοντας το ένα πεδίο
                 // κρατάμε την τιμή του άλλου (ή 0 αν δεν υπάρχει ακόμα προορισμός).
-                const dcol = coordInput("στήλη προορισμού (0.." + (COLS - 1) + ")",
+                const dcol = coordInput("destination column (0.." + (COLS - 1) + ")",
                     g.dest === null ? "" : String(g.dest[0]), COLS - 1);
-                const drow = coordInput("γραμμή προορισμού (0.." + (ROWS - 1) + ")",
+                const drow = coordInput("destination row (0.." + (ROWS - 1) + ")",
                     g.dest === null ? "" : String(g.dest[1]), ROWS - 1);
 
                 function commit() {
@@ -1028,8 +1045,8 @@
                 pick.type = "button";
                 pick.className = "pick";
                 const picking = pickKind === "tp" && pickIndex === i;
-                pick.textContent = picking ? "Άκυρο" : "Ορισμός";
-                pick.title = "Διάλεξε το κελί προορισμού με κλικ στο πλέγμα (Esc ακυρώνει)";
+                pick.textContent = picking ? "Cancel" : "Set";
+                pick.title = "Click on the grid to pick the destination cell (Esc cancels)";
                 pick.addEventListener("click", function () {
                     if (picking) cancelPick(); else startPick("tp", i);
                 });
@@ -1094,13 +1111,13 @@
             if (kind === "tp") {
                 teleHighlight = index;
                 const g = teleGroups[index];
-                setStatus("Διάλεξε το κελί προορισμού για την τηλεμεταφορά #" + (index + 1) +
-                    " (στ." + g.col + " γρ." + g.row + "). Esc για ακύρωση.", "warn");
+                setStatus("Pick the destination cell for teleporter #" + (index + 1) +
+                    " (col " + g.col + " row " + g.row + "). Esc to cancel.", "warn");
             } else {
                 exitHighlight = index;
                 const g = exitGroups[index];
-                setStatus("Διάλεξε πού εμφανίζεται ο παίκτης βγαίνοντας από την πόρτα #" +
-                    (index + 1) + " (στ." + g.col + " γρ." + g.row + "). Esc για ακύρωση.", "warn");
+                setStatus("Pick where the player appears coming out of door #" +
+                    (index + 1) + " (col " + g.col + " row " + g.row + "). Esc to cancel.", "warn");
             }
             renderTelePanel();
             renderTeleArrow();
@@ -1115,7 +1132,7 @@
             pickIndex = null;
             if (was === "tp") teleHighlight = null; else exitHighlight = null;
             svg.classList.remove("picking");
-            if (!quiet) setStatus("Η επιλογή κελιού ακυρώθηκε.", "info");
+            if (!quiet) setStatus("Cell selection cancelled.", "info");
             renderTelePanel();
             renderTeleArrow();
             renderExitPanel();
@@ -1128,12 +1145,12 @@
         function exitProblems() {
             const errors = [], warnings = [];
             exitGroups.forEach(function (g, i) {
-                const where = "#" + (i + 1) + " (στήλη " + g.col + ", γραμμή " + g.row + ")";
+                const where = "#" + (i + 1) + " (col " + g.col + ", row " + g.row + ")";
                 if (g.room === null) {
-                    errors.push("Η έξοδος " + where + " δεν έχει δηλωμένο προορισμό.");
+                    errors.push("Exit " + where + " has no declared destination.");
                 } else if (!knownRooms.has(g.room)) {
-                    warnings.push("Η έξοδος " + where + " οδηγεί στην αίθουσα " + g.room +
-                        ", που δεν υπάρχει ακόμα ως αρχείο room_" + g.room + ".txt.");
+                    warnings.push("Exit " + where + " leads to room " + g.room +
+                        ", which does not exist yet as file room_" + g.room + ".txt.");
                 }
             });
             return { errors: errors, warnings: warnings };
@@ -1145,13 +1162,13 @@
         function teleProblems() {
             const errors = [], warnings = [];
             teleGroups.forEach(function (g, i) {
-                const where = "#" + (i + 1) + " (στήλη " + g.col + ", γραμμή " + g.row + ")";
+                const where = "#" + (i + 1) + " (col " + g.col + ", row " + g.row + ")";
                 if (g.dest === null) {
-                    warnings.push("Η τηλεμεταφορά " + where + " δεν έχει προορισμό " +
-                        "και δεν θα κάνει τίποτα στο παιχνίδι.");
+                    warnings.push("Teleporter " + where + " has no destination " +
+                        "and will do nothing in the game.");
                 } else if (!inGrid(g.dest[0], g.dest[1])) {
-                    errors.push("Η τηλεμεταφορά " + where + " δείχνει στο κελί (" +
-                        g.dest[0] + "," + g.dest[1] + "), εκτός πλέγματος 0.." +
+                    errors.push("Teleporter " + where + " points to cell (" +
+                        g.dest[0] + "," + g.dest[1] + "), outside the grid 0.." +
                         (COLS - 1) + " x 0.." + (ROWS - 1) + ".");
                 }
             });
@@ -1167,9 +1184,9 @@
             }
             // ΠΡΟΣΟΧΗ: το διπλό at ("@@") είναι escape του Razor — στο JS φτάνει ένα.
             if (starts > 1) {
-                errors.push("Υπάρχουν " + starts + " δείκτες εκκίνησης '@@' — επιτρέπεται το πολύ ένας.");
+                errors.push("There are " + starts + " start markers '@@' — at most one is allowed.");
             } else if (starts === 0) {
-                warnings.push("Δεν υπάρχει δείκτης εκκίνησης '@@' στο δωμάτιο.");
+                warnings.push("There is no start marker '@@' in the room.");
             }
             return { errors: errors, warnings: warnings };
         }
@@ -1197,14 +1214,14 @@
         }
 
         function undo() {
-            if (!undoStack.length) { setStatus("Δεν υπάρχει τίποτα για αναίρεση.", "info"); return; }
+            if (!undoStack.length) { setStatus("Nothing to undo.", "info"); return; }
             redoStack.push(snapshot());
             restore(undoStack.pop());
             dirty = true;
         }
 
         function redo() {
-            if (!redoStack.length) { setStatus("Δεν υπάρχει τίποτα για επανάληψη.", "info"); return; }
+            if (!redoStack.length) { setStatus("Nothing to redo.", "info"); return; }
             undoStack.push(snapshot());
             restore(redoStack.pop());
             dirty = true;
@@ -1253,7 +1270,7 @@
             for (let c = 0; c < COLS; c++) { setCell(0, c, SOLID); setCell(ROWS - 1, c, SOLID); }
             for (let r = 0; r < ROWS; r++) { setCell(r, 0, SOLID); setCell(r, COLS - 1, SOLID); }
             refreshSource();
-            setStatus("Μπήκε πλαίσιο περιγράμματος.", "ok");
+            setStatus("Border box added.", "ok");
         }
 
         function clearAll() {
@@ -1262,7 +1279,7 @@
                 for (let c = 0; c < COLS; c++) setCell(r, c, EMPTY);
             }
             refreshSource();
-            setStatus("Η πίστα καθαρίστηκε.", "ok");
+            setStatus("Level cleared.", "ok");
         }
 
         // --- Ποντίκι ---------------------------------------------------
@@ -1293,14 +1310,14 @@
                     setGroupDest(i, [p.c, p.r]);
                     teleHighlight = i;
                     renderTeleArrow();
-                    setStatus("Η τηλεμεταφορά #" + (i + 1) + " βγάζει στο κελί στ." +
-                        p.c + " γρ." + p.r + ".", "ok");
+                    setStatus("Teleporter #" + (i + 1) + " leads to cell col " +
+                        p.c + " row " + p.r + ".", "ok");
                 } else {
                     setGroupArrive(i, [p.c, p.r]);
                     exitHighlight = i;
                     renderExitArrow();
-                    setStatus("Η πόρτα #" + (i + 1) + " βγάζει τον παίκτη στο κελί στ." +
-                        p.c + " γρ." + p.r + ".", "ok");
+                    setStatus("Door #" + (i + 1) + " puts the player at cell col " +
+                        p.c + " row " + p.r + ".", "ok");
                 }
                 return;
             }
@@ -1335,12 +1352,12 @@
             cursor.setAttribute("y", p.r * CELL);
             cursor.setAttribute("visibility", "visible");
             const tile = TILE_BY_SYMBOL.get(grid[p.r][p.c]);
-            readoutEl.textContent = "στήλη " + p.c + ", γραμμή " + p.r +
+            readoutEl.textContent = "col " + p.c + ", row " + p.r +
                 "  ·  " + (tile ? tile.name : "?") + " '" + grid[p.r][p.c] + "'" +
                 (pickKind === "tp"
-                    ? "  ·  κλικ = προορισμός τηλεμεταφοράς #" + (pickIndex + 1)
+                    ? "  ·  click = teleporter destination #" + (pickIndex + 1)
                     : pickKind === "exit"
-                    ? "  ·  κλικ = σημείο άφιξης πόρτας #" + (pickIndex + 1)
+                    ? "  ·  click = door arrival point #" + (pickIndex + 1)
                     : "");
             if (painting) setCell(p.r, p.c, paintSymbol);
         });
@@ -1449,9 +1466,9 @@
         async function readError(res) {
             try {
                 const body = await res.json();
-                return body.error || ("Σφάλμα " + res.status);
+                return body.error || ("Error " + res.status);
             } catch (e) {
-                return "Σφάλμα " + res.status;
+                return "Error " + res.status;
             }
         }
 
@@ -1467,7 +1484,7 @@
                 // Οι αίθουσες φαίνονται με τον αριθμό τους· η σειρά έρχεται από τον
                 // server (αριθμητικά: room_2 πριν το room_10).
                 opt.textContent = (f.room === null || f.room === undefined)
-                    ? f.name : ("Αίθουσα " + f.room + " — " + f.name);
+                    ? f.name : ("Room " + f.room + " — " + f.name);
                 fileList.appendChild(opt);
                 if (f.room !== null && f.room !== undefined) knownRooms.add(f.room);
             });
@@ -1476,48 +1493,48 @@
         }
 
         async function openLevel(name) {
-            if (!name) { setStatus("Δεν υπάρχει πίστα να ανοίξω.", "err"); return; }
-            if (dirty && !confirm("Υπάρχουν μη αποθηκευμένες αλλαγές. Να συνεχίσω;")) return;
+            if (!name) { setStatus("No level to open.", "err"); return; }
+            if (dirty && !confirm("There are unsaved changes. Continue?")) return;
             const res = await fetch("/api/levels/" + encodeURIComponent(name));
             if (!res.ok) { setStatus(await readError(res), "err"); return; }
             loadDocument(await res.json());
             fileName.value = name;
-            setStatus("Φορτώθηκε η πίστα «" + name + "».", "ok");
+            setStatus("Loaded level \"" + name + "\".", "ok");
         }
 
         async function newLevel() {
-            if (dirty && !confirm("Υπάρχουν μη αποθηκευμένες αλλαγές. Να συνεχίσω;")) return;
+            if (dirty && !confirm("There are unsaved changes. Continue?")) return;
             const res = await fetch("/api/levels/new");
             if (!res.ok) { setStatus(await readError(res), "err"); return; }
             loadDocument(await res.json());
             fileName.value = "";
-            setStatus("Νέα άδεια πίστα με περίγραμμα.", "ok");
+            setStatus("New empty level with a border.", "ok");
         }
 
         async function newRoom() {
-            if (dirty && !confirm("Υπάρχουν μη αποθηκευμένες αλλαγές. Να συνεχίσω;")) return;
+            if (dirty && !confirm("There are unsaved changes. Continue?")) return;
             const res = await fetch("/api/levels/room", { method: "POST" });
             if (!res.ok) { setStatus(await readError(res), "err"); return; }
             const dto = await res.json();
             loadDocument(dto);
             await refreshFileList(dto.name);
             fileName.value = dto.name;
-            setStatus("Δημιουργήθηκε η αίθουσα " + dto.room + " (" + dto.name + ").", "ok");
+            setStatus("Created room " + dto.room + " (" + dto.name + ").", "ok");
         }
 
         async function saveLevel() {
             cancelPick(true);
             const name = fileName.value.trim();
-            if (!name) { setStatus("Δώσε όνομα αρχείου.", "err"); return; }
+            if (!name) { setStatus("Enter a file name.", "err"); return; }
 
             // ΕΠΙΚΥΡΩΣΗ πριν σταλεί οτιδήποτε: τα σφάλματα σταματούν την αποθήκευση,
             // οι προειδοποιήσεις ζητούν απλώς επιβεβαίωση.
             const p = problems();
             if (p.errors.length) {
-                setStatus("Δεν αποθηκεύτηκε — " + p.errors.join(" "), "err");
+                setStatus("Not saved — " + p.errors.join(" "), "err");
                 return;
             }
-            if (p.warnings.length && !confirm(p.warnings.join("\n") + "\n\nΝα αποθηκεύσω;")) return;
+            if (p.warnings.length && !confirm(p.warnings.join("\n") + "\n\nSave anyway?")) return;
 
             const payload = {
                 name: name,
@@ -1551,7 +1568,7 @@
             fileName.value = body.saved;
             const warn = (body.warnings && body.warnings.length)
                 ? " — " + body.warnings.join(" ") : "";
-            setStatus("Αποθηκεύτηκε: " + body.saved + warn, warn ? "warn" : "ok");
+            setStatus("Saved: " + body.saved + warn, warn ? "warn" : "ok");
         }
 
         document.getElementById("btn-open").addEventListener("click", () => openLevel(fileList.value));
@@ -1576,33 +1593,33 @@
                 body: JSON.stringify(body)
             });
             const b = await res.json();
-            if (!res.ok) { setStatus(b.error || "Απέτυχε.", "err"); return null; }
+            if (!res.ok) { setStatus(b.error || "Failed.", "err"); return null; }
             await refreshFileList();
             return b;
         }
 
         document.getElementById("btn-copy-room").addEventListener("click", async function () {
             const n = roomNumberOfName(fileName.value.trim());
-            if (!n) { setStatus("Άνοιξε πρώτα μια αίθουσα (room_<N>.txt).", "err"); return; }
-            if (dirty && !confirm("Υπάρχουν μη αποθηκευμένες αλλαγές. Θα αντιγραφεί το ΑΠΟΘΗΚΕΥΜΕΝΟ αρχείο. Συνέχεια;")) return;
+            if (!n) { setStatus("Open a room first (room_<N>.txt).", "err"); return; }
+            if (dirty && !confirm("There are unsaved changes. The SAVED file will be copied. Continue?")) return;
             const b = await roomOp("/api/levels/room/copy", { from: n });
             if (!b) return;
             loadDocument(b);
             fileName.value = b.name;
             fileList.value = b.name;
-            setStatus("Αντιγράφηκε ως «" + b.name + "». Καμία πόρτα δεν δείχνει ακόμα σε αυτήν.", "ok");
+            setStatus("Copied as \"" + b.name + "\". No door points to it yet.", "ok");
         });
 
         document.getElementById("btn-move-room").addEventListener("click", async function () {
             const n = roomNumberOfName(fileName.value.trim());
-            if (!n) { setStatus("Άνοιξε πρώτα μια αίθουσα (room_<N>.txt).", "err"); return; }
-            if (dirty) { setStatus("Αποθήκευσε πρώτα: η μετακίνηση δουλεύει στα αρχεία.", "err"); return; }
+            if (!n) { setStatus("Open a room first (room_<N>.txt).", "err"); return; }
+            if (dirty) { setStatus("Save first: Move works on the files.", "err"); return; }
             // Πεδίο και όχι prompt(): το prompt() το μπλοκάρουν οι browsers σε
             // διάφορες περιπτώσεις και το κουμπί έμοιαζε νεκρό.
             const target = document.getElementById("room-target");
             const to = parseInt(target.value.trim(), 10);
             if (!to || to < 1 || to > 9999) {
-                setStatus("Γράψε πρώτα τον νέο αριθμό αίθουσας στο πεδίο δίπλα.", "err");
+                setStatus("Type the new room number in the field next to it first.", "err");
                 target.focus();
                 return;
             }
@@ -1614,28 +1631,28 @@
             // Δείξε ΤΙ ενημερώθηκε: ο χρήστης πρέπει να ξέρει ότι πειράχτηκαν
             // και άλλα αρχεία, όχι μόνο αυτό που είχε ανοιχτό.
             document.getElementById("room-target").value = "";
-            setStatus("Μετακινήθηκε στην " + to + ". " + (b.touched || []).join(" · "), "ok");
+            setStatus("Moved to " + to + ". " + (b.touched || []).join(" · "), "ok");
         });
 
         document.getElementById("btn-play").addEventListener("click", function () {
             const name = fileName.value.trim();
             if (!name) {
-                setStatus("Άνοιξε ή αποθήκευσε πρώτα μια αίθουσα.", "err");
+                setStatus("Open or save a room first.", "err");
                 return;
             }
-            if (dirty) setStatus("Προσοχή: η δοκιμή τρέχει το αποθηκευμένο αρχείο.");
+            if (dirty) setStatus("Note: the test run uses the saved file.");
             window.open("/game/play.html?level=" + encodeURIComponent(name), "_blank");
         });
 
         document.getElementById("btn-dsk").addEventListener("click", async function (ev) {
             const room = roomNumberOfName(fileName.value.trim());
             if (!room) {
-                setStatus("Το .dsk ξεκινά από αίθουσα — άνοιξε ένα room_<N>.txt.", "err");
+                setStatus("The .dsk starts from a room — open a room_<N>.txt.", "err");
                 return;
             }
             const btn = ev.currentTarget;
             btn.disabled = true;
-            setStatus("Χτίσιμο για αίθουσα " + room + "…");
+            setStatus("Building for room " + room + "…");
             try {
                 const res = await fetch("/api/build", {
                     method: "POST",
@@ -1644,11 +1661,11 @@
                 });
                 const b = await res.json();
                 setStatus(b.ok
-                    ? "Έτοιμο: " + b.dsk + " (" + b.bytes + " bytes), αίθουσα " + room
-                    : "Απέτυχε το χτίσιμο: " + (b.output || b.error || ""),
+                    ? "Ready: " + b.dsk + " (" + b.bytes + " bytes), room " + room
+                    : "Build failed: " + (b.output || b.error || ""),
                     b.ok ? "ok" : "err");
             } catch (e) {
-                setStatus("Σφάλμα χτισίματος: " + e, "err");
+                setStatus("Build error: " + e, "err");
             } finally {
                 btn.disabled = false;
             }

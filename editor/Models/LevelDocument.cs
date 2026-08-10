@@ -113,8 +113,8 @@ public sealed class LevelDocument
         if (doc.Rows.Count != TileCatalog.Rows)
         {
             throw new LevelFormatException(
-                $"Περίμενα {TileCatalog.Rows} γραμμές πίστας των {TileCatalog.Cols} " +
-                $"χαρακτήρων, βρήκα {doc.Rows.Count}. Έγκυροι χαρακτήρες: {TileCatalog.ValidSymbols}");
+                $"Expected {TileCatalog.Rows} level rows of {TileCatalog.Cols} " +
+                $"characters, found {doc.Rows.Count}. Valid characters: {TileCatalog.ValidSymbols}");
         }
 
         return doc;
@@ -128,7 +128,7 @@ public sealed class LevelDocument
     {
         if (Rows.Count != TileCatalog.Rows)
         {
-            return $"Η πίστα έχει {Rows.Count} γραμμές αντί για {TileCatalog.Rows}.";
+            return $"The level has {Rows.Count} rows instead of {TileCatalog.Rows}.";
         }
 
         for (var i = 0; i < Rows.Count; i++)
@@ -136,14 +136,14 @@ public sealed class LevelDocument
             var line = Rows[i];
             if (line.Length != TileCatalog.Cols)
             {
-                return $"Η γραμμή {i + 1} έχει {line.Length} χαρακτήρες αντί για {TileCatalog.Cols}.";
+                return $"Row {i + 1} has {line.Length} characters instead of {TileCatalog.Cols}.";
             }
 
             var bad = line.FirstOrDefault(c => !TileCatalog.IsValid(c), '\0');
             if (bad != '\0')
             {
-                return $"Άγνωστος χαρακτήρας '{bad}' στη γραμμή {i + 1}. " +
-                       $"Έγκυροι: {TileCatalog.ValidSymbols}";
+                return $"Unknown character '{bad}' on row {i + 1}. " +
+                       $"Valid: {TileCatalog.ValidSymbols}";
             }
         }
 
@@ -151,8 +151,8 @@ public sealed class LevelDocument
         var strays = Header.Concat(Footer).Where(IsGridLine).ToList();
         if (strays.Count > 0)
         {
-            return "Γραμμή σχολίου μοιάζει με γραμμή πίστας — ο parser θα τη μετρήσει. " +
-                   "Ξεκίνησέ την με ';'.";
+            return "A comment line looks like a level row — the parser will count it. " +
+                   "Start it with ';'.";
         }
 
         return null;
@@ -241,11 +241,11 @@ public sealed class LevelDocument
         var starts = StartMarkerCount;
         if (starts > 1)
         {
-            errors.Add($"Υπάρχουν {starts} δείκτες εκκίνησης '@' — επιτρέπεται το πολύ ένας.");
+            errors.Add($"There are {starts} start markers '@' — at most one is allowed.");
         }
         else if (starts == 0)
         {
-            warnings.Add("Δεν υπάρχει δείκτης εκκίνησης '@' — ο παίκτης θα ξεκινήσει στην προεπιλεγμένη θέση.");
+            warnings.Add("There is no start marker '@' — the player will start at the default position.");
         }
 
         var groups = ExitGroups();
@@ -255,18 +255,18 @@ public sealed class LevelDocument
 
         foreach (var group in groups)
         {
-            var where = $"στήλη {group.Col}, γραμμή {group.Row}";
-            var size = group.Cells.Count == 1 ? "1 κελί" : $"{group.Cells.Count} κελιά";
+            var where = $"col {group.Col}, row {group.Row}";
+            var size = group.Cells.Count == 1 ? "1 cell" : $"{group.Cells.Count} cells";
             if (!byAnchor.TryGetValue((group.Col, group.Row), out var room))
             {
-                errors.Add($"Η έξοδος στη θέση {where} ({size}) δεν έχει δηλωμένο προορισμό.");
+                errors.Add($"The exit at {where} ({size}) has no declared destination.");
                 continue;
             }
 
             if (!roomExists(room))
             {
-                warnings.Add($"Η έξοδος στη θέση {where} οδηγεί στην αίθουσα {room}, " +
-                             $"που δεν υπάρχει ακόμα ως αρχείο {RoomNaming.FileName(room)}.");
+                warnings.Add($"The exit at {where} leads to room {room}, " +
+                             $"which does not exist yet as file {RoomNaming.FileName(room)}.");
             }
         }
 
@@ -274,8 +274,8 @@ public sealed class LevelDocument
         var anchors = groups.Select(g => (g.Col, g.Row)).ToHashSet();
         foreach (var link in ExitLinks().Where(l => !anchors.Contains((l.Col, l.Row))))
         {
-            warnings.Add($"Η δήλωση «{ExitGraph.FormatLine(link)}» δεν αντιστοιχεί σε " +
-                         "ομάδα εξόδου του πλέγματος και αγνοήθηκε.");
+            warnings.Add($"The declaration \"{ExitGraph.FormatLine(link)}\" does not match " +
+                         "an exit group on the grid and was ignored.");
         }
 
         ValidateTeleports(errors, warnings);
@@ -300,20 +300,20 @@ public sealed class LevelDocument
 
         foreach (var group in groups)
         {
-            var where = $"στήλη {group.Col}, γραμμή {group.Row}";
-            var size = group.Cells.Count == 1 ? "1 κελί" : $"{group.Cells.Count} κελιά";
+            var where = $"col {group.Col}, row {group.Row}";
+            var size = group.Cells.Count == 1 ? "1 cell" : $"{group.Cells.Count} cells";
             if (!byAnchor.TryGetValue((group.Col, group.Row), out var link))
             {
-                warnings.Add($"Η τηλεμεταφορά στη θέση {where} ({size}) δεν έχει " +
-                             "δηλωμένο προορισμό και δεν θα κάνει τίποτα στο παιχνίδι.");
+                warnings.Add($"The teleporter at {where} ({size}) has no declared " +
+                             "destination and will do nothing in the game.");
                 continue;
             }
 
             if (link.DestCol < 0 || link.DestCol >= TileCatalog.Cols ||
                 link.DestRow < 0 || link.DestRow >= TileCatalog.Rows)
             {
-                errors.Add($"Η τηλεμεταφορά στη θέση {where} δείχνει στο κελί " +
-                           $"({link.DestCol},{link.DestRow}), εκτός πλέγματος " +
+                errors.Add($"The teleporter at {where} points to cell " +
+                           $"({link.DestCol},{link.DestRow}), outside the grid " +
                            $"0..{TileCatalog.Cols - 1} x 0..{TileCatalog.Rows - 1}.");
             }
         }
@@ -322,8 +322,8 @@ public sealed class LevelDocument
         var anchors = groups.Select(g => (g.Col, g.Row)).ToHashSet();
         foreach (var link in links.Where(l => !anchors.Contains((l.Col, l.Row))))
         {
-            warnings.Add($"Η δήλωση «{TeleportGraph.FormatLine(link)}» δεν αντιστοιχεί σε " +
-                         "ομάδα τηλεμεταφοράς του πλέγματος και αγνοήθηκε.");
+            warnings.Add($"The declaration \"{TeleportGraph.FormatLine(link)}\" does not match " +
+                         "a teleporter group on the grid and was ignored.");
         }
     }
 

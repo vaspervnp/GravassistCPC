@@ -99,14 +99,14 @@
         // όχι πάνω της — εκεί θα σε ξαναπερνούσε αμέσως, ατέρμονα.
         const arr = two ? arrivalIn(nr, from) : null;
         start(sel.value, nr.cells, arr || nr.start);
-        note.textContent = "Αίθουσα " + dest + (arr ? " (δίπλα στην πόρτα)" : "");
+        note.textContent = "Room " + dest + (arr ? " (door arrival point)" : "");
       } else if (dest) {
-        note.textContent = "Η αίθουσα " + dest + " δεν υπάρχει";
+        note.textContent = "Room " + dest + " does not exist";
       } else {
-        note.textContent = "Έξοδος χωρίς δηλωμένο προορισμό";
+        note.textContent = "Exit with no declared destination";
       }
     }
-    if (hero.energy === 0) note.textContent = "Χωρίς ενέργεια — επανεκκίνηση";
+    if (hero.energy === 0) note.textContent = "Out of energy — restart";
 
     screen.clear();
     screen.tiles(room);

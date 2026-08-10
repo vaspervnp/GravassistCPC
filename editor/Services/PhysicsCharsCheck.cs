@@ -56,7 +56,7 @@ public static partial class PhysicsCharsCheck
         if (fromPhysics is null)
         {
             logger.LogInformation(
-                "Δεν διαβάστηκε το CHARS από το {Path} — ο έλεγχος συμφωνίας τύπων παραλείπεται.",
+                "Could not read CHARS from {Path} — the cell-type agreement check is skipped.",
                 physicsPath);
             return;
         }
@@ -69,22 +69,22 @@ public static partial class PhysicsCharsCheck
         if (missing.Length == 0 && extra.Length == 0)
         {
             logger.LogInformation(
-                "Οι {Count} τύποι κελιών συμφωνούν με το CHARS του physics.py.", fromCatalog.Count);
+                "The {Count} cell types agree with CHARS in physics.py.", fromCatalog.Count);
             return;
         }
 
         if (missing.Length > 0)
         {
             logger.LogWarning(
-                "Τύποι που υπάρχουν στο physics.py αλλά ΛΕΙΠΟΥΝ από τον editor: {Symbols}. " +
-                "Πρόσθεσέ τους στο Models/TileType.cs (TileCatalog.All).", missing);
+                "Types present in physics.py but MISSING from the editor: {Symbols}. " +
+                "Add them to Models/TileType.cs (TileCatalog.All).", missing);
         }
 
         if (extra.Length > 0)
         {
             logger.LogWarning(
-                "Τύποι που υπάρχουν στον editor αλλά ΟΧΙ στο physics.py: {Symbols}. " +
-                "Ο parser της Python θα απορρίψει πίστες που τους χρησιμοποιούν.", extra);
+                "Types present in the editor but NOT in physics.py: {Symbols}. " +
+                "The Python parser will reject levels that use them.", extra);
         }
     }
 }

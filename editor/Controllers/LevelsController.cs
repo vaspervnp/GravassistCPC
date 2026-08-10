@@ -6,7 +6,8 @@ namespace GravassistEditor.Controllers;
 
 /// <summary>
 /// API πιστών: λίστα, φόρτωση, δημιουργία, αποθήκευση.
-/// Όλα τα μηνύματα σφάλματος είναι στα ελληνικά και εμφανίζονται όπως έχουν στο UI.
+/// Τα μηνύματα σφάλματος είναι στα ΑΓΓΛΙΚΑ (όπως όλο το UI του editor) και
+/// εμφανίζονται όπως έχουν· τα σχόλια του κώδικα μένουν ελληνικά.
 /// </summary>
 [ApiController]
 [Route("api/levels")]
@@ -22,7 +23,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
     {
         try
         {
-            if (!store.Exists(name)) return NotFound(new ErrorDto($"Δεν βρέθηκε η πίστα «{name}»."));
+            if (!store.Exists(name)) return NotFound(new ErrorDto($"Level \"{name}\" not found."));
             var doc = store.Load(name);
             return Ok(ToDto(Path.GetFileName(store.ResolvePath(name)), doc));
         }
@@ -32,7 +33,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
         }
         catch (IOException ex)
         {
-            return BadRequest(new ErrorDto($"Σφάλμα ανάγνωσης: {ex.Message}"));
+            return BadRequest(new ErrorDto($"Read error: {ex.Message}"));
         }
     }
 
@@ -77,7 +78,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
         }
         catch (IOException ex)
         {
-            return BadRequest(new ErrorDto($"Σφάλμα εγγραφής: {ex.Message}"));
+            return BadRequest(new ErrorDto($"Write error: {ex.Message}"));
         }
     }
 
@@ -107,7 +108,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
         }
         catch (IOException ex)
         {
-            return BadRequest(new ErrorDto($"Σφάλμα εγγραφής: {ex.Message}"));
+            return BadRequest(new ErrorDto($"Write error: {ex.Message}"));
         }
     }
 
@@ -121,7 +122,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             return Ok(ToDto(name, doc));
         }
         catch (LevelFormatException ex) { return BadRequest(new ErrorDto(ex.Message)); }
-        catch (IOException ex) { return BadRequest(new ErrorDto($"Σφάλμα εγγραφής: {ex.Message}")); }
+        catch (IOException ex) { return BadRequest(new ErrorDto($"Write error: {ex.Message}")); }
     }
 
     /// <summary>
@@ -132,7 +133,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
     public IActionResult MoveRoom([FromBody] RoomOpRequest req)
     {
         if (req.To is null or < 1 or > 9999)
-            return BadRequest(new ErrorDto("Ο νέος αριθμός πρέπει να είναι 1..9999."));
+            return BadRequest(new ErrorDto("The new number must be 1..9999."));
         try
         {
             var touched = store.MoveRoom(req.From, req.To.Value);
@@ -140,7 +141,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             return Ok(new { name, touched, dto = ToDto(name, store.Load(name)) });
         }
         catch (LevelFormatException ex) { return BadRequest(new ErrorDto(ex.Message)); }
-        catch (IOException ex) { return BadRequest(new ErrorDto($"Σφάλμα εγγραφής: {ex.Message}")); }
+        catch (IOException ex) { return BadRequest(new ErrorDto($"Write error: {ex.Message}")); }
     }
 
     /// <summary>

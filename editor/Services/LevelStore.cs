@@ -68,7 +68,7 @@ public sealed class LevelStore
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            throw new LevelFormatException("Λείπει το όνομα αρχείου.");
+            throw new LevelFormatException("Missing file name.");
         }
 
         name = name.Trim();
@@ -77,13 +77,13 @@ public sealed class LevelStore
         // Μόνο σκέτο όνομα αρχείου: κανένα '/', '\' ή '..'.
         if (name != Path.GetFileName(name) || name.Contains(".."))
         {
-            throw new LevelFormatException($"Μη αποδεκτό όνομα αρχείου: {name}");
+            throw new LevelFormatException($"Invalid file name: {name}");
         }
 
         var full = Path.GetFullPath(Path.Combine(RootPath, name));
         if (!full.StartsWith(RootPath + Path.DirectorySeparatorChar, StringComparison.Ordinal))
         {
-            throw new LevelFormatException($"Μη αποδεκτό όνομα αρχείου: {name}");
+            throw new LevelFormatException($"Invalid file name: {name}");
         }
 
         return full;
@@ -128,7 +128,7 @@ public sealed class LevelStore
     {
         var src = RoomNaming.FileName(from);
         if (!Exists(src))
-            throw new LevelFormatException($"Δεν υπάρχει η αίθουσα {from}.");
+            throw new LevelFormatException($"Room {from} does not exist.");
 
         var number = NextRoomNumber();
         var name = RoomNaming.FileName(number);
@@ -149,10 +149,10 @@ public sealed class LevelStore
     {
         if (from == to) return Array.Empty<string>();
         if (!RoomExists(from))
-            throw new LevelFormatException($"Δεν υπάρχει η αίθουσα {from}.");
+            throw new LevelFormatException($"Room {from} does not exist.");
         if (RoomExists(to))
             throw new LevelFormatException(
-                $"Η αίθουσα {to} υπάρχει ήδη. Διάλεξε ελεύθερο αριθμό ή μετακίνησέ την πρώτη.");
+                $"Room {to} already exists. Pick a free number, or move that one first.");
 
         var touched = new List<string>();
         var oldName = RoomNaming.FileName(from);
@@ -167,7 +167,7 @@ public sealed class LevelStore
             if (n == 0) continue;
 
             File.WriteAllText(ResolvePath(info.Name), doc.Serialize());
-            touched.Add($"{info.Name}: {n} " + (n == 1 ? "έξοδος" : "έξοδοι"));
+            touched.Add($"{info.Name}: {n} " + (n == 1 ? "exit" : "exits"));
         }
 
         return touched;

@@ -24,7 +24,7 @@ public sealed class BuildController(ILogger<BuildController> log) : ControllerBa
         // Ο αριθμός αίθουσας μπαίνει σε γραμμή εντολών — δεχόμαστε ΜΟΝΟ ακέραιο
         // σε λογικό εύρος, ώστε να μη μπορεί να γίνει έγχυση εντολής.
         if (req.Room is < 0 or > 9999)
-            return BadRequest(new { error = "Μη έγκυρος αριθμός αίθουσας." });
+            return BadRequest(new { error = "Invalid room number." });
 
         var script = req.Room > 0
             ? $"python3 tools/genasm.py --start {req.Room} && make"
@@ -32,7 +32,7 @@ public sealed class BuildController(ILogger<BuildController> log) : ControllerBa
 
         var (code, output) = await RunAsync(script);
         var dsk = Path.Combine(RepoRoot, "build", "gravassist.dsk");
-        log.LogInformation("Χτίσιμο αίθουσας {Room}: κωδικός {Code}", req.Room, code);
+        log.LogInformation("Build for room {Room}: exit code {Code}", req.Room, code);
 
         return Ok(new
         {

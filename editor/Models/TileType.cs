@@ -75,23 +75,23 @@ public static class TileCatalog
     /// <summary>Ο χαρακτήρας της τηλεμεταφοράς (βλ. <see cref="TeleportGraph"/>).</summary>
     public const char TeleportSymbol = TeleportGraph.TeleportSymbol;
 
-    private const string GeoGroup = "Γεωμετρία";
-    private const string SurfaceGroup = "Επιφάνειες & ζώνες";
-    private const string HazardGroup = "Κίνδυνοι";
-    private const string ItemGroup = "Αντικείμενα";
-    private const string MechGroup = "Μηχανισμοί";
+    private const string GeoGroup = "Geometry";
+    private const string SurfaceGroup = "Surfaces & zones";
+    private const string HazardGroup = "Hazards";
+    private const string ItemGroup = "Items";
+    private const string MechGroup = "Mechanisms";
 
     public static readonly IReadOnlyList<TileType> All =
     [
         // ================= Γεωμετρία =================
-        new TileType('.', "empty", GeoGroup, "Κενό",
-            "Αέρας — ο ήρωας περνάει ελεύθερα.",
+        new TileType('.', "empty", GeoGroup, "Empty",
+            "Air — the hero passes through freely.",
             "transparent", "transparent",
             // Κενό κελί: δεν ζωγραφίζεται τίποτα, φαίνεται το φόντο του δωματίου.
             ""),
 
-        new TileType('#', "solid", GeoGroup, "Στερεό",
-            "Γεμάτο υλικό 8x8 — πάτωμα, τοίχος ή ταβάνι.",
+        new TileType('#', "solid", GeoGroup, "Solid",
+            "Full 8x8 material — floor, wall or ceiling.",
             Palette.Material, Palette.EdgeColor,
             // Δίτονο πλακίδιο: πορτοκαλί ακμή 1 px γύρω από πράσινο σώμα (concept-art §5).
             """
@@ -103,32 +103,32 @@ public static class TileCatalog
         // όπου u = στήλη pixel 0..7 και v = γραμμή pixel 0..7 (v προς τα κάτω).
         // Το εξωτερικό πολύγωνο είναι η ακμή, το εσωτερικό (1 μονάδα προς τα μέσα)
         // το σώμα — γι' αυτό οι κορυφές πέφτουν σε 2.414 / 5.586.
-        new TileType('/', "ramp_dr", GeoGroup, "Ράμπα ↗",
-            "Στερεό κάτω-δεξιά — πάτωμα που ανεβαίνει προς τα δεξιά (v >= 7-u).",
+        new TileType('/', "ramp_dr", GeoGroup, "Ramp ↗",
+            "Solid bottom-right — floor rising to the right (v >= 7-u).",
             Palette.Material, Palette.EdgeColor,
             """
             <polygon points="0,8 8,0 8,8" fill="var(--edge)"/>
             <polygon points="2.414,7 7,2.414 7,7" fill="var(--fill)"/>
             """),
 
-        new TileType('\\', "ramp_dl", GeoGroup, "Ράμπα ↘",
-            "Στερεό κάτω-αριστερά — πάτωμα που κατεβαίνει προς τα δεξιά (v >= u).",
+        new TileType('\\', "ramp_dl", GeoGroup, "Ramp ↘",
+            "Solid bottom-left — floor dropping to the right (v >= u).",
             Palette.Material, Palette.EdgeColor,
             """
             <polygon points="0,0 0,8 8,8" fill="var(--edge)"/>
             <polygon points="1,2.414 1,7 5.586,7" fill="var(--fill)"/>
             """),
 
-        new TileType('7', "ramp_ur", GeoGroup, "Ταβάνι ↘",
-            "Στερεό πάνω-δεξιά — ταβάνι που κατεβαίνει προς τα δεξιά (v <= u).",
+        new TileType('7', "ramp_ur", GeoGroup, "Ceiling ↘",
+            "Solid top-right — ceiling dropping to the right (v <= u).",
             Palette.Material, Palette.EdgeColor,
             """
             <polygon points="0,0 8,0 8,8" fill="var(--edge)"/>
             <polygon points="2.414,1 7,1 7,5.586" fill="var(--fill)"/>
             """),
 
-        new TileType('F', "ramp_ul", GeoGroup, "Ταβάνι ↗",
-            "Στερεό πάνω-αριστερά — ταβάνι που ανεβαίνει προς τα δεξιά (v <= 7-u).",
+        new TileType('F', "ramp_ul", GeoGroup, "Ceiling ↗",
+            "Solid top-left — ceiling rising to the right (v <= 7-u).",
             Palette.Material, Palette.EdgeColor,
             """
             <polygon points="0,0 8,0 0,8" fill="var(--edge)"/>
@@ -139,8 +139,8 @@ public static class TileCatalog
         // Η φορά είναι αυτή που δείχνουν οι ΜΥΤΕΣ (FACING στο physics.py):
         // ^ πάνω (4), < αριστερά (2), v κάτω (0), > δεξιά (6). Η βάση κάθεται
         // στην αντίθετη πλευρά — από εκεί τα αγγίζεις ακίνδυνα.
-        new TileType('^', "spike_u", HazardGroup, "Αγκάθια ↑",
-            "Μύτες προς τα πάνω, βάση στο κάτω μέρος. Στερεό αλλά θανάσιμο από πάνω.",
+        new TileType('^', "spike_u", HazardGroup, "Spikes ↑",
+            "Points up, base at the bottom. Solid but deadly from above.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0" y="6" width="8" height="2" fill="var(--fill)"/>
@@ -149,8 +149,8 @@ public static class TileCatalog
             <polygon points="5.33,6 6.67,1 8,6" fill="var(--edge)"/>
             """),
 
-        new TileType('v', "spike_d", HazardGroup, "Αγκάθια ↓",
-            "Μύτες προς τα κάτω, βάση στο πάνω μέρος.",
+        new TileType('v', "spike_d", HazardGroup, "Spikes ↓",
+            "Points down, base at the top.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0" y="0" width="8" height="2" fill="var(--fill)"/>
@@ -159,8 +159,8 @@ public static class TileCatalog
             <polygon points="5.33,2 6.67,7 8,2" fill="var(--edge)"/>
             """),
 
-        new TileType('<', "spike_l", HazardGroup, "Αγκάθια ←",
-            "Μύτες προς τα αριστερά, βάση στη δεξιά πλευρά.",
+        new TileType('<', "spike_l", HazardGroup, "Spikes ←",
+            "Points left, base on the right side.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="6" y="0" width="2" height="8" fill="var(--fill)"/>
@@ -169,8 +169,8 @@ public static class TileCatalog
             <polygon points="6,5.33 1,6.67 6,8" fill="var(--edge)"/>
             """),
 
-        new TileType('>', "spike_r", HazardGroup, "Αγκάθια →",
-            "Μύτες προς τα δεξιά, βάση στην αριστερή πλευρά.",
+        new TileType('>', "spike_r", HazardGroup, "Spikes →",
+            "Points right, base on the left side.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0" y="0" width="2" height="8" fill="var(--fill)"/>
@@ -182,8 +182,8 @@ public static class TileCatalog
         // ================= Επιφάνειες & ζώνες =================
         // Μονόδρομες: η μπάρα κάθεται στην πλευρά από την οποία είναι ΣΤΕΡΕΗ.
         // Τα βελάκια δείχνουν τη φορά που την περνάς.
-        new TileType('-', "oneway_u", SurfaceGroup, "Μονόδρομη ↑",
-            "Στερεή μόνο από πάνω — την περνάς ανεβαίνοντας από κάτω.",
+        new TileType('-', "oneway_u", SurfaceGroup, "One-way ↑",
+            "Solid only from above — you pass through it going up from below.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0" y="0" width="8" height="2" fill="var(--fill)"/>
@@ -192,8 +192,8 @@ public static class TileCatalog
                   stroke="var(--edge)" stroke-width="0.5"/>
             """),
 
-        new TileType('_', "oneway_d", SurfaceGroup, "Μονόδρομη ↓",
-            "Στερεή μόνο από κάτω — την περνάς κατεβαίνοντας από πάνω.",
+        new TileType('_', "oneway_d", SurfaceGroup, "One-way ↓",
+            "Solid only from below — you pass through it going down from above.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0" y="6" width="8" height="2" fill="var(--fill)"/>
@@ -202,8 +202,8 @@ public static class TileCatalog
                   stroke="var(--edge)" stroke-width="0.5"/>
             """),
 
-        new TileType('[', "oneway_l", SurfaceGroup, "Μονόδρομη ←",
-            "Στερεή μόνο από αριστερά — την περνάς πηγαίνοντας προς τα αριστερά.",
+        new TileType('[', "oneway_l", SurfaceGroup, "One-way ←",
+            "Solid only from the left — you pass through it moving left.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0" y="0" width="2" height="8" fill="var(--fill)"/>
@@ -212,8 +212,8 @@ public static class TileCatalog
                   stroke="var(--edge)" stroke-width="0.5"/>
             """),
 
-        new TileType(']', "oneway_r", SurfaceGroup, "Μονόδρομη →",
-            "Στερεή μόνο από δεξιά — την περνάς πηγαίνοντας προς τα δεξιά.",
+        new TileType(']', "oneway_r", SurfaceGroup, "One-way →",
+            "Solid only from the right — you pass through it moving right.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="6" y="0" width="2" height="8" fill="var(--fill)"/>
@@ -222,8 +222,8 @@ public static class TileCatalog
                   stroke="var(--edge)" stroke-width="0.5"/>
             """),
 
-        new TileType(':', "gravlock", SurfaceGroup, "Ζώνη κλειδώματος",
-            "Μέσα της ΔΕΝ αλλάζει η βαρύτητα. Δεν είναι στερεή.",
+        new TileType(':', "gravlock", SurfaceGroup, "Gravity-lock zone",
+            "Inside it gravity does NOT change. It is not solid.",
             Palette.Ink, Palette.EdgeColor,
             """
             <rect x="0" y="0" width="8" height="8" fill="var(--fill)" fill-opacity="0.12"/>
@@ -231,8 +231,8 @@ public static class TileCatalog
             <line x1="2.3" y1="5.7" x2="5.7" y2="2.3" stroke="var(--fill)" stroke-width="0.7"/>
             """),
 
-        new TileType('%', "crumble", SurfaceGroup, "Εύθραυστο",
-            "Στερεό που καταρρέει λίγο αφού το πατήσεις.",
+        new TileType('%', "crumble", SurfaceGroup, "Fragile",
+            "Solid that collapses shortly after you step on it.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0" y="0" width="8" height="8" fill="var(--fill)" fill-opacity="0.7"/>
@@ -243,8 +243,8 @@ public static class TileCatalog
             """),
 
         // ================= Αντικείμενα =================
-        new TileType('X', "exit", ItemGroup, "Έξοδος",
-            "Ο στόχος της πίστας.",
+        new TileType('X', "exit", ItemGroup, "Exit",
+            "The goal of the level.",
             Palette.Ink, Palette.EdgeColor,
             """
             <rect x="0.6" y="0.6" width="6.8" height="6.8" fill="none"
@@ -252,16 +252,16 @@ public static class TileCatalog
             <polygon points="2.6,2.2 5.6,4 2.6,5.8" fill="var(--fill)"/>
             """),
 
-        new TileType('+', "energy", ItemGroup, "Ενέργεια",
-            "Μάζεμα: +2 ενέργεια.",
+        new TileType('+', "energy", ItemGroup, "Energy",
+            "Pickup: +2 energy.",
             Palette.Ink, Palette.EdgeColor,
             """
             <path d="M3.2,1 h1.6 v2.2 h2.2 v1.6 h-2.2 v2.2 h-1.6 v-2.2 h-2.2 v-1.6 h2.2 z"
                   fill="var(--fill)"/>
             """),
 
-        new TileType('P', "parachute", ItemGroup, "Αλεξίπτωτο",
-            "Μάζεμα: ακυρώνει τη ζημιά από πτώση.",
+        new TileType('P', "parachute", ItemGroup, "Parachute",
+            "Pickup: cancels fall damage.",
             Palette.Ink, Palette.EdgeColor,
             """
             <path d="M0.8,4.4 Q4,0.2 7.2,4.4 Z" fill="var(--fill)"/>
@@ -269,8 +269,8 @@ public static class TileCatalog
                   fill="none" stroke="var(--fill)" stroke-width="0.4"/>
             """),
 
-        new TileType('k', "key", ItemGroup, "Κλειδί",
-            "Μάζεμα: ανοίγει την κλειδαριά (K).",
+        new TileType('k', "key", ItemGroup, "Key",
+            "Pickup: opens the lock (K).",
             Palette.Ink, Palette.EdgeColor,
             """
             <circle cx="2.6" cy="3" r="1.4" fill="none" stroke="var(--fill)" stroke-width="0.8"/>
@@ -278,8 +278,8 @@ public static class TileCatalog
                   fill="none" stroke="var(--fill)" stroke-width="0.7"/>
             """),
 
-        new TileType('T', "teleport", ItemGroup, "Τηλεμεταφορά",
-            "Σε στέλνει σε άλλο κελί της ΙΔΙΑΣ αίθουσας. Όρισε τον προορισμό στον πίνακα «Τηλεμεταφορές».",
+        new TileType('T', "teleport", ItemGroup, "Teleporter",
+            "Sends you to another cell of the SAME room. Set the destination in the \"Teleporters\" panel.",
             Palette.Ink, Palette.EdgeColor,
             """
             <ellipse cx="4" cy="6.3" rx="3" ry="1.2" fill="none"
@@ -290,8 +290,8 @@ public static class TileCatalog
                   stroke="var(--fill)" stroke-width="0.5"/>
             """),
 
-        new TileType('B', "crate", ItemGroup, "Κιβώτιο",
-            "Στερεό που σπρώχνεται και πέφτει κι αυτό με τη βαρύτητα.",
+        new TileType('B', "crate", ItemGroup, "Crate",
+            "Solid that can be pushed and also falls with gravity.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0.6" y="0.6" width="6.8" height="6.8" fill="var(--fill)"/>
@@ -306,8 +306,8 @@ public static class TileCatalog
         // Κατάσταση εκτέλεσης, όχι εργαλείο σχεδίασης: προκύπτει όταν ο παίκτης
         // ξεκλειδώσει. Υπάρχει εδώ ώστε ο editor να μπορεί να ανοίξει πίστα που
         // αποθηκεύτηκε σε αυτή την κατάσταση.
-        new TileType('|', "lock_open", MechGroup, "Κλειδαριά ανοιγμένη",
-            "Ξεκλειδωμένη: φαίνεται ακόμα, αλλά περνάς από μέσα.",
+        new TileType('|', "lock_open", MechGroup, "Lock opened",
+            "Unlocked: still visible, but you pass through it.",
             Palette.Material, Palette.EdgeColor,
             """
             <path d="M1.4,3.4 L6.6,3.4 L6.6,7.4 L1.4,7.4 Z" fill="none"
@@ -317,8 +317,8 @@ public static class TileCatalog
                   transform="rotate(-35 2.4 3.4)"/>
             """),
 
-        new TileType('@', "start", MechGroup, "Θέση εκκίνησης",
-            "Πού ξεκινά ο παίκτης. Το κελί μένει κενό στο παιχνίδι.",
+        new TileType('@', "start", MechGroup, "Start position",
+            "Where the player starts. The cell stays empty in the game.",
             Palette.Ink, Palette.EdgeColor,
             """
             <circle cx="4" cy="4" r="3" fill="none"
@@ -329,8 +329,8 @@ public static class TileCatalog
             """),
 
         // ================= Μηχανισμοί =================
-        new TileType('K', "lock", MechGroup, "Κλειδαριά",
-            "Στερεό μέχρι να μαζέψεις το κλειδί (k).",
+        new TileType('K', "lock", MechGroup, "Lock",
+            "Solid until you pick up the key (k).",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0" y="0" width="8" height="8" fill="var(--fill)"/>
@@ -338,8 +338,8 @@ public static class TileCatalog
             <polygon points="3.3,3.6 4.7,3.6 5.2,6.4 2.8,6.4" fill="var(--edge)"/>
             """),
 
-        new TileType('G', "gate", MechGroup, "Πόρτα",
-            "Στερεή όσο είναι κλειστή· ανοίγει από διακόπτη (S) ή πλάκα (p).",
+        new TileType('G', "gate", MechGroup, "Gate",
+            "Solid while closed; opened by a switch (S) or a plate (p).",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0" y="0" width="8" height="8" fill="var(--fill)"/>
@@ -348,8 +348,8 @@ public static class TileCatalog
             <rect x="6" y="0" width="1" height="8" fill="var(--edge)"/>
             """),
 
-        new TileType('S', "switch", MechGroup, "Διακόπτης",
-            "Toggle: αλλάζει μόνιμα την κατάσταση των πορτών.",
+        new TileType('S', "switch", MechGroup, "Switch",
+            "Toggle: permanently flips the state of the gates.",
             Palette.Ink, Palette.EdgeColor,
             """
             <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
@@ -357,8 +357,8 @@ public static class TileCatalog
             <circle cx="6.1" cy="1.9" r="1" fill="var(--fill)"/>
             """),
 
-        new TileType('p', "plate", MechGroup, "Πλάκα πίεσης",
-            "Ενεργή μόνο όσο πατιέται από τον ήρωα ή από κιβώτιο.",
+        new TileType('p', "plate", MechGroup, "Pressure plate",
+            "Active only while pressed by the hero or a crate.",
             Palette.Material, Palette.EdgeColor,
             """
             <rect x="0.6" y="4.8" width="6.8" height="1.4" fill="var(--fill)"/>
