@@ -287,11 +287,19 @@ def rooms_asm(rooms):
                 f"                dw room_{r.number}_cells",
                 f"                dw room_{r.number}_exits",
                 f"                dw room_{r.number}_tps",
+                f"                dw room_{r.number}_arr",
                 "",
-                f"room_{r.number}_exits:   ; col, row, αίθουσα ... #FF = τέλος"]
-        for (c, rr), dest, cells in r.exit_groups():
-            for cc, cr in sorted(cells, key=lambda p: (p[1], p[0])):
-                out.append(f"                db {cc},{cr},{dest}")
+                f"room_{r.number}_exits:   ; col, row, αίθουσα, διπλής; ... #FF"]
+        for (c, rr), dest, two, cells in r.exit_groups():
+            for cc, cr in cells:
+                out.append(f"                db {cc},{cr},{dest},{1 if two else 0}")
+        out += ["                db #FF", "",
+                f"room_{r.number}_arr:     ; αίθουσα προέλευσης, col, row ... #FF",
+                ]
+        for other in rooms:
+            a = r.arrival_for(other.number)
+            if a:
+                out.append(f"                db {other.number},{a[0]},{a[1]}")
         out += ["                db #FF", "",
                 f"room_{r.number}_tps:     ; col, row, dcol, drow ... #FF = τέλος"]
         for (c, rr), dest, cells in r.teleport_groups():

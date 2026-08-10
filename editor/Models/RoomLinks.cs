@@ -18,7 +18,12 @@ public sealed record GridCell(int Col, int Row);
 public sealed record CellGroup(int Col, int Row, IReadOnlyList<GridCell> Cells);
 
 /// <summary>Μία γραμμή footer «exit &lt;col&gt; &lt;row&gt; &lt;room&gt;».</summary>
-public sealed record ExitLink(int Col, int Row, int Room);
+/// <param name="TwoWay">
+/// Διπλής κατεύθυνσης: περνώντας την, ο παίκτης εμφανίζεται ΔΙΠΛΑ στην πόρτα
+/// που γυρίζει πίσω — όχι στο σημείο εκκίνησης της αίθουσας, και ποτέ πάνω
+/// στην ίδια την πόρτα, γιατί εκεί θα την ξαναπερνούσε ατέρμονα.
+/// </param>
+public sealed record ExitLink(int Col, int Row, int Room, bool TwoWay = false);
 
 /// <summary>
 /// Μία γραμμή footer «tp &lt;col&gt; &lt;row&gt; &lt;dcol&gt; &lt;drow&gt;».
@@ -103,7 +108,7 @@ public static class ExitGraph
     // Χαλαρό ταίριασμα (κενά, πεζά/κεφαλαία) ώστε να διαβάζονται και γραμμές
     // γραμμένες στο χέρι.
     private static readonly Regex LinePattern = new(
-        @"^\s*exit\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
+        @"^\s*exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01]))?\s*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>Είναι η γραμμή δήλωση εξόδου (και όχι σχόλιο ή ρύθμιση);</summary>
@@ -111,7 +116,11 @@ public static class ExitGraph
 
     /// <summary>Η γραμμή footer για έναν σύνδεσμο εξόδου.</summary>
     public static string FormatLine(ExitLink link) =>
-        string.Create(CultureInfo.InvariantCulture, $"exit {link.Col} {link.Row} {link.Room}");
+        link.TwoWay
+            ? string.Create(CultureInfo.InvariantCulture,
+                $"exit {link.Col} {link.Row} {link.Room} 1")
+            : string.Create(CultureInfo.InvariantCulture,
+                $"exit {link.Col} {link.Row} {link.Room}");
 
     /// <summary>Οι δηλώσεις «exit» μιας ουράς αρχείου, με τη σειρά που εμφανίζονται.</summary>
     public static List<ExitLink> ParseLines(IEnumerable<string> lines)
@@ -124,7 +133,8 @@ public static class ExitGraph
             links.Add(new ExitLink(
                 int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture),
                 int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture),
-                int.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture)));
+                int.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture),
+                m.Groups[4].Success && m.Groups[4].Value == "1"));
         }
 
         return links;

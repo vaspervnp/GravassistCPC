@@ -219,6 +219,8 @@
 
     /* Ομάδα τηλεμεταφοράς χωρίς προορισμό: προειδοποίηση, όχι σφάλμα. */
     .link-row.pending input[type=number] { border-color: #ffd000; }
+    .link-two { display:flex; align-items:center; gap:.25rem; font-size:.85em;
+                color:#9ab; white-space:nowrap; cursor:pointer; }
 
     .link-row.picking {
         background: rgba(255, 128, 0, 0.18);
@@ -631,7 +633,23 @@
                     cursor.setAttribute("visibility", "hidden");
                 });
 
-                row.append(tag, pos, input);
+                // Διπλής κατεύθυνσης: περνώντας την, ο παίκτης εμφανίζεται ΔΙΠΛΑ
+                // στην πόρτα που γυρίζει πίσω — όχι στο σημείο εκκίνησης της
+                // αίθουσας, και ποτέ πάνω στην πόρτα (θα την ξαναπερνούσε).
+                const twoLbl = document.createElement("label");
+                twoLbl.className = "link-two";
+                twoLbl.title = "Διπλής κατεύθυνσης: γυρνώντας, ο παίκτης "
+                             + "εμφανίζεται δίπλα στην πόρτα επιστροφής.";
+                const twoBox = document.createElement("input");
+                twoBox.type = "checkbox";
+                twoBox.checked = !!g.twoWay;
+                twoBox.addEventListener("change", function () {
+                    exitGroups[i].twoWay = twoBox.checked;
+                    dirty = true;
+                });
+                twoLbl.append(twoBox, document.createTextNode("διπλή"));
+
+                row.append(tag, pos, input, twoLbl);
                 exitListEl.appendChild(row);
             });
 
@@ -1293,6 +1311,7 @@
                 footer: footer,
                 exits: exitGroups.map(g => ({
                     col: g.col, row: g.row, room: g.room, cells: g.cells.length,
+                    twoWay: !!g.twoWay,
                 })),
                 // Μία εγγραφή ανά ΟΜΑΔΑ — ο server γράφει μία γραμμή «tp …» για
                 // όσες έχουν προορισμό και παραλείπει τις υπόλοιπες.

@@ -91,10 +91,16 @@
       const dest = roomDestFor(hero);
       hero.won = false;
       if (dest && rooms["room_" + dest + ".txt"]) {
+        const from = roomNumberOf(curName);
+        const [bc, br] = hero.bodyCell();
+        const two = (rooms[curName].twoWay || {})[bc + "," + br];
         const nr = rooms["room_" + dest + ".txt"];
         sel.value = "room_" + dest + ".txt";
-        start(sel.value, nr.cells, nr.start);
-        note.textContent = "Αίθουσα " + dest;
+        // Πόρτα διπλής κατεύθυνσης: εμφανίζεσαι ΔΙΠΛΑ στην πόρτα επιστροφής,
+        // όχι πάνω της — εκεί θα σε ξαναπερνούσε αμέσως, ατέρμονα.
+        const arr = two ? arrivalIn(nr, from) : null;
+        start(sel.value, nr.cells, arr || nr.start);
+        note.textContent = "Αίθουσα " + dest + (arr ? " (δίπλα στην πόρτα)" : "");
       } else if (dest) {
         note.textContent = "Η αίθουσα " + dest + " δεν υπάρχει";
       } else {
@@ -113,6 +119,30 @@
     screen.hud(hero);
     screen.flush();
     requestAnimationFrame(frame);
+  }
+
+  function roomNumberOf(name) {
+    const m = /^room_(\d+)\.txt$/i.exec(name || "");
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
+  // Το κελί δίπλα στην πόρτα της `meta` που γυρίζει στην αίθουσα `origin`.
+  // Ίδια σειρά σάρωσης με το physics.arrival_for, ώστε να πέφτει στο ίδιο κελί.
+  function arrivalIn(meta, origin) {
+    const EX = D.TYPE_NAMES.indexOf("EXIT");
+    for (let r = 0; r < D.ROWS; r++)
+      for (let c = 0; c < D.COLS; c++) {
+        if (meta.cells[r][c] !== EX) continue;
+        if (meta.exits[c + "," + r] !== origin) continue;
+        for (const [nc, nr] of [[c-1,r],[c+1,r],[c,r-1],[c,r+1]]) {
+          if (nc < 0 || nr < 0 || nc >= D.COLS || nr >= D.ROWS) continue;
+          const t = meta.cells[nr][nc];
+          if (t !== EX && !(D.PROPS[t] & (D.F.SOLID | D.F.DEADLY)))
+            return [nc * D.CELL + D.CELL / 2,
+                    D.GRID_Y0 + nr * D.CELL + D.CELL / 2, meta.start[2]];
+        }
+      }
+    return null;
   }
 
   function roomDestFor(h) {
@@ -139,14 +169,18 @@
       }));
       const foot = (doc.footer || []).join("\n");
       const exits = {}, teleports = {};
-      for (const m of foot.matchAll(/exit\s+(\d+)\s+(\d+)\s+(\d+)/gi))
+      const twoWay = {};
+      for (const m of foot.matchAll(/exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01]))?/gi)) {
         exits[m[1] + "," + m[2]] = +m[3];
+        twoWay[m[1] + "," + m[2]] = m[4] === "1";
+      }
       for (const m of foot.matchAll(/tp\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/gi))
         teleports[m[1] + "," + m[2]] = [+m[3], +m[4]];
       // Γειτονικά κελιά είναι ΕΝΑ αντικείμενο: ο προορισμός σε ΟΛΑ τα κελιά.
       spread(cells, exits, D.TYPE_NAMES.indexOf("EXIT"));
       spread(cells, teleports, D.TYPE_NAMES.indexOf("TELEPORT"));
-      rooms[name] = { cells, start, exits, teleports };
+      spread(cells, twoWay, D.TYPE_NAMES.indexOf("EXIT"));
+      rooms[name] = { cells, start, exits, teleports, twoWay };
       const o = document.createElement("option");
       o.value = name; o.textContent = name;
       sel.appendChild(o);

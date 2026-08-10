@@ -194,6 +194,8 @@ ml_anim:        call anim_frame
                 push af
                 xor  a
                 ld   (pending_room),a
+                ld   a,(cur_room)       ; από πού ερχόμαστε: το χρειάζεται η
+                ld   (from_room),a      ; άφιξη δίπλα στην πόρτα επιστροφής
                 pop  af
                 call room_load
 ml_esc:

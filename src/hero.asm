@@ -142,6 +142,43 @@ ht_hset:        ld   (hero_energy),a
                 ld   (hud_dirty),a
                 ret
 
+; rl_arrival — τοποθετεί τον ήρωα ΔΙΠΛΑ στην πόρτα που γυρίζει στην αίθουσα
+;   (from_room). Αν δεν υπάρχει τέτοια πόρτα, μένει το σημείο εκκίνησης.
+;---------------------------------------------------------------------
+rl_arrival:     ld   hl,(room_arr)
+ra_lp:          ld   a,(hl)
+                cp   #FF
+                ret  z
+                ld   b,a
+                ld   a,(from_room)
+                cp   b
+                jr   z,ra_found
+                inc  hl                 ; προσπέρασε αίθουσα, col, row
+                inc  hl
+                inc  hl
+                jr   ra_lp
+
+ra_found:       inc  hl
+                ld   a,(hl)             ; col -> κέντρο κελιού
+                add  a,a
+                add  a,a
+                add  a,a
+                add  a,LVL_CELL/2
+                ld   e,a
+                ld   d,0
+                ld   (hero_x),de
+                inc  hl
+                ld   a,(hl)             ; row
+                add  a,a
+                add  a,a
+                add  a,a
+                add  a,LVL_Y0+LVL_CELL/2
+                ld   e,a
+                ld   d,0
+                ld   (hero_y),de
+                ret
+
+;---------------------------------------------------------------------
 ; exit_dest — προορισμός της εξόδου στο κελί (cell_col, cell_row)
 ;   OUT: A = αριθμός αίθουσας, 0 αν δεν δηλώθηκε
 ;
@@ -163,19 +200,29 @@ ed_lp:          ld   a,(hl)
                 ld   a,(cell_row)
                 cp   c
                 jr   nz,ed_next
+                ld   a,(hl)             ; αίθουσα προορισμού
+                inc  hl
+                ld   b,a
                 ld   a,(hl)
+                ld   (exit_two),a       ; διπλής κατεύθυνσης;
+                ld   a,b
                 ret
-ed_next:        inc  hl
+ed_next:        inc  hl                 ; προσπέρασε αίθουσα και σημαία
+                inc  hl
                 jr   ed_lp
 ed_none:        xor  a
+                ld   (exit_two),a
                 ret
+
+exit_two        db 0
 
 ;---------------------------------------------------------------------
 ; room_load — φορτώνει την αίθουσα με αριθμό A
 ;   Οι αίθουσες είναι ήδη στη μνήμη: "φόρτωση" σημαίνει αλλαγή δείκτη,
 ;   ξαναζωγράφισμα και τοποθέτηση του ήρωα στο σημείο εκκίνησής της.
 ;---------------------------------------------------------------------
-room_load:      ld   b,a
+room_load:      ld   (cur_room),a
+                ld   b,a
                 ld   hl,room_numbers
                 ld   c,0
 rl_find:        ld   a,c
@@ -226,7 +273,20 @@ rl_got:         ld   a,c
                 ld   e,(hl)
                 inc  hl
                 ld   d,(hl)
+                inc  hl
                 ld   (room_tps),de
+                ld   e,(hl)
+                inc  hl
+                ld   d,(hl)
+                ld   (room_arr),de
+
+                ; Πόρτα διπλής κατεύθυνσης: ο ήρωας εμφανίζεται ΔΙΠΛΑ στην
+                ; πόρτα που γυρίζει πίσω, όχι στο σημείο εκκίνησης της αίθουσας
+                ; και ΟΧΙ πάνω στην πόρτα — εκεί θα την ξαναπερνούσε αμέσως και
+                ; θα πηγαινοερχόταν ατέρμονα.
+                ld   a,(exit_two)
+                or   a
+                call nz,rl_arrival
 
                 xor  a                  ; καθαρή αρχή στη νέα αίθουσα
                 ld   (crates_on),a
@@ -241,6 +301,9 @@ rl_got:         ld   a,c
 
 room_exits      dw 0
 room_tps        dw 0
+room_arr        dw 0
+cur_room        db 0
+from_room       db 0
 pending_room    db 0
 
 ;---------------------------------------------------------------------

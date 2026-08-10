@@ -53,7 +53,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             // ό,τι δεν έχει προορισμό μένει έξω και το πιάνει η επικύρωση.
             doc.SetExitLinks(request.Exits
                 .Where(e => e.Room is not null)
-                .Select(e => new ExitLink(e.Col, e.Row, e.Room!.Value)));
+                .Select(e => new ExitLink(e.Col, e.Row, e.Room!.Value, e.TwoWay)));
 
             // ΜΕΤΑ τις εξόδους, ώστε η ουρά να μένει «… exit … / tp …» — η ίδια
             // σειρά με τα υπάρχοντα αρχεία (round-trip χωρίς αλλαγές).
@@ -120,13 +120,14 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
     {
         var byAnchor = doc.ExitLinks()
             .GroupBy(l => (l.Col, l.Row))
-            .ToDictionary(g => g.Key, g => g.Last().Room);
+            .ToDictionary(g => g.Key, g => g.Last());
 
         var exits = doc.ExitGroups()
             .Select(g => new ExitDto(
                 g.Col, g.Row,
-                byAnchor.TryGetValue((g.Col, g.Row), out var room) ? room : null,
-                g.Cells.Count))
+                byAnchor.TryGetValue((g.Col, g.Row), out var link) ? link.Room : null,
+                g.Cells.Count,
+                byAnchor.TryGetValue((g.Col, g.Row), out var l2) && l2.TwoWay))
             .ToList();
 
         var tpByAnchor = doc.TeleportLinks()

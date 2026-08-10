@@ -188,13 +188,15 @@ class Room:
         self.start_g = 0
         decl = {}                       # (col,row) -> αίθουσα προορισμού
         tpd = {}                        # (col,row) -> κελί προορισμού
+        two = {}                        # (col,row) -> διπλής κατεύθυνσης;
         for ln in text.splitlines():
             m = re.match(r"\s*gravity\s+([0-7])\s*$", ln, re.I)
             if m:
                 self.start_g = int(m.group(1))
-            m = re.match(r"\s*exit\s+(\d+)\s+(\d+)\s+(\d+)\s*$", ln, re.I)
+            m = re.match(r"\s*exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01]))?\s*$", ln, re.I)
             if m:
                 decl[(int(m.group(1)), int(m.group(2)))] = int(m.group(3))
+                two[(int(m.group(1)), int(m.group(2)))] = m.group(4) == "1"
             m = re.match(r"\s*tp\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", ln, re.I)
             if m:
                 a, b, c, d = (int(x) for x in m.groups())
@@ -202,6 +204,8 @@ class Room:
         self.exits = {k: (v or 0) for k, v in
                       self._link(EXIT, decl, "εξόδου").items()}
         self.teleports = self._link(TELEPORT, tpd, "τηλεμεταφοράς")
+        self.exit_two = {k: bool(v) for k, v in
+                         self._link(EXIT, two, "εξόδου (κατεύθυνση)").items()}
 
     def _groups_of(self, kind):
         """Συνιστώσες γειτονικών κελιών τύπου `kind` (γειτνίαση 4).
@@ -249,8 +253,30 @@ class Room:
         return out
 
     def exit_groups(self):
-        """[(πάνω-αριστερό κελί, αίθουσα, [κελιά])] ανά ομάδα εξόδου."""
-        return [(g[0], self.exits[g[0]], g) for g in self._groups_of(EXIT)]
+        """[(πάνω-αριστερό κελί, αίθουσα, διπλής;, [κελιά])] ανά ομάδα εξόδου."""
+        return [(g[0], self.exits[g[0]], self.exit_two.get(g[0], False), g)
+                for g in self._groups_of(EXIT)]
+
+    def arrival_for(self, origin):
+        """Πού προσγειώνεται ο παίκτης μπαίνοντας ΑΠΟ την αίθουσα `origin`.
+
+        Δίπλα στην πόρτα που γυρίζει πίσω εκεί — ΟΧΙ πάνω της: πάνω στην πόρτα
+        θα την ξαναπερνούσε αμέσως και θα πηγαινοερχόταν ατέρμονα.
+
+        Επιστρέφει κελί (col,row) ή None αν δεν υπάρχει πόρτα επιστροφής.
+        """
+        for cell, dest, _two, cells in self.exit_groups():
+            if dest != origin:
+                continue
+            for c, r in cells:          # σταθερή σειρά -> προβλέψιμο σημείο
+                for nc, nr in ((c-1, r), (c+1, r), (c, r-1), (c, r+1)):
+                    if not (0 <= nc < COLS and 0 <= nr < ROWS):
+                        continue
+                    t = self.cells[nr][nc]
+                    if t == EMPTY or not (PROPS[t] & (F_SOLID | F_DEADLY)):
+                        if t != EXIT:
+                            return nc, nr
+        return None
 
     def teleport_groups(self):
         """[(πάνω-αριστερό κελί, κελί προορισμού ή None, [κελιά])] ανά ομάδα."""

@@ -282,10 +282,15 @@ room_1_rec:
                 dw room_1_cells
                 dw room_1_exits
                 dw room_1_tps
+                dw room_1_arr
 
-room_1_exits:   ; col, row, αίθουσα ... #FF = τέλος
-                db 39,21,2
-                db 39,22,2
+room_1_exits:   ; col, row, αίθουσα, διπλής; ... #FF
+                db 39,21,2,1
+                db 39,22,2,1
+                db #FF
+
+room_1_arr:     ; αίθουσα προέλευσης, col, row ... #FF
+                db 2,38,21
                 db #FF
 
 room_1_tps:     ; col, row, dcol, drow ... #FF = τέλος
@@ -327,10 +332,15 @@ room_2_rec:
                 dw room_2_cells
                 dw room_2_exits
                 dw room_2_tps
+                dw room_2_arr
 
-room_2_exits:   ; col, row, αίθουσα ... #FF = τέλος
-                db 0,21,1
-                db 0,22,1
+room_2_exits:   ; col, row, αίθουσα, διπλής; ... #FF
+                db 0,21,1,1
+                db 0,22,1,1
+                db #FF
+
+room_2_arr:     ; αίθουσα προέλευσης, col, row ... #FF
+                db 1,1,21
                 db #FF
 
 room_2_tps:     ; col, row, dcol, drow ... #FF = τέλος

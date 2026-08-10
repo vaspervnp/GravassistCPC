@@ -271,7 +271,7 @@ def main():
     rooms = P.all_rooms()
     check("βρέθηκαν αίθουσες", len(rooms) >= 2, f"{[r.number for r in rooms]}")
     for r in rooms:
-        for cell, dest, cells in r.exit_groups():
+        for cell, dest, _two, cells in r.exit_groups():
             check(f"room_{r.number}: η έξοδος {cell} έχει προορισμό", dest != 0)
             check(f"room_{r.number}: ο προορισμός {dest} υπάρχει",
                   any(o.number == dest for o in rooms))
@@ -291,6 +291,27 @@ def main():
             dt = r.cell(*dest)
             check(f"room_{r.number}: ο προορισμός {dest} δεν είναι στερεός",
                   not (PROPS_SOLID & P.PROPS[dt]), P.TYPE_NAMES[dt])
+
+    # 14. Πόρτες διπλής κατεύθυνσης: η άφιξη είναι ΔΙΠΛΑ στην πόρτα επιστροφής,
+    #     ποτέ πάνω της — αλλιώς ο παίκτης θα πηγαινοερχόταν ατέρμονα.
+    for r in rooms:
+        for cell, dest, two, cells in r.exit_groups():
+            if not two:
+                continue
+            other = next((o for o in rooms if o.number == dest), None)
+            if other is None:
+                continue
+            a = other.arrival_for(r.number)
+            check(f"room_{dest}: υπάρχει άφιξη από την {r.number}", a is not None, f"{a}")
+            if a is None:
+                continue
+            check(f"room_{dest}: η άφιξη {a} ΔΕΝ είναι πάνω στην πόρτα",
+                  other.cell(*a) != P.EXIT, P.TYPE_NAMES[other.cell(*a)])
+            check(f"room_{dest}: η άφιξη {a} δεν είναι στερεή",
+                  not (P.PROPS[other.cell(*a)] & P.F_SOLID))
+            check(f"room_{dest}: η άφιξη {a} ακουμπά την πόρτα",
+                  any(abs(a[0]-c) + abs(a[1]-rr) == 1 for c, rr in
+                      next(g for k, d, t2, g in other.exit_groups() if d == r.number)))
 
     # Γειτονικές έξοδοι με ΔΙΑΦΟΡΕΤΙΚΟΥΣ προορισμούς πρέπει να απορρίπτονται.
     bad = ";\n" + "\n".join(
