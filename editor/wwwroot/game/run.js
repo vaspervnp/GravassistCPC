@@ -125,14 +125,19 @@
     return m ? parseInt(m[1], 10) : 0;
   }
 
-  // Το κελί δίπλα στην πόρτα της `meta` που γυρίζει στην αίθουσα `origin`.
-  // Ίδια σειρά σάρωσης με το physics.arrival_for, ώστε να πέφτει στο ίδιο κελί.
+  // Πού εμφανίζεται ο παίκτης βγαίνοντας από την πόρτα της `meta` που γυρίζει
+  // στην αίθουσα `origin`. Ίδια σειρά σάρωσης με το physics.arrival_for, ώστε
+  // browser και Amstrad να βγάζουν το ίδιο κελί.
   function arrivalIn(meta, origin) {
     const EX = D.TYPE_NAMES.indexOf("EXIT");
     for (let r = 0; r < D.ROWS; r++)
       for (let c = 0; c < D.COLS; c++) {
         if (meta.cells[r][c] !== EX) continue;
         if (meta.exits[c + "," + r] !== origin) continue;
+        // Ρητά δηλωμένο σημείο άφιξης: κερδίζει το αυτόματο διπλανό κελί.
+        const dec = (meta.arrive || {})[c + "," + r];
+        if (dec) return [dec[0] * D.CELL + D.CELL / 2,
+                         D.GRID_Y0 + dec[1] * D.CELL + D.CELL / 2, meta.start[2]];
         for (const [nc, nr] of [[c-1,r],[c+1,r],[c,r-1],[c,r+1]]) {
           if (nc < 0 || nr < 0 || nc >= D.COLS || nr >= D.ROWS) continue;
           const t = meta.cells[nr][nc];
@@ -168,10 +173,13 @@
       }));
       const foot = (doc.footer || []).join("\n");
       const exits = {}, teleports = {};
-      const twoWay = {};
-      for (const m of foot.matchAll(/exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01]))?/gi)) {
+      const twoWay = {}, arrive = {};
+      // Τα προαιρετικά πεδία είναι ΘΕΣΗΣ: το κελί άφιξης μετά τη σημαία διπλής.
+      for (const m of foot.matchAll(
+             /exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01])(?:\s+(\d+)\s+(\d+))?)?/gi)) {
         exits[m[1] + "," + m[2]] = +m[3];
         twoWay[m[1] + "," + m[2]] = m[4] === "1";
+        if (m[5] !== undefined) arrive[m[1] + "," + m[2]] = [+m[5], +m[6]];
       }
       for (const m of foot.matchAll(/tp\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/gi))
         teleports[m[1] + "," + m[2]] = [+m[3], +m[4]];
@@ -179,7 +187,8 @@
       spread(cells, exits, D.TYPE_NAMES.indexOf("EXIT"));
       spread(cells, teleports, D.TYPE_NAMES.indexOf("TELEPORT"));
       spread(cells, twoWay, D.TYPE_NAMES.indexOf("EXIT"));
-      rooms[name] = { cells, start, exits, teleports, twoWay };
+      spread(cells, arrive, D.TYPE_NAMES.indexOf("EXIT"));
+      rooms[name] = { cells, start, exits, teleports, twoWay, arrive };
       const o = document.createElement("option");
       o.value = name; o.textContent = name;
       sel.appendChild(o);

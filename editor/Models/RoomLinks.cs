@@ -17,13 +17,21 @@ public sealed record GridCell(int Col, int Row);
 /// </summary>
 public sealed record CellGroup(int Col, int Row, IReadOnlyList<GridCell> Cells);
 
-/// <summary>Μία γραμμή footer «exit &lt;col&gt; &lt;row&gt; &lt;room&gt;».</summary>
+/// <summary>
+/// Μία γραμμή footer «exit &lt;col&gt; &lt;row&gt; &lt;room&gt; [διπλή] [acol] [arow]».
+/// </summary>
 /// <param name="TwoWay">
-/// Διπλής κατεύθυνσης: περνώντας την, ο παίκτης εμφανίζεται ΔΙΠΛΑ στην πόρτα
-/// που γυρίζει πίσω — όχι στο σημείο εκκίνησης της αίθουσας, και ποτέ πάνω
-/// στην ίδια την πόρτα, γιατί εκεί θα την ξαναπερνούσε ατέρμονα.
+/// Διπλής κατεύθυνσης: η αίθουσα προορισμού έχει πόρτα που γυρίζει εδώ, οπότε
+/// ο παίκτης δεν ξεκινά από το σημείο εκκίνησης όταν επιστρέφει.
 /// </param>
-public sealed record ExitLink(int Col, int Row, int Room, bool TwoWay = false);
+/// <param name="ArriveCol">
+/// Πού εμφανίζεται ο παίκτης ΒΓΑΙΝΟΝΤΑΣ από αυτή την πόρτα. Ανήκει στην πόρτα
+/// και όχι στην αίθουσα, γιατί κάθε πόρτα βγάζει αλλού. null = να το βρει μόνο
+/// του το παιχνίδι (πρώτο ελεύθερο διπλανό κελί)· αυτό αρκεί μόνο όταν η πόρτα
+/// δεν είναι κολλημένη σε γωνία ή σε άλλη πόρτα, γι' αυτό και ορίζεται ρητά.
+/// </param>
+public sealed record ExitLink(int Col, int Row, int Room, bool TwoWay = false,
+    int? ArriveCol = null, int? ArriveRow = null);
 
 /// <summary>
 /// Μία γραμμή footer «tp &lt;col&gt; &lt;row&gt; &lt;dcol&gt; &lt;drow&gt;».
@@ -107,20 +115,25 @@ public static class ExitGraph
 
     // Χαλαρό ταίριασμα (κενά, πεζά/κεφαλαία) ώστε να διαβάζονται και γραμμές
     // γραμμένες στο χέρι.
+    // Τα προαιρετικά πεδία είναι ΘΕΣΗΣ: το σημείο άφιξης έρχεται μετά τη σημαία
+    // διπλής κατεύθυνσης, οπότε για να γράψεις άφιξη πρέπει να γράψεις και σημαία.
     private static readonly Regex LinePattern = new(
-        @"^\s*exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01]))?\s*$",
+        @"^\s*exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01])(?:\s+(\d+)\s+(\d+))?)?\s*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>Είναι η γραμμή δήλωση εξόδου (και όχι σχόλιο ή ρύθμιση);</summary>
     public static bool IsExitLine(string line) => LinePattern.IsMatch(line);
 
     /// <summary>Η γραμμή footer για έναν σύνδεσμο εξόδου.</summary>
-    public static string FormatLine(ExitLink link) =>
-        link.TwoWay
-            ? string.Create(CultureInfo.InvariantCulture,
-                $"exit {link.Col} {link.Row} {link.Room} 1")
-            : string.Create(CultureInfo.InvariantCulture,
-                $"exit {link.Col} {link.Row} {link.Room}");
+    public static string FormatLine(ExitLink link)
+    {
+        var head = string.Create(CultureInfo.InvariantCulture,
+            $"exit {link.Col} {link.Row} {link.Room}");
+        if (link.ArriveCol is { } ac && link.ArriveRow is { } ar)
+            return string.Create(CultureInfo.InvariantCulture,
+                $"{head} {(link.TwoWay ? 1 : 0)} {ac} {ar}");
+        return link.TwoWay ? head + " 1" : head;
+    }
 
     /// <summary>Οι δηλώσεις «exit» μιας ουράς αρχείου, με τη σειρά που εμφανίζονται.</summary>
     public static List<ExitLink> ParseLines(IEnumerable<string> lines)
@@ -134,7 +147,11 @@ public static class ExitGraph
                 int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture),
                 int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture),
                 int.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture),
-                m.Groups[4].Success && m.Groups[4].Value == "1"));
+                m.Groups[4].Success && m.Groups[4].Value == "1",
+                m.Groups[5].Success
+                    ? int.Parse(m.Groups[5].Value, CultureInfo.InvariantCulture) : null,
+                m.Groups[6].Success
+                    ? int.Parse(m.Groups[6].Value, CultureInfo.InvariantCulture) : null));
         }
 
         return links;

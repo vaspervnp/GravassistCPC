@@ -189,14 +189,21 @@ class Room:
         decl = {}                       # (col,row) -> αίθουσα προορισμού
         tpd = {}                        # (col,row) -> κελί προορισμού
         two = {}                        # (col,row) -> διπλής κατεύθυνσης;
+        arr = {}                        # (col,row) -> κελί άφιξης της πόρτας
         for ln in text.splitlines():
             m = re.match(r"\s*gravity\s+([0-7])\s*$", ln, re.I)
             if m:
                 self.start_g = int(m.group(1))
-            m = re.match(r"\s*exit\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+([01]))?\s*$", ln, re.I)
+            # Τα προαιρετικά πεδία είναι ΘΕΣΗΣ: το κελί άφιξης έρχεται μετά τη
+            # σημαία διπλής κατεύθυνσης.
+            m = re.match(r"\s*exit\s+(\d+)\s+(\d+)\s+(\d+)"
+                         r"(?:\s+([01])(?:\s+(\d+)\s+(\d+))?)?\s*$", ln, re.I)
             if m:
-                decl[(int(m.group(1)), int(m.group(2)))] = int(m.group(3))
-                two[(int(m.group(1)), int(m.group(2)))] = m.group(4) == "1"
+                key = (int(m.group(1)), int(m.group(2)))
+                decl[key] = int(m.group(3))
+                two[key] = m.group(4) == "1"
+                if m.group(5):
+                    arr[key] = (int(m.group(5)), int(m.group(6)))
             m = re.match(r"\s*tp\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", ln, re.I)
             if m:
                 a, b, c, d = (int(x) for x in m.groups())
@@ -206,6 +213,7 @@ class Room:
         self.teleports = self._link(TELEPORT, tpd, "τηλεμεταφοράς")
         self.exit_two = {k: bool(v) for k, v in
                          self._link(EXIT, two, "εξόδου (κατεύθυνση)").items()}
+        self.exit_arrive = self._link(EXIT, arr, "εξόδου (άφιξη)")
 
     def _groups_of(self, kind):
         """Συνιστώσες γειτονικών κελιών τύπου `kind` (γειτνίαση 4).
@@ -258,16 +266,26 @@ class Room:
                 for g in self._groups_of(EXIT)]
 
     def arrival_for(self, origin):
-        """Πού προσγειώνεται ο παίκτης μπαίνοντας ΑΠΟ την αίθουσα `origin`.
+        """Πού εμφανίζεται ο παίκτης μπαίνοντας ΑΠΟ την αίθουσα `origin`.
 
-        Δίπλα στην πόρτα που γυρίζει πίσω εκεί — ΟΧΙ πάνω της: πάνω στην πόρτα
-        θα την ξαναπερνούσε αμέσως και θα πηγαινοερχόταν ατέρμονα.
+        Στο σημείο άφιξης της πόρτας που γυρίζει πίσω εκεί — δηλαδή της πόρτας
+        από την οποία ΒΓΑΙΝΕΙ. Το σημείο δηλώνεται στην ίδια γραμμή `exit` και
+        είναι ιδιότητα της πόρτας, όχι της αίθουσας: κάθε πόρτα βγάζει αλλού.
+
+        Χωρίς δήλωση πέφτουμε σε ένα ελεύθερο διπλανό κελί. ΠΟΤΕ πάνω στην ίδια
+        την πόρτα: εκεί θα την ξαναπερνούσε αμέσως και θα πηγαινοερχόταν
+        ατέρμονα — και το διπλανό κελί δεν αρκεί πάντα, γιατί ο ήρωας είναι 7
+        pixel φαρδύς και ακουμπάει και το επόμενο κελί. Γι' αυτό υπάρχει η ρητή
+        δήλωση.
 
         Επιστρέφει κελί (col,row) ή None αν δεν υπάρχει πόρτα επιστροφής.
         """
         for cell, dest, _two, cells in self.exit_groups():
             if dest != origin:
                 continue
+            declared = self.exit_arrive.get(cell)
+            if declared is not None:
+                return declared
             for c, r in cells:          # σταθερή σειρά -> προβλέψιμο σημείο
                 for nc, nr in ((c-1, r), (c+1, r), (c, r-1), (c, r+1)):
                     if not (0 <= nc < COLS and 0 <= nr < ROWS):

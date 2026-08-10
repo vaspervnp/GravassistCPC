@@ -10,7 +10,11 @@ public sealed record LevelFileInfo(string Name, int? Room);
 /// <param name="Row">Γραμμή του πάνω-αριστερού κελιού της ομάδας.</param>
 /// <param name="Room">Αριθμός αίθουσας προορισμού, ή null αν δεν έχει δηλωθεί.</param>
 /// <param name="Cells">Πόσα κελιά έχει η ομάδα (πληροφοριακό, για το UI).</param>
-public sealed record ExitDto(int Col, int Row, int? Room, int Cells, bool TwoWay);
+/// <param name="TwoWay">Υπάρχει πόρτα επιστροφής στην άλλη αίθουσα;</param>
+/// <param name="ArriveCol">Στήλη του κελιού άφιξης, ή null = να το βρει το παιχνίδι.</param>
+/// <param name="ArriveRow">Γραμμή του κελιού άφιξης, ή null = να το βρει το παιχνίδι.</param>
+public sealed record ExitDto(int Col, int Row, int? Room, int Cells, bool TwoWay,
+    int? ArriveCol = null, int? ArriveRow = null);
 
 /// <summary>
 /// Μία ομάδα τηλεμεταφοράς με τον προορισμό της, όπως ταξιδεύει στο JSON.

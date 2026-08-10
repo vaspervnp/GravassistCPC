@@ -292,8 +292,13 @@ def main():
             check(f"room_{r.number}: ο προορισμός {dest} δεν είναι στερεός",
                   not (PROPS_SOLID & P.PROPS[dt]), P.TYPE_NAMES[dt])
 
-    # 14. Πόρτες διπλής κατεύθυνσης: η άφιξη είναι ΔΙΠΛΑ στην πόρτα επιστροφής,
-    #     ποτέ πάνω της — αλλιώς ο παίκτης θα πηγαινοερχόταν ατέρμονα.
+    # 14. Πόρτες διπλής κατεύθυνσης: μπαίνοντας πίσω, ο παίκτης ΔΕΝ ξαναπερνά
+    #     αμέσως την πόρτα. Δεν αρκεί να μην είναι ΠΑΝΩ της: με πλάγια βαρύτητα
+    #     το διπλανό κελί γλιστράει μέσα της και ο παίκτης πηγαινοέρχεται
+    #     ατέρμονα (αυτό ακριβώς έγινε στο room_1, όπου η βαρύτητα τραβάει
+    #     ΔΕΞΙΑ και η πόρτα είναι στον δεξιό τοίχο). Ο μόνος έλεγχος που το
+    #     πιάνει είναι να αφήσουμε τον ήρωα να τρέξει.
+    SETTLE = 90
     for r in rooms:
         for cell, dest, two, cells in r.exit_groups():
             if not two:
@@ -309,9 +314,20 @@ def main():
                   other.cell(*a) != P.EXIT, P.TYPE_NAMES[other.cell(*a)])
             check(f"room_{dest}: η άφιξη {a} δεν είναι στερεή",
                   not (P.PROPS[other.cell(*a)] & P.F_SOLID))
-            check(f"room_{dest}: η άφιξη {a} ακουμπά την πόρτα",
-                  any(abs(a[0]-c) + abs(a[1]-rr) == 1 for c, rr in
-                      next(g for k, d, t2, g in other.exit_groups() if d == r.number)))
+
+            fresh_room = P.load_room(other.path)
+            h = P.Hero(fresh_room,
+                       a[0] * P.CELL + P.CELL // 2,
+                       P.GRID_Y0 + a[1] * P.CELL + P.CELL // 2,
+                       fresh_room.start_g)
+            bounced = False
+            for _ in range(SETTLE):
+                h.update()
+                if h.won:
+                    bounced = True
+                    break
+            check(f"room_{dest}: η άφιξη {a} δεν ξαναπερνά την πόρτα",
+                  not bounced, f"βαρύτητα {fresh_room.start_g}")
 
     # Γειτονικές έξοδοι με ΔΙΑΦΟΡΕΤΙΚΟΥΣ προορισμούς πρέπει να απορρίπτονται.
     bad = ";\n" + "\n".join(
