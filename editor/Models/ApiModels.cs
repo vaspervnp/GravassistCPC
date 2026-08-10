@@ -27,6 +27,11 @@ public sealed record ExitDto(int Col, int Row, int? Room, int Cells, bool TwoWay
 /// <param name="Cells">Πόσα κελιά έχει η ομάδα (πληροφοριακό, για το UI).</param>
 public sealed record TeleportDto(int Col, int Row, int? DestCol, int? DestRow, int Cells);
 
+/// <summary>Μία ομάδα διακόπτη/πόρτας/κλειδαριάς/κλειδιού με το κανάλι της.</summary>
+/// <param name="Kind">«sw», «gate», «lock» ή «key».</param>
+/// <param name="Value">Κανάλι (διακόπτες, πόρτες) ή ταυτότητα (κλειδιά, κλειδαριές).</param>
+public sealed record AttrDto(string Kind, int Col, int Row, int Value, int Cells);
+
 /// <summary>Απάντηση φόρτωσης/δημιουργίας πίστας προς τον browser.</summary>
 public sealed record LevelDto(
     string Name,
@@ -36,7 +41,8 @@ public sealed record LevelDto(
     IReadOnlyList<ExitDto> Exits,
     IReadOnlyList<TeleportDto> Teleports,
     int? Room,
-    int Gravity);
+    int Gravity,
+    IReadOnlyList<AttrDto> Attrs);
 
 /// <summary>
 /// Αίτημα αποθήκευσης από τον browser.
@@ -55,6 +61,9 @@ public sealed class SaveLevelRequest
 
     /// <summary>Αρχική φορά βαρύτητας της αίθουσας (0..7) — η γραμμή «gravity N».</summary>
     public int Gravity { get; set; }
+
+    /// <summary>Καλωδίωση διακοπτών/πορτών και κλειδιών/κλειδαριών.</summary>
+    public List<AttrDto> Attrs { get; set; } = [];
 }
 
 /// <summary>Ενιαία μορφή απάντησης σφάλματος (ελληνικό μήνυμα).</summary>

@@ -46,6 +46,69 @@ public sealed record ExitLink(int Col, int Row, int Room, bool TwoWay = false,
 public sealed record TeleportLink(int Col, int Row, int DestCol, int DestRow);
 
 /// <summary>
+/// Μία γραμμή footer «sw|gate|lock|key &lt;col&gt; &lt;row&gt; &lt;τιμή&gt;».
+///
+/// Ο σύνδεσμος ΔΕΝ είναι κελί αλλά ΑΡΙΘΜΟΣ: «κανάλι» για διακόπτες και πόρτες,
+/// «ταυτότητα» για κλειδιά και κλειδαριές. Γι' αυτό ένας διακόπτης μπορεί να
+/// οδηγεί όσες πόρτες θέλει ο σχεδιαστής, όπου κι αν βρίσκονται.
+/// </summary>
+public sealed record AttrLink(string Kind, int Col, int Row, int Value);
+
+/// <summary>
+/// Ανάγνωση και γραφή των γραμμών καλωδίωσης του footer.
+///
+/// Ένας πίνακας για τα τέσσερα είδη: κάθε κελί έχει ακριβώς έναν τύπο, οπότε
+/// το είδος προκύπτει από το ίδιο το πλέγμα και δεν υπάρχει ασάφεια.
+/// </summary>
+public static class AttrGraph
+{
+    /// <summary>Χαρακτήρας πλέγματος ανά είδος καλωδίωσης.</summary>
+    public static readonly (string Kind, char[] Symbols)[] Kinds =
+    [
+        ("sw", ['S']),
+        ("gate", ['G', 'g']),        // 'g' = ανοιγμένη· κρατά την καλωδίωσή της
+        ("lock", ['K', '|']),
+        ("key", ['k']),
+    ];
+
+    private static readonly Regex LinePattern = new(
+        @"^\s*(sw|gate|lock|key)\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    public static bool IsAttrLine(string line) => LinePattern.IsMatch(line);
+
+    public static string FormatLine(AttrLink link) => string.Create(
+        CultureInfo.InvariantCulture,
+        $"{link.Kind} {link.Col} {link.Row} {link.Value}");
+
+    public static List<AttrLink> ParseLines(IEnumerable<string> lines)
+    {
+        var links = new List<AttrLink>();
+        foreach (var line in lines)
+        {
+            var m = LinePattern.Match(line);
+            if (!m.Success) continue;
+            links.Add(new AttrLink(
+                m.Groups[1].Value.ToLowerInvariant(),
+                int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture),
+                int.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture),
+                int.Parse(m.Groups[4].Value, CultureInfo.InvariantCulture)));
+        }
+
+        return links;
+    }
+
+    /// <summary>Οι ομάδες κελιών ενός είδους, σε σειρά σάρωσης κατά γραμμές.</summary>
+    public static List<CellGroup> FindGroups(IReadOnlyList<string> rows, string kind)
+    {
+        var symbols = Kinds.First(k => k.Kind == kind).Symbols;
+        var groups = symbols.SelectMany(s => CellGroups.Find(rows, s)).ToList();
+        groups.Sort((a, b) => a.Row != b.Row ? a.Row - b.Row : a.Col - b.Col);
+        return groups;
+    }
+}
+
+/// <summary>
 /// Ομαδοποίηση γειτονικών κελιών ενός χαρακτήρα (γειτνίαση 4).
 ///
 /// Είναι η ίδια πλημμύρα με το <c>Room._groups_of</c> του tools/physics.py —

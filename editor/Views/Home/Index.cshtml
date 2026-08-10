@@ -20,6 +20,15 @@
         solid = Model.SolidSymbol.ToString(),
         exit = Model.ExitSymbol.ToString(),
         teleport = Model.TeleportSymbol.ToString(),
+        // Τα είδη καλωδίωσης: ο σύνδεσμος είναι ΑΡΙΘΜΟΣ (κανάλι ή ταυτότητα)
+        // και όχι κελί, γι' αυτό ένας διακόπτης οδηγεί όσες πόρτες θέλεις.
+        wiring = new[]
+        {
+            new { kind = "sw",   symbols = "S",  label = "Switch",  peer = "gate" },
+            new { kind = "gate", symbols = "Gg", label = "Gate",    peer = "sw" },
+            new { kind = "lock", symbols = "K|", label = "Lock",    peer = "key" },
+            new { kind = "key",  symbols = "k",  label = "Key",     peer = "lock" },
+        },
         start = Model.StartSymbol.ToString(),
         tiles = Model.Tiles.Select(t => new
         {
@@ -365,6 +374,29 @@
         </div>
 
         <div class="panel">
+            <h2>Switches &amp; gates</h2>
+            <div id="sw-list"></div>
+            <div class="hintline">
+                The link is a <b>channel</b>, not a position: a switch flips
+                <b>every</b> gate on the same channel, wherever it is. Give the
+                switch and its gates the same number. Channel 0 means
+                &quot;unwired&quot; and writes nothing to the file. Hover a row to
+                see the connection on the grid. Pressing a switch does not consume
+                it &mdash; step on it again to close the gates.
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Keys &amp; locks</h2>
+            <div id="key-list"></div>
+            <div class="hintline">
+                Same idea, but the number is an <b>identity</b>: key 3 opens only
+                lock 3. Without identities one key opens whatever it finds and you
+                cannot enforce an order &mdash; which is the whole puzzle.
+            </div>
+        </div>
+
+        <div class="panel">
             <h2>Teleporters</h2>
             <div id="tp-list"></div>
             <div class="link-note" id="tp-note"></div>
@@ -417,6 +449,11 @@
                         markerWidth="5" markerHeight="5" orient="auto-start-reverse">
                     <path d="M0,1 L10,5 L0,9 z" fill="#ff8000"></path>
                 </marker>
+                @* Μύτη του βέλους καλωδίωσης: διακόπτης -> πόρτα, κλειδί -> κλειδαριά. *@
+                <marker id="attr-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                        markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                    <path d="M0,1 L10,5 L0,9 z" fill="#ffd000"></path>
+                </marker>
                 @* Μύτη του βέλους άφιξης — δείχνει πού βγαίνει ο παίκτης από την πόρτα. *@
                 <marker id="exit-arrow" viewBox="0 0 10 10" refX="9" refY="5"
                         markerWidth="5" markerHeight="5" orient="auto-start-reverse">
@@ -429,12 +466,19 @@
             <g id="tp-links"></g>
             @* Βέλος από την επιλεγμένη πόρτα προς το σημείο άφιξής της. *@
             <g id="exit-links"></g>
+            @* Γραμμές από τον επιλεγμένο διακόπτη προς τις πόρτες του καναλιού
+               του (και από κλειδί προς κλειδαριά). *@
+            <g id="attr-links"></g>
             @* Ο αριθμός αίθουσας προορισμού, γραμμένος πάνω σε κάθε κελί της ομάδας. *@
             <g id="exit-labels" font-size="5" font-family="monospace" font-weight="bold"
                text-anchor="middle" stroke="#000000" stroke-width="1.2"
                paint-order="stroke" stroke-linejoin="round"></g>
             @* Ο αύξων αριθμός κάθε τηλεμεταφοράς, πάνω σε κάθε κελί της ομάδας. *@
             <g id="tp-labels" font-size="5" font-family="monospace" font-weight="bold"
+               text-anchor="middle" stroke="#000000" stroke-width="1.2"
+               paint-order="stroke" stroke-linejoin="round"></g>
+            @* Το κανάλι / η ταυτότητα, γραμμένα πάνω σε κάθε κελί καλωδίωσης. *@
+            <g id="attr-labels" font-size="5" font-family="monospace" font-weight="bold"
                text-anchor="middle" stroke="#000000" stroke-width="1.2"
                paint-order="stroke" stroke-linejoin="round"></g>
             <rect id="cursor" width="8" height="8" fill="none"
@@ -532,6 +576,10 @@
         const teleLabels = document.getElementById("tp-labels");
         const teleLinks = document.getElementById("tp-links");
         const exitLinks = document.getElementById("exit-links");
+        const attrLinks = document.getElementById("attr-links");
+        const attrLabels = document.getElementById("attr-labels");
+        const swListEl = document.getElementById("sw-list");
+        const keyListEl = document.getElementById("key-list");
         const cursor = document.getElementById("cursor");
         const statusEl = document.getElementById("status");
         const readoutEl = document.getElementById("readout");
@@ -571,6 +619,16 @@
         // Προορισμοί τηλεμεταφορών, με την ΙΔΙΑ λογική: κλειδί = "col,row" κάθε
         // κελιού 'T' της ομάδας, τιμή = [dcol,drow] ή null. Ο προορισμός επιβιώνει
         // όταν η ομάδα μεγαλώσει και μετακινηθεί το αναγνωριστικό της.
+        // ΚΑΛΩΔΙΩΣΗ: κανάλι για διακόπτες/πόρτες, ταυτότητα για κλειδιά/
+        // κλειδαριές. Ίδια λογική με τους προορισμούς εξόδου — η τιμή ζει ανά
+        // ΚΕΛΙ, ώστε να επιβιώνει όταν η ομάδα μεγαλώσει και μετακινηθεί το
+        // πάνω-αριστερό της κελί.
+        const WIRING = DATA.wiring;
+        const WIRE_BY_KIND = new Map(WIRING.map(w => [w.kind, w]));
+        let attrVals = new Map();         // "kind:col,row" -> αριθμός
+        let attrGroups = new Map();       // kind -> [{col,row,cells,value}]
+        let attrHighlight = null;         // [kind, index] που δείχνει γραμμές
+
         let teleDests = new Map();
         let teleGroups = [];              // [{col,row,cells:[[c,r],…],dest:[c,r]|null}]
 
@@ -683,6 +741,178 @@
             if (!grid.length) return;
             syncExits();
             syncTeleports();
+            syncAttrs();
+        }
+
+        function attrKey(kind, c, r) { return kind + ":" + c + "," + r; }
+
+        /// Ξαναϋπολογίζει τις ομάδες καλωδίωσης και των τεσσάρων ειδών.
+        function syncAttrs() {
+            const next = new Map();
+            attrGroups = new Map();
+            for (const w of WIRING) {
+                // Ένα είδος μπορεί να έχει ΔΥΟ χαρακτήρες: η ανοιγμένη πόρτα
+                // και η ξεκλείδωτη κλειδαριά είναι καταστάσεις εκτέλεσης και
+                // κρατούν την καλωδίωσή τους.
+                let groups = [];
+                for (const sym of w.symbols) groups = groups.concat(findGroups(sym));
+                groups.sort((a, b) => a.row !== b.row ? a.row - b.row : a.col - b.col);
+                groups.forEach(function (g) {
+                    let v = 0;
+                    for (const cell of g.cells) {
+                        const got = attrVals.get(attrKey(w.kind, cell[0], cell[1]));
+                        if (got) { v = got; break; }
+                    }
+                    g.value = v;
+                    g.cells.forEach(cell =>
+                        next.set(attrKey(w.kind, cell[0], cell[1]), v));
+                });
+                attrGroups.set(w.kind, groups);
+            }
+            attrVals = next;
+            if (attrHighlight &&
+                attrHighlight[1] >= (attrGroups.get(attrHighlight[0]) || []).length)
+                attrHighlight = null;
+            renderAttrLabels();
+            renderAttrPanels();
+            renderAttrLinks();
+        }
+
+        function setAttrValue(kind, index, value) {
+            const g = (attrGroups.get(kind) || [])[index];
+            if (!g) return;
+            g.value = value;
+            g.cells.forEach(cell =>
+                attrVals.set(attrKey(kind, cell[0], cell[1]), value));
+            dirty = true;
+            renderAttrLabels();
+            renderAttrPanels();
+            renderAttrLinks();
+        }
+
+        function renderAttrLabels() {
+            attrLabels.textContent = "";
+            const frag = document.createDocumentFragment();
+            for (const w of WIRING) {
+                for (const g of attrGroups.get(w.kind) || []) {
+                    if (!g.value) continue;      // 0 = ακαλωδίωτο, μη θορυβείς
+                    for (const cell of g.cells) {
+                        const el = document.createElementNS(SVGNS, "text");
+                        el.setAttribute("x", cell[0] * CELL + CELL / 2);
+                        el.setAttribute("y", cell[1] * CELL + CELL / 2 + 1.8);
+                        el.setAttribute("fill", "#ffd000");
+                        el.textContent = String(g.value);
+                        frag.appendChild(el);
+                    }
+                }
+            }
+            attrLabels.appendChild(frag);
+        }
+
+        /// Γραμμές από την επισημασμένη ομάδα προς ΚΑΘΕ ομάδα του ταιριαστού
+        /// είδους με το ίδιο κανάλι. Εδώ φαίνεται ότι ένας διακόπτης οδηγεί
+        /// πολλές πόρτες — ο αριθμός από μόνος του δεν το δείχνει.
+        function renderAttrLinks() {
+            attrLinks.textContent = "";
+            if (!attrHighlight) return;
+            const [kind, i] = attrHighlight;
+            const g = (attrGroups.get(kind) || [])[i];
+            if (!g) return;
+            const w = WIRE_BY_KIND.get(kind);
+            const frag = document.createDocumentFragment();
+
+            const box = (cells, colour) => cells.forEach(function (cell) {
+                const b = document.createElementNS(SVGNS, "rect");
+                b.setAttribute("x", cell[0] * CELL);
+                b.setAttribute("y", cell[1] * CELL);
+                b.setAttribute("width", CELL);
+                b.setAttribute("height", CELL);
+                b.setAttribute("fill", "none");
+                b.setAttribute("stroke", colour);
+                b.setAttribute("stroke-width", "0.6");
+                frag.appendChild(b);
+            });
+            const mid = cells => {
+                const cs = cells.map(p => p[0]), rs = cells.map(p => p[1]);
+                return [(Math.min(...cs) + Math.max(...cs) + 1) / 2 * CELL,
+                        (Math.min(...rs) + Math.max(...rs) + 1) / 2 * CELL];
+            };
+
+            box(g.cells, "#ffd000");
+            if (g.value) {
+                const [x1, y1] = mid(g.cells);
+                for (const peer of attrGroups.get(w.peer) || []) {
+                    if (peer.value !== g.value) continue;
+                    box(peer.cells, "#ffd000");
+                    const [x2, y2] = mid(peer.cells);
+                    const line = document.createElementNS(SVGNS, "line");
+                    line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+                    line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+                    line.setAttribute("stroke", "#ffd000");
+                    line.setAttribute("stroke-width", "0.7");
+                    line.setAttribute("stroke-dasharray", "2 1.5");
+                    line.setAttribute("marker-end", "url(#attr-arrow)");
+                    frag.appendChild(line);
+                }
+            }
+            attrLinks.appendChild(frag);
+        }
+
+        function renderAttrPanels() {
+            renderAttrPanel(swListEl, ["sw", "gate"]);
+            renderAttrPanel(keyListEl, ["key", "lock"]);
+        }
+
+        function renderAttrPanel(el, kinds) {
+            el.textContent = "";
+            let any = false;
+            for (const kind of kinds) {
+                const w = WIRE_BY_KIND.get(kind);
+                (attrGroups.get(kind) || []).forEach(function (g, i) {
+                    any = true;
+                    const row = document.createElement("div");
+                    row.className = "link-row";
+
+                    const tag = document.createElement("span");
+                    tag.className = "link-tag";
+                    tag.textContent = w.label;
+
+                    const pos = document.createElement("span");
+                    pos.className = "link-pos";
+                    pos.textContent = "col " + g.col + " row " + g.row +
+                        " · " + g.cells.length + " cells";
+
+                    const input = coordInput(
+                        kind === "sw" || kind === "gate"
+                            ? "channel (0 = unwired)" : "identity (0 = unwired)",
+                        g.value ? String(g.value) : "", 7);
+                    input.addEventListener("change", function () {
+                        const n = parseCoord(input.value);
+                        setAttrValue(kind, i, (n === null || n < 0) ? 0 : n);
+                    });
+
+                    row.addEventListener("mouseenter", function () {
+                        attrHighlight = [kind, i];
+                        renderAttrLinks();
+                    });
+                    row.addEventListener("mouseleave", function () {
+                        attrHighlight = null;
+                        renderAttrLinks();
+                    });
+
+                    row.append(tag, pos, input);
+                    el.appendChild(row);
+                });
+            }
+            if (!any) {
+                const p = document.createElement("div");
+                p.className = "hintline";
+                p.style.marginTop = "0";
+                p.textContent = kinds[0] === "sw"
+                    ? "No switches or gates. Paint S and G cells on the grid."
+                    : "No keys or locks. Paint k and K cells on the grid.";
+                el.appendChild(p);
+            }
         }
 
         // --- Έξοδοι & αίθουσες ------------------------------------------
@@ -1558,6 +1788,10 @@
                 exitArriveG.set(k, (e.arriveG === null || e.arriveG === undefined)
                     ? null : e.arriveG);
             });
+            attrVals = new Map();
+            (dto.attrs || []).forEach(function (a) {
+                attrVals.set(attrKey(a.kind, a.col, a.row), a.value || 0);
+            });
             teleDests = new Map();
             (dto.teleports || []).forEach(function (t) {
                 const dest = (t.destCol === null || t.destCol === undefined ||
@@ -1660,6 +1894,13 @@
                     arriveG: (g.arriveG === null || g.arriveG === undefined)
                         ? null : g.arriveG,
                 })),
+                // Μία εγγραφή ανά ΟΜΑΔΑ καλωδίωσης· ο server παραλείπει όσες
+                // έχουν 0, που είναι η προεπιλογή και δεν χρειάζεται γραμμή.
+                attrs: WIRING.flatMap(w =>
+                    (attrGroups.get(w.kind) || []).map(g => ({
+                        kind: w.kind, col: g.col, row: g.row, value: g.value || 0,
+                        cells: g.cells.length,
+                    }))),
                 // Μία εγγραφή ανά ΟΜΑΔΑ — ο server γράφει μία γραμμή «tp …» για
                 // όσες έχουν προορισμό και παραλείπει τις υπόλοιπες.
                 teleports: teleGroups.map(g => ({

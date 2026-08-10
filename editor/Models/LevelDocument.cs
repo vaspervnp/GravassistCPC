@@ -271,6 +271,25 @@ public sealed class LevelDocument
         foreach (var link in links) Footer.Add(TeleportGraph.FormatLine(link));
     }
 
+    /// <summary>Οι δηλώσεις καλωδίωσης της ουράς.</summary>
+    public List<AttrLink> AttrLinks() => AttrGraph.ParseLines(Footer);
+
+    /// <summary>Οι ομάδες κελιών ενός είδους καλωδίωσης.</summary>
+    public List<CellGroup> AttrGroups(string kind) =>
+        AttrGraph.FindGroups(Rows, kind);
+
+    /// <summary>
+    /// Ξαναγράφει τις γραμμές καλωδίωσης. Ό,τι έχει τιμή 0 ΔΕΝ γράφεται: το 0
+    /// είναι η προεπιλογή και μια γραμμή για αυτό είναι σκέτος θόρυβος στο
+    /// αρχείο και στο diff.
+    /// </summary>
+    public void SetAttrLinks(IEnumerable<AttrLink> links)
+    {
+        Footer.RemoveAll(AttrGraph.IsAttrLine);
+        foreach (var link in links.Where(l => l.Value != 0))
+            Footer.Add(AttrGraph.FormatLine(link));
+    }
+
     /// <summary>
     /// Επικύρωση περιεχομένου (πέρα από τη μορφή): δείκτες εκκίνησης και έξοδοι.
     ///

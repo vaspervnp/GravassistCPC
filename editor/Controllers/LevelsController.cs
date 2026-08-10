@@ -65,6 +65,9 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
                 .Where(t => t.DestCol is not null && t.DestRow is not null)
                 .Select(t => new TeleportLink(t.Col, t.Row, t.DestCol!.Value, t.DestRow!.Value)));
 
+            doc.SetAttrLinks(request.Attrs
+                .Select(a => new AttrLink(a.Kind, a.Col, a.Row, a.Value)));
+
             doc.StartGravity = request.Gravity;
 
             var warnings = store.Save(request.Name, doc);
@@ -178,7 +181,20 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
                 : new TeleportDto(g.Col, g.Row, null, null, g.Cells.Count))
             .ToList();
 
+        // Η αυθεντία για το ΠΟΙΕΣ ομάδες υπάρχουν είναι πάντα το πλέγμα· η ουρά
+        // δίνει μόνο τιμές, και όποια δήλωση δεν πέφτει πάνω σε ομάδα αγνοείται.
+        var byKind = doc.AttrLinks()
+            .GroupBy(l => (l.Kind, l.Col, l.Row))
+            .ToDictionary(g => g.Key, g => g.Last().Value);
+
+        var attrs = new List<AttrDto>();
+        foreach (var (kind, _) in AttrGraph.Kinds)
+            foreach (var g in doc.AttrGroups(kind))
+                attrs.Add(new AttrDto(kind, g.Col, g.Row,
+                    byKind.TryGetValue((kind, g.Col, g.Row), out var v) ? v : 0,
+                    g.Cells.Count));
+
         return new LevelDto(name, doc.Rows, doc.Header, doc.Footer,
-            exits, teleports, RoomNaming.NumberOf(name), doc.StartGravity);
+            exits, teleports, RoomNaming.NumberOf(name), doc.StartGravity, attrs);
     }
 }
