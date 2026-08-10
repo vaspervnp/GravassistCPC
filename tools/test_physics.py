@@ -458,6 +458,29 @@ def main():
           h.energy == P.ENERGY_MAX and h.parachute == 0,
           f"ενέργεια {h.energy}, αλεξίπτωτα {h.parachute}")
 
+
+    # 20. Η πόρτα ΔΕΝ ανοίγει με την επαφή — μόνο με ενεργοποίηση (ΠΑΝΩ/ΚΑΤΩ).
+    #     Με αυτόματο πέρασμα κάθε άφιξη ήταν λεπτή ισορροπία: το σημείο
+    #     άφιξης είναι αναγκαστικά κοντά στην πόρτα επιστροφής και ένα
+    #     γλίστρημα λίγων pixel σε ξανάβαζε μέσα.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][30] = "X"
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\ngravity 0\nexit 30 22 2"
+    room = P.Room(text)
+
+    h = P.Hero(room, 20 * 8 + 4, P.GRID_Y0 + 21 * 8 + 4, 0)
+    for _ in range(200):                    # περπάτα ΠΑΝΩ στην πόρτα
+        h.update(1)
+        if h.body_cell() == P.EXIT:
+            break
+    check("ο ήρωας φτάνει πάνω στην πόρτα", h.body_cell() == P.EXIT,
+          P.TYPE_NAMES[h.body_cell()])
+    for _ in range(60):                     # …και μένει εκεί
+        h.update(0)
+    check("η πόρτα ΔΕΝ ανοίγει με την επαφή", not h.won)
+    check("το πάτημα την ανοίγει", h.use() and h.won)
+
     # Γειτονικές έξοδοι με ΔΙΑΦΟΡΕΤΙΚΟΥΣ προορισμούς πρέπει να απορρίπτονται.
     bad = ";\n" + "\n".join(
         "#" * 40 if i in (0, 23) else "#" + ("X" * 2 if i == 5 else ".." ) + "." * 36 + "#"

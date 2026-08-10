@@ -212,28 +212,32 @@ def main():
             want.append(tuple(GA.pack_mode1(GA.arrow_pixels(g, 3)[y])))
         check(f"βέλος βαρύτητας φοράς {g} στο HUD", got == want)
 
-    # 7. Ασυλία πόρτας: μετά την άφιξη, η πόρτα αγνοείται για ένα δευτερόλεπτο.
-    #    Χωρίς αυτό, το σημείο άφιξης είναι αναγκαστικά κοντά στην πόρτα
-    #    επιστροφής και ένα γλίστρημα λίγων pixel σε ξανάβαζε μέσα.
+    # 7. Η πόρτα ανοίγει ΜΟΝΟ με ενεργοποίηση. Το h_touch δεν την κοιτάει
+    #    πια· το h_use την κρίνει από το κελί του ΣΩΜΑΤΟΣ.
     rooms_all = P.all_rooms()
-    if rooms_all:
-        room = rooms_all[0]
-        index = RF.set_of(room.number)
+    door = next((r for r in rooms_all if r.exit_groups()), None)
+    if door is not None:
+        index = RF.set_of(door.number)
         t.poke(set_buf, dict((i, d) for i, _, d in RF.all_sets())[index])
         t.poke(t.sym("SET_CUR"), bytes((index,)))
         t.poke(t.sym("JR_COUNT"), b"\x00")
-        t.call("ROOM_LOAD", a=room.number)
-        check("η άφιξη ξεκινά την ασυλία",
-              t.peek(t.sym("DOOR_COOL"))[0] == P.EXIT_COOL,
-              f"{t.peek(t.sym('DOOR_COOL'))[0]} vs {P.EXIT_COOL}")
+        t.call("ROOM_LOAD", a=door.number)
 
-        # Κάθε frame μειώνει τον μετρητή κατά ένα και σταματά στο μηδέν.
+        (col, row), dest, _two, _cells = door.exit_groups()[0]
+        t.poke16(t.sym("HERO_X"), col * P.CELL + P.CELL // 2)
+        t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + row * P.CELL + P.CELL // 2)
+        t.poke(t.sym("PENDING_ROOM"), b"\x00")
+
         t.stub("CRATE_STEP")
-        for i in range(P.EXIT_COOL + 5):
-            t.call("HERO_UPDATE", a=0)
-        check("η ασυλία μηδενίζει και δεν γίνεται αρνητική",
-              t.peek(t.sym("DOOR_COOL"))[0] == 0,
-              f"{t.peek(t.sym('DOOR_COOL'))[0]}")
+        t.call("H_TOUCH")
+        check("η επαφή με την πόρτα ΔΕΝ αλλάζει αίθουσα",
+              t.peek(t.sym("PENDING_ROOM"))[0] == 0,
+              f"{t.peek(t.sym('PENDING_ROOM'))[0]}")
+
+        t.call("H_USE")
+        check("η ενεργοποίηση πάνω στην πόρτα αλλάζει αίθουσα",
+              t.peek(t.sym("PENDING_ROOM"))[0] == dest,
+              f"{t.peek(t.sym('PENDING_ROOM'))[0]} vs {dest}")
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0

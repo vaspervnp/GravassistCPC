@@ -66,7 +66,9 @@
     let walk = 0;
     if (keys.has("KeyM") || keys.has("ArrowRight")) walk = 1;
     else if (keys.has("KeyN") || keys.has("ArrowLeft")) walk = -1;
-    const use = keys.has("ArrowDown") || keys.has("Space");
+    // ΠΑΝΩ ή ΚΑΤΩ ανοίγει την πόρτα — η επαφή δεν αρκεί. Το Space μένει ως
+    // εναλλακτική για τα υπόλοιπα (λουκέτο, τηλεμεταφορά, κιβώτιο).
+    const use = keys.has("ArrowDown") || keys.has("ArrowUp") || keys.has("Space");
     if (use && !usePrev) hero.use();
     usePrev = use;
     return { walk, run: keys.has("ShiftLeft") || keys.has("ShiftRight") };
@@ -98,9 +100,6 @@
         // — όχι αυτή από την οποία μπήκες, που ζει σε άλλο αρχείο.
         const arr = arrivalIn(nr, from);
         start(sel.value, nr.cells, arr || nr.start);
-        // Μία στιγμή ασυλίας: το σημείο άφιξης είναι αναγκαστικά κοντά στην
-        // πόρτα επιστροφής και ένα γλίστρημα λίγων pixel σε ξανάβαζε μέσα.
-        hero.enterRoom();
         note.textContent = "Room " + dest + (arr ? " (door arrival point)" : "");
       } else if (dest) {
         note.textContent = "Room " + dest + " does not exist";

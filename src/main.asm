@@ -50,6 +50,7 @@ K_N             equ  46         ; βάδισμα πίσω  (σχετικά με 
 K_M             equ  38         ; βάδισμα μπροστά
 K_LEFT          equ  8          ; ισοδύναμα με N
 K_RIGHT         equ  1          ; ισοδύναμα με M
+K_UP            equ  0          ; ενεργοποίηση — ΠΑΝΩ ή ΚΑΤΩ ανοίγει πόρτα
 K_DOWN          equ  2          ; ενεργοποίηση αντικειμένου
 K_SPACE         equ  47         ; το ίδιο
 K_SHIFT         equ  21         ; κρατημένο = τρέξιμο
@@ -304,7 +305,10 @@ rw_back:        ld   a,-1
 ; read_use — κάτω βελάκι ή SPACE
 ;   OUT: A = 1 αν πατιέται
 ;---------------------------------------------------------------------
-read_use:       ld   a,K_DOWN
+read_use:       ld   a,K_UP             ; ΠΑΝΩ ή ΚΑΤΩ ανοίγει την πόρτα· η
+                call KM_TEST_KEY        ; επαφή δεν αρκεί πια
+                jr   nz,ru_yes
+                ld   a,K_DOWN
                 call KM_TEST_KEY
                 jr   nz,ru_yes
                 ld   a,K_SPACE
