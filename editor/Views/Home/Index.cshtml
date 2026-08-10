@@ -2120,6 +2120,17 @@
             window.open("/game/play.html?level=" + encodeURIComponent(name), "_blank");
         });
 
+        // Ξεκινά το κατέβασμα χωρίς να φύγει η σελίδα: ένα window.location θα
+        // ακύρωνε τη σελίδα του editor και θα έχανε ό,τι δεν έχει σωθεί.
+        function downloadDsk(url) {
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "";        // το όνομα το δίνει ο server
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+
         document.getElementById("btn-dsk").addEventListener("click", async function (ev) {
             const room = roomNumberOfName(fileName.value.trim());
             if (!room) {
@@ -2136,10 +2147,13 @@
                     body: JSON.stringify({ room: room })
                 });
                 const b = await res.json();
-                setStatus(b.ok
-                    ? "Ready: " + b.dsk + " (" + b.bytes + " bytes), room " + room
-                    : "Build failed: " + (b.output || b.error || ""),
-                    b.ok ? "ok" : "err");
+                if (!b.ok) {
+                    setStatus("Build failed: " + (b.output || b.error || ""), "err");
+                    return;
+                }
+                downloadDsk(b.download);
+                setStatus("Ready: " + b.bytes + " bytes, room " + room
+                          + " — downloading the .dsk…", "ok");
             } catch (e) {
                 setStatus("Build error: " + e, "err");
             } finally {
