@@ -196,6 +196,50 @@
     requestAnimationFrame(frame);
   }
 
+  // --- Οθόνη μενού ------------------------------------------------------
+  // Ο ήρωας κάνει κύκλους μέσα σε αρένα 10x5. ΔΕΝ είναι animation: τρέχει η
+  // πραγματική φυσική με walk=1 μονίμως, όπως και στον Amstrad.
+  const ARENA_C = 15, ARENA_R = 9, ARENA_W = 10, ARENA_H = 5;
+
+  function menu(firstRoom) {
+    const SOLID = D.TYPE_NAMES.indexOf("SOLID");
+    const cells = [];
+    for (let r = 0; r < D.ROWS; r++) cells.push(new Array(D.COLS).fill(0));
+    for (let r = ARENA_R; r < ARENA_R + ARENA_H; r++)
+      for (let c = ARENA_C; c < ARENA_C + ARENA_W; c++)
+        if (r === ARENA_R || r === ARENA_R + ARENA_H - 1 ||
+            c === ARENA_C || c === ARENA_C + ARENA_W - 1)
+          cells[r][c] = SOLID;
+
+    const mroom = new G.Room(cells, {}, {});
+    const mhero = new G.Hero(mroom, (ARENA_C + 3) * D.CELL + D.CELL / 2,
+                             D.GRID_Y0 + (ARENA_R + 2) * D.CELL + D.CELL / 2, 0);
+    let mtick = 0, done = false;
+    const go = e => {
+      if (e.code !== "Space" || done) return;
+      done = true;
+      removeEventListener("keydown", go);
+      start(firstRoom, rooms[firstRoom].cells, rooms[firstRoom].start);
+      requestAnimationFrame(frame);
+    };
+    addEventListener("keydown", go);
+    note.textContent = "Press Space to start game";
+
+    (function menuFrame() {
+      if (done) return;
+      mhero.update(1);
+      mtick++;
+      screen.clear();
+      screen.tiles(mroom);
+      screen.sprite(R.heroSprite(mhero.g,
+        mhero.state === "WALK" ? 2 + ((mtick >> 2) & 7) : (mtick >> 5) & 1),
+        mhero.x, mhero.y);
+      screen.flush();
+      screen.title();
+      requestAnimationFrame(menuFrame);
+    })();
+  }
+
   function roomNumberOf(name) {
     const m = /^room_(\d+)\.txt$/i.exec(name || "");
     return m ? parseInt(m[1], 10) : 0;
@@ -290,10 +334,15 @@
       o.value = name; o.textContent = name;
       sel.appendChild(o);
     }
-    const want = new URLSearchParams(location.search).get("level")
+    // ΤΟ ΜΕΝΟΥ ΜΟΝΟ ΧΩΡΙΣ ?level=. Το κουμπί «Δοκιμή» του editor περνά πάντα
+    // αίθουσα και πρέπει να μπαίνει κατευθείαν μέσα: μια οθόνη τίτλου
+    // ανάμεσα σε κάθε δοκιμή σχεδίασης θα ήταν σκέτο εμπόδιο.
+    const asked = new URLSearchParams(location.search).get("level");
+    const want = asked
               || Object.keys(rooms).find(n => /^room_/.test(n))
               || Object.keys(rooms)[0];
     sel.value = want;
+    if (!asked) { menu(want); return; }
     start(want, rooms[want].cells, rooms[want].start);
     requestAnimationFrame(frame);
   }

@@ -1,0 +1,275 @@
+;=====================================================================
+;  GRAVASSIST — οθόνη μενού
+;
+;  Ο τίτλος όπως στο docs/concept-art.png: GRAV σε ένα χρώμα, ASSIST σε άλλο,
+;  σε διπλό μέγεθος pixel. Το concept έχει κίτρινο και κυανό· η παλέτα του
+;  MODE 1 έχει τέσσερα χρώματα και δεν περιλαμβάνει κανένα από τα δύο, οπότε
+;  μπαίνουν πορτοκαλί και πράσινο — η ΑΝΤΙΘΕΣΗ των δύο μισών διατηρείται, που
+;  είναι το νόημα του σχεδίου.
+;
+;  Κάτω από τον τίτλο ο ήρωας κάνει κύκλους μέσα σε αρένα 10x5. ΔΕΝ είναι
+;  animation: τρέχει η ΠΡΑΓΜΑΤΙΚΗ φυσική με walk=1 μονίμως, και οι στροφές στις
+;  γωνίες βγαίνουν από τον ίδιο κανόνα που τις βγάζει μέσα στο παιχνίδι. Το
+;  μενού είναι έτσι και επίδειξη του μηχανισμού.
+;=====================================================================
+
+TITLE_X         equ 20          ; στήλη byte· (80 - 10 γράμματα x 4) / 2
+TITLE_Y         equ 16          ; scanline
+
+ARENA_C         equ 15          ; πάνω-αριστερό κελί της αρένας
+ARENA_R         equ 9
+ARENA_W         equ 10
+ARENA_H         equ 5
+
+MENU_TXT_ROW    equ 20          ; γραμμές κειμένου του firmware (από 1)
+MENU_SIG_ROW    equ 23
+
+;---------------------------------------------------------------------
+; menu_show — δείχνει το μενού και γυρίζει όταν πατηθεί SPACE
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+menu_show:      ld   a,1
+                call SCR_SET_MODE       ; καθαρίζει την οθόνη
+                call set_palette
+                call draw_title
+                call menu_arena
+                call menu_text
+
+                ; Ο ήρωας ξεκινά μέσα στην αρένα και περπατάει για πάντα.
+                ld   hl,(ARENA_C+3)*LVL_CELL+LVL_CELL/2
+                ld   (hero_x),hl
+                ld   hl,LVL_Y0+(ARENA_R+2)*LVL_CELL+LVL_CELL/2
+                ld   (hero_y),hl
+                xor  a
+                ld   (hero_g),a
+                ld   (world_g),a
+                ld   (hero_carry),a
+                ld   (hero_paraopen),a
+                ld   (crates_on),a
+                ld   a,HST_FALL
+                ld   (hero_state),a
+                ld   a,#FF
+                ld   (last_valid),a
+                xor  a
+                ld   (last_valid),a
+
+menu_loop:      ld   a,1                ; ΠΑΝΤΑ μπροστά: ο γύρος βγαίνει μόνος
+                call hero_update
+                call anim_frame
+                call prep_hero
+                call MC_WAIT_FLYBACK
+                call draw_hero
+                ld   a,K_SPACE
+                call KM_TEST_KEY
+                jr   z,menu_loop
+                ret
+
+;---------------------------------------------------------------------
+; menu_arena — χτίζει και ζωγραφίζει την αρένα 10x5 μέσα στο cell_buf
+;
+;   Το υπόλοιπο πλέγμα μένει κενό, ώστε το σβήσιμο του ήρωα (που ζωγραφίζει
+;   ξανά τα πλακίδια από κάτω του) να μη σβήνει τίτλο ή κείμενο — αυτά είναι
+;   ζωγραφισμένα κατευθείαν στην οθόνη και δεν υπάρχουν στο πλέγμα.
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+menu_arena:     ld   hl,cell_buf        ; όλα κενά
+                ld   (hl),T_EMPTY
+                ld   de,cell_buf+1
+                ld   bc,LVL_CELLS-1
+                ldir
+                ld   hl,cell_buf
+                ld   (level_ptr),hl
+
+                ; Οι πίνακες αντικειμένων δείχνουν σε σκέτο τερματικό: το
+                ; hero_update τους σαρώνει και χωρίς αυτό θα διάβαζε ό,τι
+                ; έτυχε να υπάρχει στη μνήμη.
+                ld   hl,menu_term
+                ld   (room_exits),hl
+                ld   (room_tps),hl
+                ld   (room_arr),hl
+                ld   (room_attrs),hl
+
+                ld   b,ARENA_R          ; --- το περίγραμμα ---
+                ld   c,ARENA_C
+                ld   a,ARENA_H
+                ld   (ma_rows),a
+ma_row:         ld   a,ARENA_W
+                ld   (ma_cols),a
+                ld   c,ARENA_C
+ma_cell:        push bc
+                ld   a,b                ; πάνω ή κάτω γραμμή -> στερεό
+                cp   ARENA_R
+                jr   z,ma_solid
+                cp   ARENA_R+ARENA_H-1
+                jr   z,ma_solid
+                ld   a,c                ; αριστερή ή δεξιά στήλη -> στερεό
+                cp   ARENA_C
+                jr   z,ma_solid
+                cp   ARENA_C+ARENA_W-1
+                jr   z,ma_solid
+                ld   a,T_EMPTY
+                jr   ma_put
+ma_solid:       ld   a,T_SOLID
+ma_put:         push af
+                call cell_addr
+                pop  af
+                ld   (hl),a
+                pop  bc
+                push bc
+                call draw_tile
+                pop  bc
+                inc  c
+                ld   hl,ma_cols
+                dec  (hl)
+                jr   nz,ma_cell
+                inc  b
+                ld   hl,ma_rows
+                dec  (hl)
+                jr   nz,ma_row
+                ret
+
+ma_rows         db 0
+ma_cols         db 0
+menu_term       db #FF
+
+;---------------------------------------------------------------------
+; menu_text — οι δύο γραμμές κάτω από την αρένα
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+menu_text:      ld   a,INK_HERO_PEN
+                call TXT_SET_PEN
+                ld   h,(40-(msg_start_end-msg_start))/2+1
+                ld   l,MENU_TXT_ROW
+                ld   de,msg_start
+                ld   b,msg_start_end-msg_start
+                call menu_puts
+                ld   h,(40-(msg_sig_end-msg_sig))/2+1
+                ld   l,MENU_SIG_ROW
+                ld   de,msg_sig
+                ld   b,msg_sig_end-msg_sig
+                ; πέφτει μέσα
+
+; menu_puts — τυπώνει B χαρακτήρες από το DE στη θέση (H,L)
+menu_puts:      call TXT_SET_CURSOR
+mp_lp:          ld   a,(de)
+                push de
+                push bc
+                call TXT_OUTPUT
+                pop  bc
+                pop  de
+                inc  de
+                djnz mp_lp
+                ret
+
+msg_start:      db "Press Space to start game"
+msg_start_end:
+msg_sig:        db "REVIVE8BIT - 2026 - VASPER"
+msg_sig_end:
+
+;---------------------------------------------------------------------
+; draw_title — «GRAVASSIST» σε διπλό μέγεθος pixel
+;
+;   Τα πρώτα τέσσερα γράμματα σε ένα χρώμα και τα υπόλοιπα σε άλλο, όπως το
+;   GRAV/ASSIST του concept art.
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+draw_title:     ld   a,TITLE_X
+                ld   (dt_col),a
+                ld   hl,title_idx
+                ld   (dt_ptr),hl
+                ld   b,TITLE_LEN
+tt_lp:          push bc
+                ld   a,TITLE_LEN        ; πόσο μακριά είμαστε από την αρχή
+                sub  b
+                cp   4                  ; GRAV | ASSIST
+                ld   hl,font_x2_a
+                jr   c,tt_pen
+                ld   hl,font_x2_b
+tt_pen:         ld   (dt_tab),hl
+                ld   a,TITLE_Y
+                ld   (dt_row),a
+                ld   hl,(dt_ptr)
+                ld   a,(hl)
+                inc  hl
+                ld   (dt_ptr),hl
+                call draw_glyph
+                ld   hl,dt_col
+                ld   a,(hl)
+                add  a,4                ; 16 pixel = 4 bytes σε MODE 1
+                ld   (hl),a
+                pop  bc
+                djnz tt_lp
+                ret
+
+;---------------------------------------------------------------------
+; draw_glyph — ένα γράμμα 8x8 σε διπλό μέγεθος (16x16 pixel)
+; IN: A = δείκτης γράμματος, (dt_col) = στήλη byte, (dt_row) = scanline,
+;     (dt_tab) = πίνακας επέκτασης του χρώματος
+;---------------------------------------------------------------------
+draw_glyph:     ld   l,a
+                ld   h,0
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl              ; *8 bytes ανά γράμμα
+                ld   de,font_glyphs
+                add  hl,de
+                ld   (dt_src),hl
+                ld   a,8
+                ld   (dt_n),a
+
+dg_row:         ld   hl,(dt_src)        ; κάθε γραμμή πηγής -> ΔΥΟ scanlines
+                ld   a,(hl)
+                ld   (dt_bits),a
+                ld   b,2
+dg_dup:         push bc
+                ld   a,(dt_row)
+                ld   b,a
+                ld   a,(dt_col)
+                ld   c,a
+                call scr_addr
+                ex   de,hl              ; DE = οθόνη
+                ld   a,(dt_bits)
+                rrca
+                rrca
+                rrca
+                rrca
+                and  15                 ; υψηλό nibble = τα 4 αριστερά pixel
+                call dg_pair
+                ld   a,(dt_bits)
+                and  15
+                call dg_pair
+                ld   hl,dt_row
+                inc  (hl)
+                pop  bc
+                djnz dg_dup
+
+                ld   hl,(dt_src)
+                inc  hl
+                ld   (dt_src),hl
+                ld   hl,dt_n
+                dec  (hl)
+                jr   nz,dg_row
+                ret
+
+; dg_pair — 4 bits μάσκας -> 2 bytes οθόνης στο DE
+dg_pair:        add  a,a                ; δύο bytes ανά εγγραφή
+                ld   l,a
+                ld   h,0
+                ld   bc,(dt_tab)
+                add  hl,bc
+                ld   a,(hl)
+                ld   (de),a
+                inc  de
+                inc  hl
+                ld   a,(hl)
+                ld   (de),a
+                inc  de
+                ret
+
+dt_col          db 0
+dt_row          db 0
+dt_n            db 0
+dt_bits         db 0
+dt_src          dw 0
+dt_tab          dw 0
+dt_ptr          dw 0

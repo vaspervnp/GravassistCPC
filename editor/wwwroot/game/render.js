@@ -119,6 +119,31 @@
       this.ctx.drawImage(this.tmp, 0, 0, W * this.scale, H * this.scale);
     }
 
+    /// Ο τίτλος του μενού. Ο Amstrad τον ζωγραφίζει pixel-pixel από δική του
+    /// γραμματοσειρά· εδώ αρκεί canvas text στα ίδια χρώματα και στην ίδια
+    /// θέση — το ζητούμενο είναι να δεις τη διάταξη χωρίς emulator.
+    title() {
+      const s = this.scale;
+      this.ctx.textAlign = "center";
+      this.ctx.font = "bold " + (26 * s) + "px monospace";
+      const cx = (W / 2) * s, y = 34 * s;
+      const grav = "GRAV", assist = "ASSIST";
+      const wg = this.ctx.measureText(grav).width;
+      const wa = this.ctx.measureText(assist).width;
+      this.ctx.textAlign = "left";
+      this.ctx.fillStyle = "#FF8000";
+      this.ctx.fillText(grav, cx - (wg + wa) / 2, y);
+      this.ctx.fillStyle = "#00FF00";
+      this.ctx.fillText(assist, cx - (wg + wa) / 2 + wg, y);
+
+      this.ctx.textAlign = "center";
+      this.ctx.fillStyle = "#FFFFFF";
+      this.ctx.font = (8 * s) + "px monospace";
+      this.ctx.fillText("Press Space to start game", cx, 160 * s);
+      this.ctx.fillText("REVIVE8BIT - 2026 - VASPER", cx, 184 * s);
+      this.ctx.textAlign = "left";
+    }
+
     /// Κείμενο σε γραμμή ΠΛΕΓΜΑΤΟΣ, μετά το flush.
     ///
     /// Ο Amstrad το τυπώνει με τη γραμματοσειρά του firmware, που δεν την

@@ -353,6 +353,61 @@ def main():
         check("σβήνει μόλις φύγεις από την πόρτα", msg_row() == 0xFF,
               str(msg_row()))
 
+    # 11. Οθόνη μενού: ο τίτλος σε δύο χρώματα και ο ήρωας που κάνει τον γύρο
+    #     της αρένας. Ο γύρος ΔΕΝ είναι animation — τρέχει η πραγματική φυσική,
+    #     οπότε αν σπάσουν οι γωνίες, το μενού το δείχνει αμέσως.
+    t.call("INIT_LINETAB")
+    for a in range(0xC000, 0x10000):
+        t.m.memory[a] = 0
+    t.call("DRAW_TITLE")
+
+    def pen(v, s):
+        return (1 if v & (1 << (7 - s)) else 0) | (2 if v & (1 << (3 - s)) else 0)
+
+    lit, pens = 0, set()
+    for y in range(16, 32):
+        base = 0xC000 + (y % 8) * 0x800 + (y // 8) * 80
+        for b in range(20, 60):
+            for s in range(4):
+                p = pen(t.m.memory[base + b], s)
+                if p:
+                    lit += 1
+                    pens.add((p, b))
+    check("ο τίτλος ζωγραφίστηκε", lit > 400, f"{lit} pixel")
+    left = {p for p, b in pens if b < 36}       # GRAV
+    right = {p for p, b in pens if b >= 36}     # ASSIST
+    check("GRAV και ASSIST σε ΔΙΑΦΟΡΕΤΙΚΑ χρώματα, όπως στο concept art",
+          left == {3} and right == {2}, f"{left} vs {right}")
+
+    # Η αρένα και ο γύρος του ήρωα.
+    t.stub("DRAW_TILE")
+    t.call("MENU_ARENA")
+    cb = t.sym("CELL_BUF")
+
+    def cell(c, r):
+        return t.peek(cb + r * P.COLS + c)[0]
+
+    check("η αρένα είναι κλειστή", all(
+        cell(c, 9) == P.SOLID and cell(c, 13) == P.SOLID for c in range(15, 25))
+        and all(cell(15, r) == P.SOLID and cell(24, r) == P.SOLID
+                for r in range(9, 14)))
+    check("το εσωτερικό της είναι κενό",
+          all(cell(c, r) == P.EMPTY
+              for c in range(16, 24) for r in range(10, 13)))
+
+    t.poke16(t.sym("HERO_X"), 18 * P.CELL + P.CELL // 2)
+    t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + 11 * P.CELL + P.CELL // 2)
+    t.poke(t.sym("HERO_G"), b"\x00")
+    t.poke(t.sym("WORLD_G"), b"\x00")
+    t.poke(t.sym("HERO_STATE"), b"\x02")
+    t.stub("CRATE_STEP")
+    seen = set()
+    for _ in range(500):
+        t.call("HERO_UPDATE", a=1)
+        seen.add(t.peek(t.sym("HERO_G"))[0])
+    check("ο ήρωας κάνει τον γύρο: και οι τέσσερις ορθές φορές",
+          {0, 2, 4, 6} <= seen, str(sorted(seen)))
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

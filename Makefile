@@ -12,6 +12,7 @@ DEPS  = src/rotate.asm src/level.asm src/hero.asm src/tables.asm src/rooms.asm s
 GFX   = src/gfx_hero.asm src/gfx_objects.asm
 PNG   = assets/hero.png assets/objects.png
 BAS   = src/loader.bas
+SPLASH = assets/revive8b.scr
 BIN   = build/main.bin
 BASD  = build/grav.bas
 DSK   = build/gravassist.dsk
@@ -50,11 +51,14 @@ $(BASD): $(BAS) | build
 $(SETS): tools/roomfile.py tools/physics.py $(ROOMS) $(BIN) | build
 	$(PY) tools/roomfile.py
 
-$(DSK): $(BIN) $(BASD) $(SETS)
+$(DSK): $(BIN) $(BASD) $(SETS) $(SPLASH)
 	rm -f $(DSK)
 	$(DISK) $(DSK) -n
 	$(DISK) $(DSK) -i $(BIN)  -t 1 -c 4000 -e 4000 -f
 	$(DISK) $(DSK) -i $(BASD) -t 0 -f
+	@# Η οθόνη υποδοχής: MODE 0 με δική της παλέτα, 16 KB ωμά pixel. Φορτώνεται
+	@# από τον BASIC loader στο #C000 πριν καν μπει το παιχνίδι στη μνήμη.
+	$(DISK) $(DSK) -i $(SPLASH) -t 1 -c C000 -e C000 -f
 	@for s in $(SETS); do \
 	    $(DISK) $(DSK) -i $$s -t 1 -c 0000 -e 0000 -f; \
 	done

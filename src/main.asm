@@ -120,6 +120,10 @@ main:           ld   a,1
                 call SCR_SET_MODE
                 call set_palette
                 call init_linetab
+                call menu_show          ; τίτλος και επίδειξη· γυρίζει με SPACE
+                ld   a,1
+                call SCR_SET_MODE       ; καθάρισε ό,τι άφησε το μενού
+                call set_palette
                 ld   a,START_ROOM       ; ποια αίθουσα· ορίζεται στο build
                 call room_load
                 call prep_hero
@@ -1361,6 +1365,7 @@ linetab         ds   400, 0
                 include "level.asm"
                 include "hero.asm"
                 include "roomfile.asm"
+                include "menu.asm"
 
 ;--- δεδομένα ---------------------------------------------------------
                 include "gfx_hero.asm"
