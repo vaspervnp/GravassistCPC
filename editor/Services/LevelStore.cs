@@ -117,6 +117,62 @@ public sealed class LevelStore
     /// Δημιουργεί ΝΕΑ ΑΙΘΟΥΣΑ με τον επόμενο ελεύθερο αριθμό και τη γράφει στον δίσκο.
     /// Επιστρέφει τον αριθμό και το έγγραφο, ώστε ο editor να την ανοίξει αμέσως.
     /// </summary>
+    /// <summary>
+    /// Αντιγράφει αίθουσα στον επόμενο ελεύθερο αριθμό.
+    ///
+    /// Το αντίγραφο κρατά τις εξόδους και τις τηλεμεταφορές του πρωτοτύπου: οι
+    /// έξοδοι δείχνουν σε ΑΛΛΕΣ αίθουσες και παραμένουν έγκυρες. Κανείς όμως δεν
+    /// δείχνει στο αντίγραφο — αυτό το συνδέεις εσύ.
+    /// </summary>
+    public (int Number, string Name, LevelDocument Doc) CopyRoom(int from)
+    {
+        var src = RoomNaming.FileName(from);
+        if (!Exists(src))
+            throw new LevelFormatException($"Δεν υπάρχει η αίθουσα {from}.");
+
+        var number = NextRoomNumber();
+        var name = RoomNaming.FileName(number);
+        File.Copy(ResolvePath(src), ResolvePath(name));
+        return (number, name, Load(name));
+    }
+
+    /// <summary>
+    /// Μετακινεί αίθουσα σε άλλον αριθμό και ΕΝΗΜΕΡΩΝΕΙ ΟΛΕΣ τις αναφορές.
+    ///
+    /// Αυτό είναι το ουσιώδες: ο αριθμός της αίθουσας ζει και μέσα στις γραμμές
+    /// «exit … &lt;room&gt;» των ΑΛΛΩΝ αιθουσών. Σκέτη μετονομασία αρχείου θα άφηνε
+    /// πόρτες να δείχνουν σε αίθουσα που δεν υπάρχει — και θα το ανακάλυπτες
+    /// παίζοντας, όχι σχεδιάζοντας.
+    /// </summary>
+    /// <returns>Πόσες αναφορές ενημερώθηκαν, ανά αρχείο.</returns>
+    public IReadOnlyList<string> MoveRoom(int from, int to)
+    {
+        if (from == to) return Array.Empty<string>();
+        if (!RoomExists(from))
+            throw new LevelFormatException($"Δεν υπάρχει η αίθουσα {from}.");
+        if (RoomExists(to))
+            throw new LevelFormatException(
+                $"Η αίθουσα {to} υπάρχει ήδη. Διάλεξε ελεύθερο αριθμό ή μετακίνησέ την πρώτη.");
+
+        var touched = new List<string>();
+        var oldName = RoomNaming.FileName(from);
+        var newName = RoomNaming.FileName(to);
+        File.Move(ResolvePath(oldName), ResolvePath(newName));
+        touched.Add($"{oldName} → {newName}");
+
+        foreach (var info in List())
+        {
+            var doc = Load(info.Name);
+            var n = doc.RenumberExitTargets(from, to);
+            if (n == 0) continue;
+
+            File.WriteAllText(ResolvePath(info.Name), doc.Serialize());
+            touched.Add($"{info.Name}: {n} " + (n == 1 ? "έξοδος" : "έξοδοι"));
+        }
+
+        return touched;
+    }
+
     public (int Number, string Name, LevelDocument Doc) CreateRoom()
     {
         Directory.CreateDirectory(RootPath);

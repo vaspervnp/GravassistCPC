@@ -281,6 +281,14 @@
                         title="Δημιουργεί levels/room_&lt;N&gt;.txt με τον επόμενο ελεύθερο αριθμό">
                     Νέα αίθουσα
                 </button>
+                <button id="btn-copy-room" type="button"
+                        title="Αντιγράφει την ανοιχτή αίθουσα στον επόμενο ελεύθερο αριθμό">
+                    Αντιγραφή
+                </button>
+                <button id="btn-move-room" type="button"
+                        title="Αλλάζει τον αριθμό της αίθουσας και ενημερώνει όλες τις πόρτες που δείχνουν σε αυτήν">
+                    Μετακίνηση
+                </button>
                 <button id="btn-play" type="button"
                         title="Τρέχει την αίθουσα στον browser, με την ίδια φυσική">
                     Δοκιμή
@@ -1378,10 +1386,53 @@
             return m ? parseInt(m[1], 10) : 0;
         }
 
+        // --- Αντιγραφή / μετακίνηση αίθουσας -----------------------------
+        async function roomOp(url, body, okMsg) {
+            const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            const b = await res.json();
+            if (!res.ok) { setStatus(b.error || "Απέτυχε.", "err"); return null; }
+            await refreshFileList();
+            return b;
+        }
+
+        document.getElementById("btn-copy-room").addEventListener("click", async function () {
+            const n = roomNumberOfName(fileName.value.trim());
+            if (!n) { setStatus("Άνοιξε πρώτα μια αίθουσα (room_<N>.txt).", "err"); return; }
+            if (dirty && !confirm("Υπάρχουν μη αποθηκευμένες αλλαγές. Θα αντιγραφεί το ΑΠΟΘΗΚΕΥΜΕΝΟ αρχείο. Συνέχεια;")) return;
+            const b = await roomOp("/api/levels/room/copy", { from: n });
+            if (!b) return;
+            loadDocument(b);
+            fileName.value = b.name;
+            fileList.value = b.name;
+            setStatus("Αντιγράφηκε ως «" + b.name + "». Καμία πόρτα δεν δείχνει ακόμα σε αυτήν.", "ok");
+        });
+
+        document.getElementById("btn-move-room").addEventListener("click", async function () {
+            const n = roomNumberOfName(fileName.value.trim());
+            if (!n) { setStatus("Άνοιξε πρώτα μια αίθουσα (room_<N>.txt).", "err"); return; }
+            if (dirty) { setStatus("Αποθήκευσε πρώτα: η μετακίνηση δουλεύει στα αρχεία.", "err"); return; }
+            const raw = prompt("Νέος αριθμός αίθουσας για την " + n + ":", String(n));
+            if (raw === null) return;
+            const to = parseInt(raw.trim(), 10);
+            if (!to || to < 1) { setStatus("Μη έγκυρος αριθμός.", "err"); return; }
+            const b = await roomOp("/api/levels/room/move", { from: n, to: to });
+            if (!b) return;
+            loadDocument(b.dto);
+            fileName.value = b.name;
+            fileList.value = b.name;
+            // Δείξε ΤΙ ενημερώθηκε: ο χρήστης πρέπει να ξέρει ότι πειράχτηκαν
+            // και άλλα αρχεία, όχι μόνο αυτό που είχε ανοιχτό.
+            setStatus("Μετακινήθηκε στην " + to + ". " + (b.touched || []).join(" · "), "ok");
+        });
+
         document.getElementById("btn-play").addEventListener("click", function () {
             const name = fileName.value.trim();
             if (!name) {
-                setStatus("Άνοιξε ή αποθήκευσε πρώτα μια αίθουσα.", true);
+                setStatus("Άνοιξε ή αποθήκευσε πρώτα μια αίθουσα.", "err");
                 return;
             }
             if (dirty) setStatus("Προσοχή: η δοκιμή τρέχει το αποθηκευμένο αρχείο.");
@@ -1391,7 +1442,7 @@
         document.getElementById("btn-dsk").addEventListener("click", async function (ev) {
             const room = roomNumberOfName(fileName.value.trim());
             if (!room) {
-                setStatus("Το .dsk ξεκινά από αίθουσα — άνοιξε ένα room_<N>.txt.", true);
+                setStatus("Το .dsk ξεκινά από αίθουσα — άνοιξε ένα room_<N>.txt.", "err");
                 return;
             }
             const btn = ev.currentTarget;
@@ -1406,9 +1457,10 @@
                 const b = await res.json();
                 setStatus(b.ok
                     ? "Έτοιμο: " + b.dsk + " (" + b.bytes + " bytes), αίθουσα " + room
-                    : "Απέτυχε το χτίσιμο: " + (b.output || b.error || ""), !b.ok);
+                    : "Απέτυχε το χτίσιμο: " + (b.output || b.error || ""),
+                    b.ok ? "ok" : "err");
             } catch (e) {
-                setStatus("Σφάλμα χτισίματος: " + e, true);
+                setStatus("Σφάλμα χτισίματος: " + e, "err");
             } finally {
                 btn.disabled = false;
             }

@@ -50,3 +50,8 @@ public sealed class SaveLevelRequest
 
 /// <summary>Ενιαία μορφή απάντησης σφάλματος (ελληνικό μήνυμα).</summary>
 public sealed record ErrorDto(string Error);
+
+/// <summary>Αίτημα αντιγραφής ή μετακίνησης αίθουσας.</summary>
+/// <param name="From">Αριθμός της αίθουσας πηγής.</param>
+/// <param name="To">Νέος αριθμός (μόνο για μετακίνηση).</param>
+public sealed record RoomOpRequest(int From, int? To);

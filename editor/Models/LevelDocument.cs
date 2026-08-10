@@ -181,6 +181,29 @@ public sealed class LevelDocument
     /// νέες στο τέλος, μία ανά ομάδα. Ό,τι άλλο υπάρχει στην ουρά (σχόλια,
     /// «gravity N») μένει αυτούσιο και στη σειρά του.
     /// </summary>
+    /// <summary>
+    /// Αλλάζει τον αριθμό αίθουσας-στόχου σε όσες γραμμές «exit» δείχνουν στο
+    /// <paramref name="from"/>, ΕΠΙΤΟΠΟΥ.
+    ///
+    /// Δεν χρησιμοποιεί το <see cref="SetExitLinks"/> επίτηδες: εκείνο πετάει τις
+    /// γραμμές και τις ξαναβάζει στο τέλος, οπότε μια απλή αλλαγή αριθμού θα
+    /// αναδιέτασσε την ουρά και θα μόλυνε το diff με ψεύτικες αλλαγές.
+    /// </summary>
+    /// <returns>Πόσες γραμμές άλλαξαν.</returns>
+    public int RenumberExitTargets(int from, int to)
+    {
+        var changed = 0;
+        for (var i = 0; i < Footer.Count; i++)
+        {
+            var link = ExitGraph.ParseLines([Footer[i]]).FirstOrDefault();
+            if (link is null || link.Room != from) continue;
+            Footer[i] = ExitGraph.FormatLine(link with { Room = to });
+            changed++;
+        }
+
+        return changed;
+    }
+
     public void SetExitLinks(IEnumerable<ExitLink> links)
     {
         Footer.RemoveAll(ExitGraph.IsExitLine);

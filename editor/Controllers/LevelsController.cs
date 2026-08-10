@@ -110,6 +110,38 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
         }
     }
 
+    /// <summary>Αντιγράφει αίθουσα στον επόμενο ελεύθερο αριθμό.</summary>
+    [HttpPost("room/copy")]
+    public IActionResult CopyRoom([FromBody] RoomOpRequest req)
+    {
+        try
+        {
+            var (_, name, doc) = store.CopyRoom(req.From);
+            return Ok(ToDto(name, doc));
+        }
+        catch (LevelFormatException ex) { return BadRequest(new ErrorDto(ex.Message)); }
+        catch (IOException ex) { return BadRequest(new ErrorDto($"Σφάλμα εγγραφής: {ex.Message}")); }
+    }
+
+    /// <summary>
+    /// Μετακινεί αίθουσα σε άλλον αριθμό, ενημερώνοντας ΟΛΕΣ τις πόρτες που
+    /// δείχνουν σε αυτήν.
+    /// </summary>
+    [HttpPost("room/move")]
+    public IActionResult MoveRoom([FromBody] RoomOpRequest req)
+    {
+        if (req.To is null or < 1 or > 9999)
+            return BadRequest(new ErrorDto("Ο νέος αριθμός πρέπει να είναι 1..9999."));
+        try
+        {
+            var touched = store.MoveRoom(req.From, req.To.Value);
+            var name = RoomNaming.FileName(req.To.Value);
+            return Ok(new { name, touched, dto = ToDto(name, store.Load(name)) });
+        }
+        catch (LevelFormatException ex) { return BadRequest(new ErrorDto(ex.Message)); }
+        catch (IOException ex) { return BadRequest(new ErrorDto($"Σφάλμα εγγραφής: {ex.Message}")); }
+    }
+
     /// <summary>
     /// Ενώνει τις ομάδες εξόδου και τηλεμεταφοράς του πλέγματος με τους
     /// προορισμούς της ουράς. Η αυθεντία για το ΠΟΙΕΣ είναι οι ομάδες είναι πάντα
