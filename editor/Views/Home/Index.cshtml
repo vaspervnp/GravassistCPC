@@ -1627,7 +1627,11 @@
             attrVals = shiftMap(attrVals, false);
 
             dirty = true;
-            refreshSource();
+            // drawAll και ΟΧΙ refreshSource: το δεύτερο ενημερώνει μόνο το
+            // πηγαίο κείμενο και τις συνδέσεις. Τα κελιά του SVG τα
+            // ξαναζωγραφίζει το drawAll — χωρίς αυτό μετακινούνταν οι
+            // ετικέτες καλωδίωσης ενώ ο χάρτης έμενε ακίνητος.
+            drawAll();
             setStatus("Panned by " + dx + "," + dy + ".", "ok");
         }
 
