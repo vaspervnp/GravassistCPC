@@ -212,6 +212,29 @@ def main():
             want.append(tuple(GA.pack_mode1(GA.arrow_pixels(g, 3)[y])))
         check(f"βέλος βαρύτητας φοράς {g} στο HUD", got == want)
 
+    # 7. Ασυλία πόρτας: μετά την άφιξη, η πόρτα αγνοείται για ένα δευτερόλεπτο.
+    #    Χωρίς αυτό, το σημείο άφιξης είναι αναγκαστικά κοντά στην πόρτα
+    #    επιστροφής και ένα γλίστρημα λίγων pixel σε ξανάβαζε μέσα.
+    rooms_all = P.all_rooms()
+    if rooms_all:
+        room = rooms_all[0]
+        index = RF.set_of(room.number)
+        t.poke(set_buf, dict((i, d) for i, _, d in RF.all_sets())[index])
+        t.poke(t.sym("SET_CUR"), bytes((index,)))
+        t.poke(t.sym("JR_COUNT"), b"\x00")
+        t.call("ROOM_LOAD", a=room.number)
+        check("η άφιξη ξεκινά την ασυλία",
+              t.peek(t.sym("DOOR_COOL"))[0] == P.EXIT_COOL,
+              f"{t.peek(t.sym('DOOR_COOL'))[0]} vs {P.EXIT_COOL}")
+
+        # Κάθε frame μειώνει τον μετρητή κατά ένα και σταματά στο μηδέν.
+        t.stub("CRATE_STEP")
+        for i in range(P.EXIT_COOL + 5):
+            t.call("HERO_UPDATE", a=0)
+        check("η ασυλία μηδενίζει και δεν γίνεται αρνητική",
+              t.peek(t.sym("DOOR_COOL"))[0] == 0,
+              f"{t.peek(t.sym('DOOR_COOL'))[0]}")
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

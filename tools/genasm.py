@@ -265,6 +265,7 @@ def defs_asm(rooms=()):
             f"ATTR_MAX        equ {P.ATTR_MAX}   ; κανάλια διακοπτών / "
             "ταυτότητες κλειδιών",
             f"SPIKE_TICKS     equ {P.SPIKE_TICKS}",
+            f"EXIT_COOL       equ {P.EXIT_COOL}   ; frames ασυλίας μετά από πόρτα",
             f"ENERGY_MAX      equ {P.ENERGY_MAX}",
             f"ENERGY_PICK     equ {P.ENERGY_PICK}",
             f"SPIKE_DMG       equ {P.SPIKE_DMG}",

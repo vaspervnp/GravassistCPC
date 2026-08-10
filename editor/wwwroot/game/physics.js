@@ -70,6 +70,7 @@
       // ΕΝΑΣ ΜΕΤΡΗΤΗΣ ΑΝΑ ΤΑΥΤΟΤΗΤΑ: το κλειδί 3 ανοίγει μόνο την κλειδαριά 3.
       this.keys = new Array(K.ATTR_MAX).fill(0);
       this.spikeTick = 0; this.prevCell = null; this.prevBody = null;
+      this.exitCool = 0;
       this.parachute = 0; this.paraOpen = 0; this.won = false;
       this.crateTick = 0; this.walkAcc = 0; this.worldG = g; this.cratesOn = false;
       this.face = 1; this.carry = 0; this.warp = false;
@@ -257,7 +258,7 @@
         if (t === T.ENERGY) this.energy = Math.min(K.ENERGY_MAX, this.energy + K.ENERGY_PICK);
         else if (t === T.PARACHUTE) this.parachute++;
         else if (t === T.KEY) this.keys[this.room.attr(col, row)]++;
-      } else if (t === T.EXIT) {
+      } else if (t === T.EXIT && this.exitCool === 0) {
         this.won = true;
       } else if (t === T.SWITCH && (col + "," + row) !== this.prevBody) {
         // ΤΟ ΠΑΤΑΣ, ΔΕΝ ΤΟ ΞΟΔΕΥΕΙΣ: γυρίζει κάθε πόρτα του καναλιού του και
@@ -335,8 +336,11 @@
     // Η σειρά και οι πρόωροι τερματισμοί είναι ΑΚΡΙΒΩΣ του physics.py.update.
     // Στην πτώση το prevSupport ΔΕΝ ενημερώνεται — αυτό κρατά τη μνήμη ότι
     // ερχόμασταν από ράμπα, που χρειάζεται το align.
+    enterRoom() { this.exitCool = K.EXIT_COOL; }
     update(walk, run) {
       walk = walk | 0;
+      // ΠΡΙΝ το touchObjects, αλλιώς η πόρτα ελέγχεται μία φορά με cooldown 0.
+      if (this.exitCool) this.exitCool--;
       this.crateStep();
       this.touchObjects();
       const k = this.groundDepth(0);

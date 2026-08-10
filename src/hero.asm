@@ -29,7 +29,13 @@ HST_FALL        equ 2
 ; hero_update — ένα frame
 ;   IN: A = κατεύθυνση βάδισης: -1 πίσω, 0 ακίνητος, +1 μπροστά
 ;=====================================================================
-hero_update:    ld   (h_d),a
+hero_update:    ld   (h_d),a            ; φύλαξε ΠΡΩΤΑ τη φορά βάδισης
+                ld   hl,door_cool       ; μετά μείωσε την ασυλία πόρτας — ΠΡΙΝ
+                ld   a,(hl)             ; το h_touch, αλλιώς η πόρτα ελέγχεται
+                or   a                  ; μία φορά με μετρητή μηδέν
+                jr   z,hu_nocool
+                dec  (hl)
+hu_nocool:      ld   a,(h_d)
                 or   a                  ; κατεύθυνση για τη μέτρηση κλίσης:
                 jr   nz,hu_td           ; όταν στέκεται, χρησιμοποιούμε +1
                 ld   a,1
@@ -203,6 +209,13 @@ ht_esave:       ld   (hero_energy),a
 ht_nopick:      ld   a,(h_cell)
                 cp   T_EXIT
                 jr   nz,ht_nosw
+                ; ΜΙΑ ΣΤΙΓΜΗ ΑΣΥΛΙΑΣ ΜΕΤΑ ΤΗΝ ΑΦΙΞΗ. Το σημείο άφιξης είναι
+                ; αναγκαστικά κοντά στην πόρτα επιστροφής, οπότε ένα γλίστρημα
+                ; λίγων pixel σε ξανάβαζε μέσα και πηγαινοερχόσουν.
+                ld   a,(door_cool)
+                or   a
+                jr   nz,ht_spikes
+                ld   a,(h_cell)
                 call exit_dest          ; ποια αίθουσα; 0 = καμία
                 or   a
                 jr   z,ht_spikes
@@ -468,6 +481,8 @@ rl_have:        pop  af
                 ld   (hero_carry),a
                 ld   a,HST_FALL
                 ld   (hero_state),a
+                ld   a,EXIT_COOL        ; ασυλία πόρτας για ένα δευτερόλεπτο
+                ld   (door_cool),a
                 ld   a,1
                 ld   (hud_dirty),a
                 jp   render_room
@@ -476,6 +491,9 @@ room_exits      dw 0
 room_tps        dw 0
 room_arr        dw 0
 cur_room        db 0
+; ΟΧΙ 'exit_cool': το rasm είναι case-insensitive και θα συγκρουόταν με τη
+; σταθερά EXIT_COOL — το `ld a,EXIT_COOL` θα έπαιρνε τη ΔΙΕΥΘΥΝΣΗ αυτού εδώ.
+door_cool       db 0            ; frames ασυλίας μετά από πέρασμα πόρτας
 from_room       db 0
 pending_room    db 0
 

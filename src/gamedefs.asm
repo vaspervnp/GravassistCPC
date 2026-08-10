@@ -59,6 +59,7 @@ MEM_CEIL        equ #A67B
 NTYPES          equ 29
 ATTR_MAX        equ 8   ; κανάλια διακοπτών / ταυτότητες κλειδιών
 SPIKE_TICKS     equ 10
+EXIT_COOL       equ 50   ; frames ασυλίας μετά από πόρτα
 ENERGY_MAX      equ 8
 ENERGY_PICK     equ 2
 SPIKE_DMG       equ 2

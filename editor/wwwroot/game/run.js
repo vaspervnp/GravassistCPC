@@ -98,6 +98,9 @@
         // — όχι αυτή από την οποία μπήκες, που ζει σε άλλο αρχείο.
         const arr = arrivalIn(nr, from);
         start(sel.value, nr.cells, arr || nr.start);
+        // Μία στιγμή ασυλίας: το σημείο άφιξης είναι αναγκαστικά κοντά στην
+        // πόρτα επιστροφής και ένα γλίστρημα λίγων pixel σε ξανάβαζε μέσα.
+        hero.enterRoom();
         note.textContent = "Room " + dest + (arr ? " (door arrival point)" : "");
       } else if (dest) {
         note.textContent = "Room " + dest + " does not exist";
