@@ -31,6 +31,47 @@
   let rooms = {}, hero = null, room = null, tick = 0, paraFrame = 0, paraTick = 0;
   let hist = [], usePrev = false, curName = "";
 
+  // ΣΤΟΙΒΑ ΔΙΑΔΡΟΜΗΣ — μεταγραφή του Trail του tools/physics.py.
+  // Πόρτα προς δωμάτιο της στοίβας = ανοιχτή (γυρνάς πίσω). Πόρτα προς δωμάτιο
+  // που ΞΕΧΕΙΛΙΣΕ = μπλοκ. Πόρτα προς δωμάτιο που δεν έχεις δει = ανοιχτή.
+  const trail = { rooms: [], sealed: new Set() };
+
+  function trailEnter(current, entering) {
+    const at = trail.rooms.indexOf(entering);
+    if (at >= 0) {                      // γύρισες πίσω: ξετυλίγεται η στοίβα
+      trail.rooms = trail.rooms.slice(at + 1);
+      return;
+    }
+    trail.rooms.unshift(current);
+    trail.sealed.delete(current);       // ξαναμπήκε στη στοίβα -> ξανανοίγει
+    while (trail.rooms.length > D.K.TRAIL_MAX) trail.sealed.add(trail.rooms.pop());
+  }
+
+  // Οι σφραγισμένες πόρτες γίνονται στερεές ΣΤΟ ΑΝΤΙΓΡΑΦΟ του δωματίου και
+  // ΟΧΙ στο αποθηκευμένο πλέγμα: η σφράγιση δεν είναι αλλαγή του δωματίου
+  // αλλά της διαδρομής σου, και ξαναϋπολογίζεται σε κάθε είσοδο.
+  let sealedCells = [];               // ποια κελιά μετατράπηκαν σε μπλοκ
+
+  function sealDoors(meta) {
+    const EX = D.TYPE_NAMES.indexOf("EXIT");
+    sealedCells = [];
+    for (let r = 0; r < D.ROWS; r++)
+      for (let c = 0; c < D.COLS; c++)
+        if (room.cells[r][c] === EX && trail.sealed.has(meta.exits[c + "," + r])) {
+          room.cells[r][c] = D.TYPE_NAMES.indexOf("SOLID");
+          sealedCells.push([c, r]);
+        }
+  }
+
+  /// Ξηλώνει τη σφράγιση πριν αποθηκευτεί το πλέγμα του δωματίου. Χωρίς αυτό
+  /// τα μπλοκ θα γράφονταν ως πραγματικά τοιχώματα και η πόρτα δεν θα
+  /// ξανάνοιγε ποτέ — ενώ ο κανόνας λέει ότι ξανανοίγει.
+  function unsealDoors() {
+    const EX = D.TYPE_NAMES.indexOf("EXIT");
+    for (const [c, r] of sealedCells) room.cells[r][c] = EX;
+    sealedCells = [];
+  }
+
   function animFrame() {
     if (hero.state === "WALK") return 2 + ((tick >> 2) & 7);
     if (hero.state === "FALL") return 18 + ((tick >> 3) & 3);
@@ -95,6 +136,7 @@
     } else { paraFrame = 0; paraTick = 0; }
 
     window.__hero = hero;               // για επιθεώρηση/έλεγχο από εργαλεία
+    window.__trail = trail;
     hist.push([hero.x, hero.y]);
     if (hist.length > STUCK_FRAMES) hist.shift();
 
@@ -111,12 +153,17 @@
         // άλλαζε ο παίκτης ζούσε μόνο στο αντίγραφο και χανόταν με την πόρτα:
         // τα pickups αναγεννιόνταν σε κάθε επίσκεψη. Ο Amstrad το λύνει με
         // ημερολόγιο· εδώ αρκεί να κρατήσουμε το πλέγμα.
+        // Πριν το write-back, ξήλωσε τη σφράγιση: αλλιώς τα μπλοκ θα
+        // αποθηκεύονταν ως πραγματικά τοιχώματα του δωματίου.
+        unsealDoors();
         rooms[curName].cells = room.cells;
         const arr = arrivalIn(nr, from);
         start(sel.value, nr.cells, arr || nr.start, {
             energy: hero.energy, keys: hero.keys,
             parachute: hero.parachute, carry: hero.carry,
         });
+        trailEnter(from, dest);
+        sealDoors(nr);
         note.textContent = "Room " + dest + (arr ? " (door arrival point)" : "");
       } else if (dest) {
         note.textContent = "Room " + dest + " does not exist";

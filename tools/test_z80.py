@@ -268,6 +268,27 @@ def main():
         check("τα κιβώτια ξεκινούν ακίνητα στη νέα αίθουσα",
               t.peek(t.sym("CRATES_ON"))[0] == 0)
 
+    # 9. Στοίβα διαδρομής: γυρνάς πίσω ως TRAIL_MAX δωμάτια και οι πόρτες
+    #    προς ό,τι ξεχείλισε γίνονται μπλοκ. Συγκρίνεται ΒΗΜΑ-ΒΗΜΑ με το
+    #    μοντέλο — η λογική έχει τρεις κλάδους (μπροστά, πίσω, ξεχείλισμα) και
+    #    κανένας δεν είναι προφανής στον Z80.
+    TR, TRN, SEAL = t.sym("TRAIL"), t.sym("TRAIL_N"), t.sym("SEALED")
+    t.poke(TRN, b"\x00")
+    t.poke(SEAL, bytes(32))
+    ref = P.Trail()
+    for a, b in [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 5), (5, 6),
+                 (6, 7), (7, 8), (8, 3)]:
+        t.poke(t.sym("FROM_ROOM"), bytes((a,)))
+        t.call("TRAIL_ENTER", a=b)
+        ref.enter(a, b)
+        n = t.peek(TRN)[0]
+        rooms = list(t.peek(TR, P.TRAIL_MAX))[:n]
+        sealed = [r for r in range(256)
+                  if t.peek(SEAL + (r >> 3))[0] & (1 << (r & 7))]
+        check(f"διαδρομή {a}->{b}",
+              rooms == ref.rooms and sealed == sorted(ref.sealed),
+              f"Z80 {rooms}/{sealed} vs {ref.rooms}/{sorted(ref.sealed)}")
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

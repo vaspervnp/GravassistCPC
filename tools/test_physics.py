@@ -481,6 +481,40 @@ def main():
     check("η πόρτα ΔΕΝ ανοίγει με την επαφή", not h.won)
     check("το πάτημα την ανοίγει", h.use() and h.won)
 
+    # 21. Στοίβα διαδρομής: γυρνάς πίσω ως TRAIL_MAX δωμάτια.
+    tr = P.Trail()
+    for a, b in [(1, 2), (2, 3), (3, 4), (4, 5)]:
+        tr.enter(a, b)
+    check(f"στοίβα {P.TRAIL_MAX} δωματίων χωρίς σφράγιση",
+          tr.rooms == [4, 3, 2, 1] and not tr.sealed, f"{tr.rooms}")
+    tr.enter(5, 6)
+    check("το πέμπτο δωμάτιο σφραγίζει το πρώτο",
+          tr.rooms == [5, 4, 3, 2] and tr.sealed == {1}, f"{tr.rooms} {tr.sealed}")
+
+    # Γυρνώντας πίσω, το δωμάτιο που άφησες είναι ΜΠΡΟΣΤΑ σου και ΔΕΝ
+    # σφραγίζεται — αλλιώς δύο δωμάτια θα κλείδωναν το ένα το άλλο μόλις
+    # πηγαινοερχόσουν.
+    tr.enter(6, 5)
+    check("το γύρισμα πίσω δεν σφραγίζει ό,τι άφησες",
+          not tr.is_sealed(6), f"{tr.rooms} {tr.sealed}")
+    check("η σφράγιση του πρώτου παραμένει", tr.is_sealed(1))
+    tr.enter(5, 6)
+    check("και ξαναμπροστά, χωρίς νέα σφράγιση",
+          tr.rooms == [5, 4, 3, 2] and tr.sealed == {1}, f"{tr.rooms} {tr.sealed}")
+
+    # Σφραγισμένος προορισμός -> τα κελιά της πόρτας γίνονται στερεά.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[10][5] = "X"
+    rows[11][5] = "X"
+    rows[10][30] = "X"
+    text = ";\n" + "\n".join("".join(r) for r in rows) + \
+        "\ngravity 0\nexit 5 10 1\nexit 30 10 9"
+    room = P.Room(text)
+    cells = tr.sealed_cells(room)
+    check("σφραγίζονται τα κελιά ΜΟΝΟ της σφραγισμένης πόρτας",
+          sorted(cells) == [(5, 10), (5, 11)], str(sorted(cells)))
+
     # Γειτονικές έξοδοι με ΔΙΑΦΟΡΕΤΙΚΟΥΣ προορισμούς πρέπει να απορρίπτονται.
     bad = ";\n" + "\n".join(
         "#" * 40 if i in (0, 23) else "#" + ("X" * 2 if i == 5 else ".." ) + "." * 36 + "#"

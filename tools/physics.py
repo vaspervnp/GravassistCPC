@@ -971,6 +971,49 @@ def render(room, hero, w=40, h=24):
     return "\n".join("".join(row) for row in out)
 
 
+# --- Διαδρομή δωματίων -------------------------------------------------
+TRAIL_MAX = 4           # πόσα δωμάτια πίσω μπορείς να γυρίσεις
+
+
+class Trail:
+    """Η στοίβα των δωματίων από τα οποία ΗΡΘΕΣ, και ποιες πόρτες σφραγίζουν.
+
+    Ο κανόνας: πόρτα προς δωμάτιο της στοίβας είναι ανοιχτή (γυρνάς πίσω),
+    πόρτα προς δωμάτιο που ΕΠΕΣΕ ΕΞΩ από τη στοίβα γίνεται μπλοκ, και πόρτα
+    προς δωμάτιο που δεν έχεις δει ποτέ είναι πάντα ανοιχτή — προχωράς.
+
+    ΤΟ ΛΕΠΤΟ ΣΗΜΕΙΟ: σφραγίζονται μόνο όσα ΞΕΧΕΙΛΙΣΑΝ, όχι όσα απλώς λείπουν
+    από τη στοίβα. Γυρνώντας 6->5 το δωμάτιο 6 φεύγει από τη στοίβα αλλά είναι
+    ΜΠΡΟΣΤΑ σου, όχι πίσω: αν το σφραγίζαμε, δύο δωμάτια θα κλείδωναν το ένα
+    το άλλο με το που πηγαινοερχόσουν.
+    """
+
+    def __init__(self):
+        self.rooms = []                 # πιο πρόσφατο πρώτο
+        self.sealed = set()
+
+    def enter(self, current, entering):
+        """Μπαίνεις στο `entering` ερχόμενος από το `current`."""
+        if entering in self.rooms:      # γύρισες πίσω: ξετυλίγεται η στοίβα
+            self.rooms = self.rooms[self.rooms.index(entering) + 1:]
+            return
+        self.rooms.insert(0, current)
+        self.sealed.discard(current)    # ξαναμπήκε στη στοίβα -> ξανανοίγει
+        while len(self.rooms) > TRAIL_MAX:
+            self.sealed.add(self.rooms.pop())
+
+    def is_sealed(self, dest):
+        return dest in self.sealed
+
+    def sealed_cells(self, room):
+        """Τα κελιά εξόδου που πρέπει να γίνουν στερεά σε αυτό το δωμάτιο."""
+        out = []
+        for _cell, dest, _two, cells in room.exit_groups():
+            if self.is_sealed(dest):
+                out.extend(cells)
+        return out
+
+
 def load_room(path=None):
     path = path or os.path.join(LEVELS, "regress.txt")
     with open(path) as f:
