@@ -44,6 +44,7 @@ menu_show:      ld   a,1
                 call menu_arena
                 call menu_text
                 call menu_keys
+                call music_start        ; ο βρόχος τη συντηρεί, νότα τη νότα
 
                 ; Ο ήρωας ξεκινά μέσα στην αρένα και περπατάει για πάντα.
                 ld   hl,(ARENA_C+3)*LVL_CELL+LVL_CELL/2
@@ -78,7 +79,8 @@ menu_loop:      ld   hl,(menu_tick)     ; κάθε MENU_PAGE frames, άλλαξ�
                 xor  1
                 ld   (key_page),a
                 call menu_keys
-mk_no:          ld   a,1                ; ΠΑΝΤΑ μπροστά: ο γύρος βγαίνει μόνος
+mk_no:          call music_step
+                ld   a,1                ; ΠΑΝΤΑ μπροστά: ο γύρος βγαίνει μόνος
                 call hero_update
                 call anim_frame
                 call prep_hero
@@ -87,7 +89,7 @@ mk_no:          ld   a,1                ; ΠΑΝΤΑ μπροστά: ο γύρο
                 ld   a,K_SPACE
                 call KM_TEST_KEY
                 jr   z,menu_loop
-                ret
+                jp   music_stop         ; σιωπή πριν ξεκινήσει το παιχνίδι
 
 ;---------------------------------------------------------------------
 ; menu_arena — χτίζει και ζωγραφίζει την αρένα 10x5 μέσα στο cell_buf

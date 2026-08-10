@@ -8,7 +8,8 @@ SRC   = src/main.asm
 # αν εξαρτιόταν από ένα αρχείο, μια αλλαγή σε άλλη αίθουσα θα περνούσε
 # απαρατήρητη και το «Χτίσιμο .dsk» θα έβγαζε δισκέτα με παλιά δεδομένα.
 ROOMS = $(wildcard levels/room_*.txt)
-DEPS  = src/rotate.asm src/level.asm src/hero.asm src/tables.asm src/rooms.asm src/gamedefs.asm
+DEPS  = src/rotate.asm src/level.asm src/hero.asm src/tables.asm src/rooms.asm \
+        src/gamedefs.asm src/roomfile.asm src/menu.asm src/musicplay.asm src/music.asm
 GFX   = src/gfx_hero.asm src/gfx_objects.asm
 PNG   = assets/hero.png assets/objects.png
 BAS   = src/loader.bas
@@ -31,6 +32,11 @@ $(GFX): $(PNG) tools/sprites.py tools/cpcgfx.py tools/stickman.py tools/placehol
 # προσομοίωση, ώστε Z80 και Python να μην μπορούν να αποκλίνουν αριθμητικά.
 src/gamedefs.asm src/tables.asm src/rooms.asm: tools/genasm.py tools/physics.py $(ROOMS)
 	$(PY) tools/genasm.py
+
+# Η μουσική: νότες σε περιόδους του AY. Γεννιέται ώστε το src/music.asm να μην
+# είναι 150 magic numbers που κανείς δεν μπορεί να διορθώσει.
+src/music.asm: tools/genmusic.py
+	$(PY) tools/genmusic.py
 
 # Το rasm βγάζει το build/main.bin μέσω του `save` directive στο main.asm
 # Ο πίνακας συμβόλων δεν είναι για debugging: από εκεί διαβάζει το

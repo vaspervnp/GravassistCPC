@@ -1366,6 +1366,7 @@ linetab         ds   400, 0
                 include "hero.asm"
                 include "roomfile.asm"
                 include "menu.asm"
+                include "musicplay.asm"
 
 ;--- δεδομένα ---------------------------------------------------------
                 include "gfx_hero.asm"
@@ -1374,6 +1375,7 @@ linetab         ds   400, 0
                 include "gfx_para45.asm"
                 include "gfx_objects.asm"
                 include "rooms.asm"
+                include "music.asm"
 
 prog_end
                 save 'build/main.bin', #4000, prog_end-#4000

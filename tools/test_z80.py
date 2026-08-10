@@ -468,6 +468,61 @@ def main():
           t.peek(t.sym("HERO_KEYS"), 8)[2] == 0,
           str(list(t.peek(t.sym("HERO_KEYS"), 8))))
 
+    # 13. Μουσική: ο player χτίζει σωστά μπλοκ για το SOUND QUEUE και ο
+    #     κύκλος ξαναρχίζει από την αρχή. Το firmware εδώ απαντά πάντα
+    #     «μπήκε στην ουρά» (SCF; RET), ώστε να προχωράει η ροή σε κάθε βήμα.
+    import genmusic as GM
+    t.m.memory[0xBCAA] = 0x37           # SCF
+    t.m.memory[0xBCAB] = 0xC9           # RET
+    t.m.memory[0xBCA7] = 0xC9           # SOUND RESET -> RET
+    t.call("MUSIC_START")
+
+    table = GM.collect(GM.BASS, GM.LEAD, GM.PULSE)
+    bass, _ = GM.stream(GM.BASS, table, GM.VOL_BASS)
+
+    t.call("MUSIC_STEP")
+    # Το snd_block είναι ΚΟΙΝΟ και τα κανάλια γράφουν με τη σειρά, οπότε μετά
+    # από ένα βήμα κρατά το ΤΕΛΕΥΤΑΙΟ — τον παλμό.
+    pulse, _ = GM.stream(GM.PULSE, table, GM.VOL_PULSE)
+    note, vol, dur = pulse[0]
+    blk = t.peek(t.sym("SND_BLOCK"), 9)
+    want_tone = GM.period(table[note - 1])
+    check("το μπλοκ ήχου έχει το σωστό κανάλι", blk[0] == 4, str(blk[0]))
+    check("…τη σωστή περίοδο τόνου",
+          blk[3] | (blk[4] << 8) == want_tone,
+          f"{blk[3] | (blk[4] << 8)} vs {want_tone}")
+    check("…τη σωστή ένταση και διάρκεια",
+          blk[6] == vol and blk[7] | (blk[8] << 8) == dur,
+          f"vol {blk[6]}/{vol}, dur {blk[7] | (blk[8] << 8)}/{dur}")
+    check("…και θόρυβο μόνο εκεί που πρέπει",
+          blk[5] == GM.NOISE_PULSE, str(blk[5]))
+
+    for name, base in (("bass", "MUS_BASS"), ("lead", "MUS_LEAD"),
+                       ("pulse", "MUS_PULSE")):
+        ptr = t.peek16(t.sym("MUS_P_" + name.upper()))
+        check(f"το κανάλι {name} προχώρησε μία νότα",
+              ptr == t.sym(base) + 3, f"#{ptr:04X}")
+
+    # Μία πλήρης περιστροφή: στο τελευταίο βήμα ο δείκτης δείχνει στο #FF και
+    # το επόμενο τον γυρίζει στην αρχή.
+    for _ in range(len(bass) - 1):
+        t.call("MUSIC_STEP")
+    check("ο δείκτης φτάνει στο τέλος της ροής",
+          t.peek16(t.sym("MUS_P_BASS")) == t.sym("MUS_BASS") + 3 * len(bass),
+          f"#{t.peek16(t.sym('MUS_P_BASS')):04X}")
+    t.call("MUSIC_STEP")
+    check("ο κύκλος ξαναρχίζει από την αρχή",
+          t.peek16(t.sym("MUS_P_BASS")) == t.sym("MUS_BASS") + 3,
+          f"#{t.peek16(t.sym('MUS_P_BASS')):04X}")
+
+    # Το μήκος του κύκλου: 20 δευτερόλεπτα, και τα τρία κανάλια ίσα.
+    for name, track, vol in (("bass", GM.BASS, GM.VOL_BASS),
+                             ("lead", GM.LEAD, GM.VOL_LEAD),
+                             ("pulse", GM.PULSE, GM.VOL_PULSE)):
+        data, total = GM.stream(track, table, vol)
+        check(f"το κανάλι {name} κρατά ακριβώς 20 δευτερόλεπτα",
+              total == GM.LOOP, f"{total / 100:.1f}s")
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 
