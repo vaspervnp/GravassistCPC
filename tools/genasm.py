@@ -102,8 +102,12 @@ PLACEHOLDER = {
     P.KEY: ("KEY", 0), P.LOCK: ("LOCK", 0), P.GATE: ("GATE", 0),
     P.SWITCH: ("SWITCH", 0), P.PLATE: ("PLATE", 0), P.TELEPORT: ("TELEPORT", 0),
     P.CRATE: ("CRATE", 0), P.CRUMBLE: ("CRUMBLE", 0), P.GRAVLOCK: ("GRAVLOCK", 0),
-    P.SPIKE_U: ("SPIKES", 0), P.SPIKE_L: ("SPIKES", 1),
-    P.SPIKE_D: ("SPIKES", 2), P.SPIKE_R: ("SPIKES", 3),
+    # Η ΒΑΣΗ ΚΑΘΕΤΑΙ ΑΠΕΝΑΝΤΙ ΑΠΟ ΤΙΣ ΜΥΤΕΣ. Το αριστερό και το δεξί ήταν
+    # ανταλλαγμένα: το SPIKE_L (δείχνει αριστερά, FACING 2) ζωγραφιζόταν με τη
+    # βάση ΑΡΙΣΤΕΡΑ, δηλαδή έδειχνε δεξιά — και το ανάποδο. Το σχήμα έλεγε
+    # άλλα από τη φυσική, και ο παίκτης πάταγε τη «σίγουρη» πλευρά.
+    P.SPIKE_U: ("SPIKES", 0), P.SPIKE_L: ("SPIKES", 3),
+    P.SPIKE_D: ("SPIKES", 2), P.SPIKE_R: ("SPIKES", 1),
     P.ONEWAY_U: ("ONEWAY", 0), P.ONEWAY_L: ("ONEWAY", 1),
     P.ONEWAY_D: ("ONEWAY", 2), P.ONEWAY_R: ("ONEWAY", 3),
 }
@@ -122,8 +126,8 @@ SPIKES_OFF = [
     "XXXXXXXX",
 ]
 
-SPIKE_OFF_TURNS = {P.SPIKE_U_OFF: 0, P.SPIKE_L_OFF: 1,
-                   P.SPIKE_D_OFF: 2, P.SPIKE_R_OFF: 3}
+SPIKE_OFF_TURNS = {P.SPIKE_U_OFF: 0, P.SPIKE_L_OFF: 3,
+                   P.SPIKE_D_OFF: 2, P.SPIKE_R_OFF: 1}
 
 
 # --- Βελάκια βαρύτητας για το HUD -------------------------------------

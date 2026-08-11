@@ -316,7 +316,7 @@ public static class TileCatalog
             "Retracted: solid but harmless — a plate you walk on. A switch, plate or key on the same channel pushes them back out.",
             Palette.Material, Palette.EdgeColor,
             """
-            <g transform="rotate(90 4 4)">
+            <g transform="rotate(270 4 4)">
               <rect x="0" y="6" width="8" height="2" fill="var(--edge)"/>
               <rect x="2" y="5" width="1" height="1" fill="var(--edge)"/>
               <rect x="5" y="5" width="1" height="1" fill="var(--edge)"/>
@@ -327,7 +327,7 @@ public static class TileCatalog
             "Retracted: solid but harmless — a plate you walk on. A switch, plate or key on the same channel pushes them back out.",
             Palette.Material, Palette.EdgeColor,
             """
-            <g transform="rotate(270 4 4)">
+            <g transform="rotate(90 4 4)">
               <rect x="0" y="6" width="8" height="2" fill="var(--edge)"/>
               <rect x="2" y="5" width="1" height="1" fill="var(--edge)"/>
               <rect x="5" y="5" width="1" height="1" fill="var(--edge)"/>

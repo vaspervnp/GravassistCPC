@@ -649,6 +649,39 @@ def main():
     check("το κανάλι 0 είναι ακαλωδίωτο και δεν το ελέγχει κανείς",
           rm.cells[22][20] == P.GATE)
 
+    # --- ΤΟ ΣΧΗΜΑ ΠΡΕΠΕΙ ΝΑ ΣΥΜΦΩΝΕΙ ΜΕ ΤΗ ΦΥΣΙΚΗ.
+    #     Το αγκάθι είναι θανατηφόρο από τη μεριά των ΜΥΤΩΝ και ακίνδυνο από
+    #     τη ΒΑΣΗ. Αν το γραφικό δείχνει ανάποδα, ο παίκτης πατάει με
+    #     εμπιστοσύνη τη μεριά που τον σκοτώνει. Το αριστερό και το δεξί ήταν
+    #     όντως ανταλλαγμένα.
+    import genasm as GA
+    face_side = {4: "top", 2: "left", 0: "bottom", 6: "right"}
+    opposite = {"top": "bottom", "bottom": "top",
+                "left": "right", "right": "left"}
+    for st in (P.SPIKE_U, P.SPIKE_L, P.SPIKE_D, P.SPIKE_R):
+        px = GA.tile_pixels(st)
+        sides = {"top": sum(1 for u in range(8) if px[0][u]),
+                 "bottom": sum(1 for u in range(8) if px[7][u]),
+                 "left": sum(1 for v in range(8) if px[v][0]),
+                 "right": sum(1 for v in range(8) if px[v][7])}
+        base = max(sides, key=sides.get)
+        want = opposite[face_side[P.FACING[st]]]
+        check(f"{P.TYPE_NAMES[st]}: η βάση απέναντι από τις μύτες",
+              base == want, f"βάση {base}, περίμενα {want}")
+
+    # Και τα τραβηγμένα: η ίδια πλευρά με το αντίστοιχο βγαλμένο.
+    for on, off in P.SPIKE_OFF.items():
+        pon, poff = GA.tile_pixels(on), GA.tile_pixels(off)
+        def base_of(px):
+            s = {"top": sum(1 for u in range(8) if px[0][u]),
+                 "bottom": sum(1 for u in range(8) if px[7][u]),
+                 "left": sum(1 for v in range(8) if px[v][0]),
+                 "right": sum(1 for v in range(8) if px[v][7])}
+            return max(s, key=s.get)
+        check(f"{P.TYPE_NAMES[off]}: ίδια πλευρά με το {P.TYPE_NAMES[on]}",
+              base_of(pon) == base_of(poff),
+              f"{base_of(pon)} vs {base_of(poff)}")
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

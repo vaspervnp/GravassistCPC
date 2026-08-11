@@ -201,6 +201,7 @@
     exit:   [[319, 0, 11, 5], [478, 0, 10, 8]],
     enter:  [[478, 0, 10, 5], [319, 0, 12, 8]],
     hurt:   [[1000, 8, 14, 6], [1500, 16, 10, 8]],
+    over:   [[478, 0, 13, 14], [568, 0, 12, 14], [716, 0, 11, 18], [955, 0, 9, 40]],
   };
 
   let actx = null, noiseBuf = null, hum = null;
@@ -272,6 +273,8 @@
     }
   }
 
+  let ended = null;          // "GAME OVER" ή "THE END" — παγώνει τον βρόχο
+
   function frame() {
     const { walk, run } = input();
     hero.update(walk, run);      // το τρέξιμο είναι ΣΗΜΑΙΑ, όχι δεύτερη ενημέρωση
@@ -290,19 +293,29 @@
     hist.push([hero.x, hero.y]);
     if (hist.length > STUCK_FRAMES) hist.shift();
 
-    // ΜΗΔΕΝΙΚΗ ΕΝΕΡΓΕΙΑ = τέλος. Στον Amstrad βγαίνει η οθόνη GAME OVER με
-    // τα γράμματα του τίτλου· εδώ αρκεί το μήνυμα και η επαναφορά.
-    if (hero.energy <= 0) {
-      play("hurt");
-      note.textContent = "GAME OVER — press Restart";
-      hero.energy = 0;
+    // ΜΗΔΕΝΙΚΗ ΕΝΕΡΓΕΙΑ = τέλος. Στον Amstrad βγαίνει η οθόνη GAME OVER με τα
+    // γράμματα του τίτλου· εδώ αρκεί το μήνυμα.
+    //
+    // ΜΕ ΣΗΜΑΙΑ, όχι σκέτος έλεγχος: η συνθήκη μένει αληθής, οπότε χωρίς
+    // αυτήν ο ήχος θα έπαιζε εξήντα φορές το δευτερόλεπτο και το παιχνίδι θα
+    // συνέχιζε να τρέχει από κάτω.
+    if (hero.energy <= 0 && !ended) {
+      ended = "GAME OVER";
+      play("over");
+    }
+    if (ended) {
+      note.textContent = ended === "GAME OVER"
+        ? "GAME OVER — press Restart" : "THE END — VASPER";
+      return;                     // ο κόσμος παγώνει· η εικόνα μένει ως έχει
     }
 
     if (hero.won) {
       const dest = roomDestFor(hero);
       hero.won = false;
-      if (dest === 255) {          // ROOM_END: η πόρτα που κλείνει το παιχνίδι
-        note.textContent = "THE END — VASPER";
+      // ROOM_END: η πόρτα που ΚΛΕΙΝΕΙ το παιχνίδι. 255 και όχι 0, γιατί το 0
+      // το γράφει κάθε πόρτα χωρίς δηλωμένο προορισμό.
+      if (dest === 255) {
+        ended = "THE END";
         play("enter");
         requestAnimationFrame(frame);
         return;
@@ -338,7 +351,6 @@
         note.textContent = "Exit with no declared destination";
       }
     }
-    if (hero.energy === 0) note.textContent = "Out of energy — restart";
 
     screen.clear();
     screen.tiles(room);
@@ -571,11 +583,13 @@
 
   sel.addEventListener("change", () => {
     const m = rooms[sel.value];
+    ended = null;
     if (m) start(sel.value, m.cells, m.start);
   });
   document.getElementById("restart").addEventListener("click", () => {
     const m = rooms[curName];
     if (!m) return;
+    ended = null;                               // αλλιώς μένει παγωμένο
     m.cells = m.pristine.map(r => r.slice());   // καθαρή αίθουσα, όχι μισοπαιγμένη
     start(curName, m.cells, m.start);
   });

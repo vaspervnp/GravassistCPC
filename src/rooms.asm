@@ -74,14 +74,14 @@ tile_gfx:
                 db #55,#AA
                 db #0F,#0F
                 ; 7 SPIKE_L
-                db #08,#00
-                db #6E,#00
-                db #19,#CC
-                db #6E,#00
-                db #6E,#00
-                db #19,#CC
-                db #6E,#00
-                db #08,#00
+                db #00,#01
+                db #00,#67
+                db #33,#89
+                db #00,#67
+                db #00,#67
+                db #33,#89
+                db #00,#67
+                db #00,#01
                 ; 8 SPIKE_D
                 db #0F,#0F
                 db #55,#AA
@@ -92,14 +92,14 @@ tile_gfx:
                 db #00,#00
                 db #00,#00
                 ; 9 SPIKE_R
-                db #00,#01
-                db #00,#67
-                db #33,#89
-                db #00,#67
-                db #00,#67
-                db #33,#89
-                db #00,#67
-                db #00,#01
+                db #08,#00
+                db #6E,#00
+                db #19,#CC
+                db #6E,#00
+                db #6E,#00
+                db #19,#CC
+                db #6E,#00
+                db #08,#00
                 ; 10 ONEWAY_U
                 db #FF,#FF
                 db #FF,#FF
@@ -290,14 +290,14 @@ tile_gfx:
                 db #FF,#FF
                 db #FF,#FF
                 ; 31 SPIKE_L_OFF
-                db #CC,#00
-                db #CC,#00
-                db #EE,#00
-                db #CC,#00
-                db #CC,#00
-                db #EE,#00
-                db #CC,#00
-                db #CC,#00
+                db #00,#33
+                db #00,#33
+                db #00,#77
+                db #00,#33
+                db #00,#33
+                db #00,#77
+                db #00,#33
+                db #00,#33
                 ; 32 SPIKE_D_OFF
                 db #FF,#FF
                 db #FF,#FF
@@ -308,14 +308,14 @@ tile_gfx:
                 db #00,#00
                 db #00,#00
                 ; 33 SPIKE_R_OFF
-                db #00,#33
-                db #00,#33
-                db #00,#77
-                db #00,#33
-                db #00,#33
-                db #00,#77
-                db #00,#33
-                db #00,#33
+                db #CC,#00
+                db #CC,#00
+                db #EE,#00
+                db #CC,#00
+                db #CC,#00
+                db #EE,#00
+                db #CC,#00
+                db #CC,#00
 
 grav_gfx_world:      ; 8 φορές x 8 γραμμές x 2 bytes
                 ; φορά 0
