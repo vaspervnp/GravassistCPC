@@ -1,66 +1,61 @@
 # GRAVASSIST
 
-Puzzle game για **Amstrad CPC 6128**, γραμμένο σε **Z80 assembly**, MODE 1.
+A puzzle game for the **Amstrad CPC 6128**, written in **Z80 assembly**, MODE 1.
 
-Ο ήρωας είναι ένας stick man 7x12 pixels. Δεν πηδάει και δεν πολεμάει — το μόνο του
-εργαλείο είναι ότι **αλλάζει την κατεύθυνση της βαρύτητας** — 8 κατευθύνσεις, ανά 45 μοίρες.
-Όταν την αλλάζει, πέφτει προς τα εκεί μέχρι να προσγειωθεί, και η επιφάνεια που θα
-βρει γίνεται το νέο του πάτωμα. Έτσι περπατάει σε πατώματα, τοίχους και ταβάνια.
+The hero is a 7x12 pixel stick man. He cannot jump and cannot fight — his only tool is
+that he **changes the direction of gravity**, in 8 directions, 45 degrees apart. When he
+changes it he falls that way until he lands, and whatever surface he meets becomes his
+new floor. That is how he walks on floors, walls and ceilings.
 
-Δύο κανόνες κάνουν το παιχνίδι:
+Two rules make the game:
 
-- **Στις γωνίες η βαρύτητα ακολουθεί αυτόματα τη γεωμετρία.** Περπατώντας δεν πέφτεις
-  ποτέ από πλατφόρμα — τυλίγεσαι γύρω από την ακμή. Πέφτεις μόνο όταν το ζητήσεις.
-- **Πτώση πάνω από 36 pixels** (3x το ύψος του ήρωα) κοστίζει ενέργεια. Στο μηδέν,
-  τέλος.
+- **At corners, gravity follows the geometry automatically.** Walking, you never fall off
+  a platform — you wrap around the edge. You fall only when you ask to.
+- **A fall of more than 36 pixels** (3x the hero's height) costs energy. At zero, it is
+  over.
 
-Το puzzle δεν είναι η δεξιοτεχνία αλλά η **σειρά των flips**: ποιο τοίχωμα διαλέγεις,
-από ποια γωνία θα σε γυρίσει, πόσο ύψος θα πέσεις.
+The puzzle is not dexterity but the **order of the flips**: which wall you choose, which
+corner will turn you, how far you will drop.
 
 ![concept art](docs/concept-art.png)
 
-> **Κατάσταση: υπό ανάπτυξη.** Ο πυρήνας παίζει — βάδισμα, αυτόματη στροφή σε γωνίες,
-> ράμπες 45 μοιρών, γλίστρημα, ζημιά πτώσης. Λείπουν τα στοιχεία πίστας (πόρτες,
-> διακόπτες, κιβώτια), το HUD, οι πίστες και ο editor. Δες [plan.md](plan.md).
+> Ελληνικά: [README.el.md](README.el.md).
 
 ---
 
-## Γρήγορη εκκίνηση
+## Quick start
 
 ```bash
-make            # assemble + φτιάχνει build/gravassist.dsk
-make test       # επαληθεύσεις: sprite, μοντέλο φυσικής, ΚΑΙ ο κώδικας Z80
-make trace      # οπτικό ίχνος της διαδρομής του ήρωα στο δοκιμαστικό δωμάτιο
+make            # assemble + build build/gravassist.dsk
+make test       # checks: sprites, the physics model, AND the Z80 code itself
+make trace      # a visual trace of the hero's path through the test room
+make toolchain  # which rasm / iDSK will actually be used
 make clean
 ```
 
-Φόρτωσε το `build/gravassist.dsk` σε emulator (RetroVirtualMachine, WinAPE, Caprice)
-και τρέξε:
+Load `build/gravassist.dsk` in an emulator (RetroVirtualMachine, WinAPE, Caprice) and
+type:
 
 ```
 RUN"GRAV
 ```
 
-Πρώτα φορτώνει η οθόνη υποδοχής `REVIVE8B.SCR` (MODE 0, δική της παλέτα) και φεύγει με
-**Space** ή μετά από 10 δευτερόλεπτα. Μετά έρχεται η **οθόνη μενού**, με μουσική 20 δευτερολέπτων που επαναλαμβάνεται: ο τίτλος στα
-χρώματα του concept art, με τα χειριστήρια δεξιά κι αριστερά να εναλλάσσονται κάθε 10
-δευτερόλεπτα ανάμεσα στα δύο ισοδύναμα σετ πλήκτρων, και ο ήρωας να κάνει κύκλους μέσα
-σε μια αρένα 10x5. Ο γύρος
-δεν είναι animation — τρέχει η **πραγματική φυσική** με το πλήκτρο βάδισης πατημένο, και
-οι στροφές στις γωνίες βγαίνουν από τον ίδιο κανόνα που τις βγάζει μέσα στο παιχνίδι.
+First the splash screen `REVIVE8B.SCR` loads (MODE 0, its own palette) and leaves on
+**Space** or after 10 seconds. Then comes the **menu**, with 20 seconds of looping music:
+the title in the concept-art colours, the controls to the left and right alternating
+every 10 seconds between the two equivalent key sets, and the hero circling an arena of
+10x5. That circuit is not an animation — it runs the **real physics** with the walk key
+held down, and the corner turns come from the same rule that produces them in the game.
 
-Προς το παρόν φορτώνει ένα δοκιμαστικό δωμάτιο με πλήρη φυσική: πάτωμα, ράμπες 45
-μοιρών, πλατώματα, κατακόρυφους τοίχους και ταβάνι.
-
-| Πλήκτρα | |
+| Keys | |
 |---|---|
-| `M` / `N` | Περπάτημα μπροστά / πίσω, σχετικά με τον ήρωα |
-| `SHIFT` | Τρέξιμο |
-| `↑` / `↓` / `Space` | Ενεργοποίηση: **πέρασμα πόρτας**, ξεκλείδωμα, τηλεμεταφορά, σήκωμα/άφημα κιβωτίου |
-| `ESC` | Έξοδος |
+| `M` / `N` | Walk forward / back, relative to the hero |
+| `SHIFT` | Run |
+| `↑` / `↓` / `Space` | Act: **go through a door**, unlock, teleport, pick up / drop a crate |
+| `ESC` | Quit |
 
-Η βαρύτητα ρίχνεται με δύο ισοδύναμα πλέγματα 3x3, όπου η **θέση** του πλήκτρου
-είναι η κατεύθυνση — και **μόνο όσο πατάς έδαφος**:
+Gravity is thrown with two equivalent 3x3 grids, where the **position** of the key is the
+direction — and **only while you are on the ground**:
 
 ```
         Q  W  E                F7 F8 F9
@@ -68,215 +63,227 @@ RUN"GRAV
         Z  X  C                F1 F2 F3
 ```
 
-Στο HUD, δεξιά, δύο βελάκια δείχνουν **δύο διαφορετικά πράγματα**: πορτοκαλί η
-βαρύτητα του **κόσμου** (αυτή που όρισες, την ακολουθούν τα κιβώτια) και πράσινο η
-βαρύτητα του **ήρωα** (γυρίζει μόνη της σε κάθε γωνία που περπατάς). Όταν διαφέρουν,
-εκεί είναι που το κιβώτιο πάει αλλού από ό,τι περιμένεις.
+In the HUD, on the right, two arrows show **two different things**: orange is the
+**world's** gravity (the one you set — crates follow it) and green is the **hero's**
+(it turns by itself at every corner you walk). When they differ is exactly when a crate
+goes somewhere other than you expect.
 
-Με ένα μόνο πλήκτρο βάδισης ο ήρωας κάνει πλήρη περιδιάβαση του δωματίου — ανεβαίνει
-τη ράμπα γέρνοντας 45 μοίρες, τυλίγεται στις κυρτές γωνίες, ανεβαίνει τους τοίχους
-και περπατάει ανάποδα στο ταβάνι.
+Run out of energy and a **GAME OVER** screen appears in the title's own letters; a door
+declared with destination 255 ends the game with **THE END** and the menu music.
 
-### Προαπαιτούμενα
-| Εργαλείο | Ρόλος |
+### Prerequisites
+
+| Tool | Role |
 |---|---|
-| [rasm](https://github.com/EdouardBERGE/rasm) | assembler Z80/CPC |
-| [iDSK](https://github.com/cpcsdk/idsk) | κατασκευή εικόνων δισκέτας .dsk |
-| Python 3 + Pillow | εργαλεία γραφικών (PNG <-> assembly) |
-| .NET 10 SDK | *προαιρετικό* — ο level editor |
+| [rasm](https://github.com/EdouardBERGE/rasm) | Z80/CPC assembler |
+| [iDSK](https://github.com/cpcsdk/idsk) | builds .dsk disc images |
+| Python 3 + Pillow | graphics tools (PNG <-> assembly) |
+| .NET 10 SDK | *optional* — the level editor |
+
+Their locations are **not hard-coded**: they are configured in
+[toolchain.json](toolchain.json). `make toolchain` prints what will actually run and
+flags anything it cannot find.
 
 ---
 
-## Δομή
+## Layout
 
 ```
-src/main.asm          κύριος κώδικας (org #4000), είσοδος, σχεδίαση
-src/hero.asm          φυσική: βάδισμα, γωνίες, ράμπες, πτώση
-src/level.asm         solid_at με ράμπες, σχεδίαση δωματίου
-src/rotate.asm        περιστροφή + packing sprites σε MODE 1
-src/roomfile.asm      σετ αιθουσών: RLE, φόρτωση από δισκέτα, ημερολόγιο
-src/menu.asm          οθόνη μενού: τίτλος, αρένα επίδειξης, χειριστήρια
-src/musicplay.asm     αναπαραγωγή μουσικής μέσω του SOUND QUEUE
-src/music.asm         ΠΑΡΑΓΟΜΕΝΟ από tools/genmusic.py — νότες σε περιόδους AY
-src/tables.asm        ΠΑΡΑΓΟΜΕΝΟ — πίνακες γεωμετρίας βαρύτητας
-src/gfx_*.asm         ΠΑΡΑΓΟΜΕΝΑ από τα PNG — μην τα επεξεργάζεσαι
-assets/*.png          τα sprites· ΕΔΩ ζωγραφίζεις
-tools/*.py            PNG <-> assembly, γεννήτρια stickman, επαληθεύσεις
-levels/room_<N>.txt   οι αίθουσες· ο αριθμός είναι στο όνομα
-levels/regress.txt    σταθερό δωμάτιο για τα τεστ — μην το επεξεργάζεσαι
-editor/               level editor σε ASP.NET Core MVC
-docs/                 σχεδιαστικά έγγραφα
+src/main.asm          main code (org #4000), entry point, drawing
+src/hero.asm          physics: walking, corners, ramps, falling
+src/level.asm         solid_at with ramps, room drawing
+src/rotate.asm        sprite rotation + MODE 1 packing
+src/roomfile.asm      room sets: RLE, loading from disc, the change journal
+src/menu.asm          menu screen: title, demo arena, controls
+src/endings.asm       the GAME OVER and THE END screens
+src/sfx.asm           sound effects
+src/musicplay.asm     music playback through the firmware SOUND QUEUE
+src/music.asm         GENERATED by tools/genmusic.py — notes as AY periods
+src/tables.asm        GENERATED — gravity geometry tables
+src/gfx_*.asm         GENERATED from the PNGs — do not edit
+assets/*.png          the sprites; THIS is where you draw
+tools/*.py            PNG <-> assembly, stickman generator, verification
+levels/room_<N>.txt   the rooms; the number lives in the file name
+levels/regress.txt    a fixed room for the tests — do not edit
+editor/               level editor, ASP.NET Core MVC
+docs/                 design documents
 ```
 
-## Πώς αλλάζεις τα γραφικά
+## Changing the graphics
 
-Τα `src/gfx_*.asm` παράγονται αυτόματα. **Η αυθεντία είναι τα PNG.**
+`src/gfx_*.asm` are generated. **The PNGs are the source of truth.**
 
 ```bash
-python3 tools/sprites.py show hero 3    # δες ένα frame ως ASCII
-#  ... ζωγράφισε στο assets/hero.png με ό,τι πρόγραμμα θες ...
-make                                    # τα ξαναμεταφράζει και χτίζει το .dsk
+python3 tools/sprites.py show hero 3    # see one frame as ASCII
+#  ... draw in assets/hero.png with whatever you like ...
+make                                    # re-translates them and builds the .dsk
 ```
 
-Τα χρώματα του PNG είναι κλειδιά: `#000080` = διαφανές, `#FFFFFF` = pen1,
-`#00FF00` = pen2, `#FF8000` = pen3. Οι ματζέντα γραμμές του πλέγματος αγνοούνται.
-Ο ήρωας ζωγραφίζεται σε **δύο** φορές βαρύτητας (`hero.png` κανονική, `hero45.png`
-στις 45 μοίρες) — τις υπόλοιπες έξι τις παράγει ο κώδικας.
-Λεπτομέρειες: [docs/sprites.md](docs/sprites.md).
+The PNG colours are keys: `#000080` = transparent, `#FFFFFF` = pen1, `#00FF00` = pen2,
+`#FF8000` = pen3. The magenta grid lines are ignored. The hero is drawn in **two**
+gravity orientations (`hero.png` upright, `hero45.png` at 45 degrees) — the code produces
+the other six. Details: [docs/sprites.md](docs/sprites.md).
 
 ---
 
-## Αίθουσες
+## Rooms
 
-Κάθε αίθουσα είναι ένα `levels/room_<N>.txt`. Οι έξοδοι (`X`) δηλώνουν πού οδηγούν με
-γραμμή `exit <col> <row> <αίθουσα> [διπλή] [acol arow] [βαρύτητα]` μετά το πλέγμα.
-**Γειτονικά κελιά εξόδου είναι μία πόρτα** και οδηγούν αναγκαστικά στην ίδια αίθουσα —
-ο κανόνας επιβάλλεται στον φορτωτή, οπότε αρχείο που τον παραβιάζει απορρίπτεται.
+Each room is a `levels/room_<N>.txt`. Exits (`X`) declare where they lead with a line
+`exit <col> <row> <room> [two-way] [acol arow] [gravity]` after the grid. **Adjacent exit
+cells are one door** and must lead to the same room — the loader enforces it, so a file
+that breaks the rule is rejected.
 
-Κάθε πόρτα ορίζει **πού** και **με ποια φορά βαρύτητας** εμφανίζεται ο παίκτης
-βγαίνοντας από αυτήν. Χωρίς αυτά το παιχνίδι μαντεύει ένα διπλανό κελί με την αρχική
-φορά της αίθουσας — που αποτυγχάνει σε κάθε πόρτα πάνω σε τοίχο ή ταβάνι, γιατί ο
-παίκτης γλιστράει πίσω μέσα στην πόρτα και πηγαινοέρχεται ατέρμονα.
+Each door defines **where** and **with which gravity** the player appears when leaving
+through it. Without those the game guesses an adjacent cell with the room's initial
+gravity — which fails for every door on a wall or ceiling, because the player slides back
+into the door and bounces forever.
 
-Ο editor τα χειρίζεται όλα αυτά: ομαδοποιεί τις εξόδους, δείχνει τον προορισμό πάνω σε
-κάθε κελί, και έχει κουμπιά **Νέα αίθουσα**, **Αντιγραφή** και **Μετακίνηση**.
+The editor handles all of this: it groups exits, shows the destination on every cell, and
+has **New room**, **Copy** and **Move** buttons.
 
-Η **καλωδίωση** διακοπτών και κλειδιών δουλεύει όπως οι τηλεμεταφορές: γράφεις έναν
-αριθμό στη σειρά και περνώντας το ποντίκι από πάνω βλέπεις τη σύνδεση πάνω στο πλέγμα.
-Ο σύνδεσμος όμως δεν είναι κελί αλλά **αριθμός** — κανάλι για διακόπτες και πόρτες,
-ταυτότητα για κλειδιά και κλειδαριές — γι' αυτό ένας διακόπτης οδηγεί **όσες πόρτες
-θέλεις**, όπου κι αν βρίσκονται.
+**Wiring** works the same way, and it is **one number** — a channel. Any actuator drives
+any target:
 
-Η **μετακίνηση** αλλάζει τον αριθμό και **ενημερώνει όλες τις πόρτες** των άλλων
-αιθουσών που δείχνουν σε αυτήν. Ο αριθμός δεν ζει μόνο στο όνομα του αρχείου — ζει και
-μέσα στις γραμμές `exit` των γειτόνων, και σκέτη μετονομασία θα άφηνε πόρτες να
-δείχνουν στο πουθενά.
+| Actuators | Targets |
+|---|---|
+| Switch (toggles) · Pressure plate (while pressed) · Key (opens permanently, is consumed) | Gate · Lock · Spikes (retract into the floor) |
+
+"Open" means the same in all three cases: *it no longer stops you*. The link is a number
+and not a cell, so one switch drives **as many targets as you like**, wherever they are.
+
+**Move** changes the room number and **updates every door** in the other rooms that
+points at it. The number does not live only in the file name — it also lives inside the
+neighbours' `exit` lines, and a plain rename would leave doors pointing nowhere.
 
 ```bash
-make editor-data            # δεδομένα για το test run (μία φορά, και μετά από αλλαγές)
+make editor-data            # data for the browser test run (once, and after changes)
 export PATH="$HOME/.dotnet:$PATH"
 cd editor && dotnet run     # http://localhost:5202
 ```
 
-### Λογαριασμοί (Google)
+Full instructions: **[docs/editor-manual.md](docs/editor-manual.md)**.
 
-Ο editor **απαιτεί σύνδεση με Google**. Χρειάζεται και τις δύο μεταβλητές
-περιβάλλοντος — **ποτέ σε αρχείο του repo**:
+### Accounts
+
+Signing in is **mandatory** — there is no anonymous mode. Two ways in, ending in the same
+place: a **Google account**, or an **email address** with a six-digit code (no password).
+
+Google needs both environment variables — **never in a file in the repo**:
 
 ```bash
 export gravassistGid=<client id>.apps.googleusercontent.com
 export gravassistGscrt=<client secret>
 ```
 
-Στο Google Cloud console, η **authorised redirect URI** πρέπει να είναι ακριβώς
-`<η διεύθυνσή σου>/accounts/google` (τοπικά: `http://localhost:5202/accounts/google`).
+In the Google Cloud console the **authorised redirect URI** must be exactly
+`<your address>/accounts/google` (locally: `http://localhost:5202/accounts/google`).
+Without the variables the editor **does not start**, with a message saying what is
+missing. Starting up open would be worse than not starting: you would believe it was
+protected.
 
-Χωρίς τις μεταβλητές ο editor **δεν ξεκινά**, με μήνυμα που λέει τι λείπει. Το να
-ξεκινούσε ανοιχτός θα ήταν χειρότερο από το να μην ξεκινήσει: θα νόμιζες ότι είναι
-προστατευμένος.
+Email sign-in needs SMTP (`gravassistSmtpHost`, `gravassistSmtpPort`,
+`gravassistSmtpUser`, `gravassistSmtpPass`, `gravassistMailFrom`). If those are missing
+the editor starts normally and simply does not offer that option.
 
-**Κάθε λογαριασμός δουλεύει στον δικό του φάκελο**, `levels/<email>/`. Την πρώτη φορά
-που θα συνδεθεί, αντιγράφονται εκεί όσα αρχεία υπάρχουν στο κοινό `levels/`, ώστε να
-ξεκινά με τις υπάρχουσες αίθουσες αντί για άδειο φάκελο. Το «Χτίσιμο .dsk» χτίζει
-**τις δικές του** αίθουσες: ο editor περνά τον φάκελο στα εργαλεία με τη μεταβλητή
-`GRAVASSIST_LEVELS`, που τιμά και το `make` από τη γραμμή εντολών.
+**Signing in is not permission.** An account that has not been approved sees a *Waiting
+for approval* page and nothing is created for it. The administrator has a screen at
+`/admin` to invite, approve, revoke and delete accounts, and to grant the separate right
+to **publish** to the shared level folder.
 
-Τα ονόματα φακέλων βγαίνουν από το email με **αυστηρό καθαρισμό** — ένα `..` σε claim
-θα έγραφε έξω από το `levels/`. Το `editor.Tests` το ελέγχει.
+**Each account works in its own folder**, `levels/<email>/`, seeded on first sign-in from
+the shared `levels/`. "Build .dsk" builds **their** rooms: the editor passes the folder to
+the tools through `GRAVASSIST_LEVELS`, which `make` also honours from the command line.
+Folder names come from the email with **strict sanitising** — a `..` in a claim would
+write outside `levels/`. `editor.Tests` checks it.
 
-> **ΠΡΟΣΟΧΗ:** δεν υπάρχει λίστα επιτρεπόμενων. **Οποιοσδήποτε** λογαριασμός Google
-> μπορεί να συνδεθεί και να φτιάξει δικό του φάκελο. Πριν το ανεβάσεις κάπου δημόσια,
-> χρειάζεται περιορισμός σε συγκεκριμένα email.
+Levels move in and out as a **.zip**: *Export* downloads them all, *Import* puts them
+back, showing what would change first and refusing the whole archive if one level is
+invalid.
 
-Ο editor έχει δύο κουμπιά εκτέλεσης:
+### Running a room
 
-- **Δοκιμή** — τρέχει την αίθουσα στον browser σε canvas, με την **ίδια φυσική** και τα
-  ίδια γραφικά. Άμεσο, για να δοκιμάζεις σχεδιασμό.
-- **Χτίσιμο .dsk** — παράγει το `build/gravassist.dsk` ξεκινώντας από την ανοιχτή
-  αίθουσα, για τον πραγματικό Amstrad.
+- **Test** — runs the room in the browser on a canvas, with the **same physics** and the
+  same graphics. Immediate, for trying out a design.
+- **Build .dsk** — produces `build/gravassist.dsk` starting from the open room, for the
+  real Amstrad. Tick **DEMO** and the disc writes DEMO under the title and in the corner
+  of every screen.
 
-## Πόσες αίθουσες χωράνε
+## How many rooms fit
 
-Οι αίθουσες **δεν είναι μέσα στο MAIN.BIN**. Ασυμπίεστο, το πλέγμα 40x24 κοστίζει
-960 bytes ανά αίθουσα και χωρούσαν περίπου **δέκα συνολικά** πριν γεμίσει η μνήμη.
+The rooms are **not inside MAIN.BIN**. Uncompressed, a 40x24 grid costs 960 bytes per
+room and about **ten in total** fitted before memory ran out.
 
-Τώρα ζουν συμπιεσμένες (RLE) σε αρχεία `ROOMSnn.BIN` της δισκέτας, **σετ των 40**.
-Το σετ που παίζεις μένει ολόκληρο στη μνήμη, οπότε το πέρασμα από πόρτα σε πόρτα
-μέσα στο ίδιο σετ **δεν αγγίζει τον δίσκο** — μόνο η αλλαγή σετ διαβάζει.
+They now live compressed (RLE) in `ROOMSnn.BIN` files on the disc, in **sets of 4**. The
+set you are playing stays in memory whole, so moving from door to door inside the same
+set **does not touch the disc** — only changing set reads.
 
-| | χωρητικότητα |
+`tools/roomfile.py` breaks the build if a set does not fit in the CPC's memory, and warns
+from 85% of capacity so you see it coming. `src/main.asm` asserts that the buffers do not
+pass `#A67B`, the ceiling with AMSDOS active. Better the build breaks than the disc. At
+the end of every build `tools/checkdsk.py` reads the disc's own directory and confirms
+the rooms are actually on it — a disc without rooms used to build happily and fail much
+later, in the emulator.
+
+**What the player changes survives.** The grid is rebuilt from the RLE every time you
+enter, so a journal keeps the changes (a key picked up, a crate moved) and replays them.
+Without it energy would be infinite: walk out, walk in, collect it again.
+
+**You can go back up to 4 rooms.** The game keeps a stack of the last four rooms you came
+from. A door to a room on the stack is open; a door to a room that has **overflowed** off
+it becomes a **block**; a door to a room you have never seen is always open. The block is
+**not permanent**: if the room re-enters the stack, the door opens again.
+
+Only what *overflowed* is sealed, not merely what is absent from the stack — walking back,
+the room you just left is **ahead** of you, and sealing it would let two rooms lock each
+other the moment you went back and forth.
+
+**And what the player carries.** Energy, keys, parachutes and the crate in his hands
+travel with him from room to room. Only what belongs to the ROOM is reset: an open
+parachute closes and crates start still.
+
+### Why the three implementations do not drift
+
+The physics exists in three places: `tools/physics.py` (the reference), `src/hero.asm`
+(the Amstrad) and the editor's JavaScript. **Neither transcription computes geometry** —
+the gravity tables, cell properties and ramp shapes are generated from the model
+(`tools/genasm.py`, `tools/genjs.py`).
+
+What is left is control flow, and that is checked: `/game/parity.html` runs the same
+800-frame scenario in Python and JavaScript and compares position, direction, state,
+energy and fall height on **every** frame.
+
+Parity has a blind spot, though: neither Python nor JavaScript has 8-bit registers, so it
+**cannot** see a Z80 overflow. Two such bugs reached the player (`type*16`, which drew
+crates as spikes, and `col*8`, which sent the teleporter to the other side of the screen).
+That is why `tools/test_z80.py` **executes the very code that goes onto the disc** in a
+Z80 emulator and checks the data it produces — not a second writing of it.
+
+## Documentation
+
+| Document | Contents |
 |---|---|
-| ανά σετ | 40 αραιές αίθουσες, ή ~28 πυκνές σαν τη `room_1` |
-| σύνολο | όσα σετ θες — ο δίσκος είναι 178 KB |
+| [docs/editor-manual.md](docs/editor-manual.md) | **Level editor manual** — how to use it |
+| [plan.md](plan.md) | Game design, technical decisions, milestones *(in Greek)* |
+| [docs/concept-art.md](docs/concept-art.md) | The concept art and what it commits us to *(in Greek)* |
+| [docs/sprites.md](docs/sprites.md) | Sprite format, PNG round-trip, rotation *(in Greek)* |
+| [docs/level-elements.md](docs/level-elements.md) | The level elements and why they were chosen *(in Greek)* |
+| [tools/physics.py](tools/physics.py) | The physics model — **the reference** for src/hero.asm |
+| [CLAUDE.md](CLAUDE.md) | Toolchain instructions and code conventions *(in Greek)* |
 
-Το `tools/roomfile.py` σπάει το build αν ένα σετ δεν χωράει στη μνήμη του CPC, και
-το `src/main.asm` έχει `assert` ότι τα buffers δεν περνούν το `#A67B` — το ταβάνι
-με ενεργό AMSDOS. Καλύτερα να σπάσει το build παρά η δισκέτα.
+## Technical notes
 
-**Ό,τι αλλάζει ο παίκτης επιβιώνει.** Το πλέγμα ξαναφτιάχνεται από το RLE κάθε φορά
-που μπαίνεις, οπότε ένα ημερολόγιο κρατά τις αλλαγές (μαζεμένο κλειδί, μετακινημένο
-κιβώτιο) και τις ξαναπερνά. Χωρίς αυτό η ενέργεια θα ήταν άπειρη: μπες, βγες,
-ξαναμάζεψέ τη.
+**Sprites are not stored in screen format.** They are kept as 1 byte per pixel and one
+routine does rotation + MODE 1 packing + x-shift in a single pass. It costs about 6% of a
+frame and buys several times the memory back, 1-pixel movement accuracy, and a quarter of
+the drawing work — the same code serves the hero and the objects.
 
-**Γυρνάς πίσω ως 4 δωμάτια.** Το παιχνίδι κρατά στοίβα με τα τελευταία τέσσερα
-δωμάτια από τα οποία ήρθες. Πόρτα προς δωμάτιο της στοίβας είναι ανοιχτή· πόρτα προς
-δωμάτιο που **ξεχείλισε** από αυτήν γίνεται **μπλοκ**· πόρτα προς δωμάτιο που δεν έχεις
-δει ποτέ είναι πάντα ανοιχτή. Το μπλοκ **δεν είναι μόνιμο**: αν το δωμάτιο ξαναμπεί
-στη στοίβα, η πόρτα ξανανοίγει.
+For the **8 gravity directions** only **two** sets of frames are needed: upright and
+turned 45 degrees. Each gives four directions, because 90-degree rotations are an exact
+index remap while 45-degree ones are not. The diagonal set comes out clean because we
+rotate the stickman's **skeleton** and redraw lines — not the image.
+See [docs/sprites.md §1-2](docs/sprites.md).
 
-Σφραγίζεται μόνο ό,τι *ξεχείλισε*, όχι ό,τι απλώς λείπει από τη στοίβα — γυρνώντας
-πίσω, το δωμάτιο που άφησες είναι **μπροστά** σου, και αν το σφραγίζαμε δύο δωμάτια θα
-κλείδωναν το ένα το άλλο μόλις πηγαινοερχόσουν.
-
-**Και ό,τι κουβαλάει ο παίκτης.** Ενέργεια, κλειδιά, αλεξίπτωτα και το κιβώτιο στα
-χέρια του ταξιδεύουν μαζί του από αίθουσα σε αίθουσα. Μηδενίζεται μόνο ό,τι ανήκει
-στην ΑΙΘΟΥΣΑ: το ανοιγμένο αλεξίπτωτο κλείνει και τα κιβώτια ξεκινούν ακίνητα.
-
-### Γιατί δεν αποκλίνουν οι τρεις υλοποιήσεις
-
-Η φυσική υπάρχει σε τρία σημεία: `tools/physics.py` (αναφορά), `src/hero.asm`
-(Amstrad) και η JavaScript του editor. **Καμία από τις δύο μεταγραφές δεν υπολογίζει
-γεωμετρία** — οι πίνακες βαρύτητας, οι ιδιότητες κελιών και τα σχήματα των ραμπών
-παράγονται από το μοντέλο (`tools/genasm.py`, `tools/genjs.py`).
-
-Ό,τι μένει είναι ροή ελέγχου, και αυτή ελέγχεται: το `/game/parity.html` τρέχει το ίδιο
-σενάριο 800 frames σε Python και JavaScript και συγκρίνει θέση, φορά, κατάσταση,
-ενέργεια και ύψος πτώσης σε **κάθε** frame.
-
-Το parity όμως έχει τυφλό σημείο: ούτε η Python ούτε η JavaScript έχουν καταχωρητές
-8 bit, οπότε **δεν μπορεί** να δει υπερχείλιση του Z80. Δύο τέτοια σφάλματα έφτασαν
-στον παίκτη (`type*16` που έδειχνε τα κιβώτια σαν αγκάθια, `col*8` που έστελνε τον
-teleporter στην άλλη άκρη της οθόνης). Γι' αυτό το `tools/test_z80.py` **εκτελεί τον
-ίδιο κώδικα που μπαίνει στη δισκέτα** σε προσομοιωτή Z80 και ελέγχει τα δεδομένα που
-βγάζει — όχι μια δεύτερη γραφή του.
-
-## Τεκμηρίωση
-
-| Έγγραφο | Περιεχόμενο |
-|---|---|
-| [plan.md](plan.md) | Σχεδιασμός παιχνιδιού, τεχνικές αποφάσεις, milestones |
-| [docs/editor-manual.md](docs/editor-manual.md) | **Εγχειρίδιο του editor πιστών** (στα αγγλικά, όπως το UI) |
-| [docs/concept-art.md](docs/concept-art.md) | Το concept art και τι δεσμεύει |
-| [docs/sprites.md](docs/sprites.md) | Μορφή sprites, PNG round-trip, περιστροφή |
-| [docs/level-elements.md](docs/level-elements.md) | Τα στοιχεία πίστας και γιατί επιλέχθηκαν |
-| [tools/physics.py](tools/physics.py) | Το μοντέλο φυσικής — **αναφορά** για το src/hero.asm |
-| [CLAUDE.md](CLAUDE.md) | Οδηγίες toolchain και συμβάσεις κώδικα |
-
-## Τεχνικά αξιοσημείωτα
-
-**Τα sprites δεν αποθηκεύονται σε μορφή οθόνης.** Κρατιούνται ως 1 byte ανά pixel και
-μια ρουτίνα κάνει σε μία πέραση περιστροφή + packing σε MODE 1 + μετατόπιση x.
-Κοστίζει ~6% ενός frame και κερδίζει πολλαπλάσια μνήμη, κίνηση ακριβείας 1 pixel και
-το ένα τέταρτο της δουλειάς σχεδίασης — ο ίδιος κώδικας εξυπηρετεί ήρωα και αντικείμενα.
-
-Για τις **8 φορές βαρύτητας** αρκούν **δύο** δέσμες frames: η κανονική και η γυρισμένη
-κατά 45 μοίρες. Καθεμιά δίνει τέσσερις φορές, γιατί οι περιστροφές των 90 είναι ακριβές
-index remap ενώ οι 45 δεν είναι. Η διαγώνια δέσμη βγαίνει καθαρή επειδή περιστρέφουμε
-τον **σκελετό** του stickman και ξαναζωγραφίζουμε γραμμές — όχι την εικόνα.
-Δες [docs/sprites.md §1-2](docs/sprites.md).
-
-**Η φυσική γράφτηκε δύο φορές.** Πρώτα σε Python, όπου μπορεί να τρέξει και να
-επαληθευτεί, και μετά σε Z80. Οι πίνακες γεωμετρίας εξάγονται από το ίδιο μοντέλο
-(`tools/genasm.py`), οπότε η assembly δεν υπολογίζει τίποτα — διαβάζει. Έξι σφάλματα
-του μοντέλου βρέθηκαν στην Python, όπου ένα `make trace` τα δείχνει αμέσως· στον
-emulator θα ήταν αόρατα.
+**The physics was written twice.** First in Python, where it can be run and verified, and
+then in Z80. The geometry tables are exported from that same model (`tools/genasm.py`), so
+the assembly computes nothing — it reads. Six model bugs were found in Python, where a
+`make trace` shows them at once; in the emulator they would have been invisible.
