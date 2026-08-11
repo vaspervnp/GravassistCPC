@@ -282,6 +282,11 @@ def main():
     for r in rooms:
         for cell, dest, _two, cells in r.exit_groups():
             check(f"room_{r.number}: η έξοδος {cell} έχει προορισμό", dest != 0)
+            # Το 255 ΔΕΝ είναι αίθουσα: είναι η πόρτα που τελειώνει το
+            # παιχνίδι (ROOM_END στο src/endings.asm). Χωρίς αυτή την
+            # εξαίρεση ο έλεγχος ζητούσε αρχείο room_255.txt.
+            if dest == 255:
+                continue
             check(f"room_{r.number}: ο προορισμός {dest} υπάρχει",
                   any(o.number == dest for o in rooms))
             # ΟΛΑ τα κελιά της ομάδας δείχνουν στο ίδιο σημείο
