@@ -27,10 +27,33 @@
             <button type="submit">Invite</button>
         </form>
         <div class="hintline">
-            An invited account can sign in straight away. Anyone who signs in
-            without an invitation lands in <b>Waiting</b> below &mdash; they
-            cannot use the editor until you approve them, and no folder is
-            created for them.
+            An invited account can sign in straight away and is emailed a link.
+            Anyone who signs in without an invitation lands in <b>Waiting</b>
+            below &mdash; they cannot use the editor until you approve them, and
+            no folder is created for them.
+        </div>
+        <div class="hintline">
+            @if (ViewData["Mail"] is true)
+            {
+                <span>Mail is configured, so sign-in codes and invitations go out
+                      by email.</span>
+                <form method="post" asp-action="MailTest" class="row">
+                    @Html.AntiForgeryToken()
+                    <button type="submit">Send me a test message</button>
+                </form>
+            }
+            else
+            {
+                <b>No mail settings.</b>
+                <span>
+                    Signing in by email is switched off and invitations are not
+                    delivered &mdash; you have to pass the link on yourself. Set
+                    <code>gravassistSmtpHost</code>, <code>gravassistSmtpPort</code>,
+                    <code>gravassistSmtpUser</code>, <code>gravassistSmtpPass</code>
+                    and <code>gravassistMailFrom</code> in the environment, then
+                    restart the editor.
+                </span>
+            }
         </div>
         @if (TempData["Msg"] is string msg)
         {

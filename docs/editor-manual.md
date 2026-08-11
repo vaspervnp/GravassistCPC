@@ -32,8 +32,18 @@ of the project documentation is in Greek.
 
 ## 1. Getting in
 
-Open <http://localhost:5202>. **Sign-in with Google is mandatory** — there is no
-anonymous mode. Signing in proves who you are; it does not by itself grant access.
+Open <http://localhost:5202>. **Signing in is mandatory** — there is no anonymous mode.
+Signing in proves who you are; it does not by itself grant access.
+
+There are two ways in, and they end up in exactly the same place:
+
+- **Sign in with Google.**
+- **Sign in with an email address.** No password: you type your address, a **six-digit
+  code** arrives by email, you type it in. The code lasts 10 minutes, works once, and
+  allows five wrong guesses before it is thrown away. This option only appears if the
+  administrator has configured mail.
+
+A new address can ask to join from the same form — that is how you register.
 
 - If your account is **allowed**, you go straight to the editor.
 - If it is not, you land on a **Waiting for approval** page. Your address is recorded so
@@ -536,9 +546,14 @@ otherwise one wrong click would lock out the only person who can unlock it.
 
 The administrator sees an **Accounts** link in the header, leading to `/admin`:
 
-- **Invite** an address — it can sign in immediately.
+- **Invite** an address — it can sign in immediately, and is emailed a link. If mail is
+  not configured the invitation still stands; you just have to pass the link on yourself,
+  and the screen says so.
 - **Approve** an address that signed in and is waiting.
 - **Revoke** an address — this only stops them signing in. **Their folder is kept.**
+- Send a **test message** to yourself, to check the mail settings without going through
+  the sign-in form (whose answers are deliberately vague, so they cannot be used to
+  discover which addresses exist).
 - Turn **Publish** on or off for an address — see [§16](#16-sharing-your-rooms). Off by
   default: designing rooms in your own folder is not the same as overwriting what
   everybody sees. A revoked account cannot publish whatever its flag says, and the
@@ -567,6 +582,19 @@ variables there, a launcher that does not use a login shell will not see them.
 **Sign-in bounces or fails at the last step.** The redirect URI registered in the Google
 Cloud console must be exactly `<your address>/accounts/google`, and the secret must be
 the client *secret*, not the client id.
+
+**Nobody receives sign-in codes.** Mail needs five environment variables:
+`gravassistSmtpHost`, `gravassistSmtpPort`, `gravassistSmtpUser`, `gravassistSmtpPass`
+and `gravassistMailFrom`; optionally `gravassistMailName`, `gravassistBaseUrl` (the
+public address used in invitation links) and `gravassistSmtpTls=false` (only for a relay
+on the same machine — over a network it would send the codes in clear text). Restart the
+editor afterwards, then press **Send me a test message** on the admin screen; if it
+fails, the mail server's exact error is in the editor's console log.
+
+Three things that usually go wrong: with Gmail you need an **App Password**, not your
+normal password; use port **587**, because the built-in SMTP client does STARTTLS but not
+implicit TLS on 465; and the *from* address usually has to match the SMTP account, or the
+provider rejects the message or files it as spam.
 
 **The build says `rasm: command not found`.** Run `make toolchain` — it prints the
 resolved path of each tool and marks the ones it cannot find. Fix `dir` in

@@ -32,6 +32,9 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<UserWorkspace>();
 // Ποιοι λογαριασμοί επιτρέπονται· ο διαχειριστής πάντα.
 builder.Services.AddSingleton<AccountStore>();
+// Σύνδεση με κωδικό σε email: ο αποστολέας και οι κωδικοί στον αέρα.
+builder.Services.AddSingleton<Mailer>();
+builder.Services.AddSingleton<LoginCodes>();
 // SCOPED και όχι singleton: η ρίζα του εξαρτάται από ΠΟΙΟΣ ζητά. Ως singleton
 // θα κλείδωνε τον πρώτο χρήστη που θα συνδεόταν και όλοι οι υπόλοιποι θα
 // έγραφαν στα δικά του αρχεία.

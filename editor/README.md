@@ -29,6 +29,14 @@ dotnet run
 
 Για τη σύνδεση με Google χρειάζονται οι μεταβλητές περιβάλλοντος
 `gravassistGid` και `gravassistGscrt`· χωρίς αυτές ο editor **δεν ξεκινά**.
+
+Για τη σύνδεση με κωδικό σε email χρειάζονται `gravassistSmtpHost`,
+`gravassistSmtpPort`, `gravassistSmtpUser`, `gravassistSmtpPass`,
+`gravassistMailFrom` (και προαιρετικά `gravassistMailName`,
+`gravassistBaseUrl`, `gravassistSmtpTls`). Αν λείπουν, ο editor **ξεκινά
+κανονικά** και απλώς δεν προσφέρει τη σύνδεση με email — σε αντίθεση με τη
+Google, όπου η απουσία θα σήμαινε ανοιχτό editor.
+
 Λεπτομέρειες στο [εγχειρίδιο §1](../docs/editor-manual.md#1-getting-in).
 
 ## Χειρισμός

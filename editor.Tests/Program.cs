@@ -2,6 +2,7 @@ using System.Security.Claims;
 using GravassistEditor.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging.Abstractions;
 
 // Δουλεύει σε ΔΙΚΟ ΤΟΥ προσωρινό φάκελο: τα τεστ δεν αγγίζουν ποτέ
 // τα πραγματικά levels/ του repo.
@@ -238,6 +239,61 @@ Check("…πατώντας το δικό μου",
 Check("…χωρίς να σβήνει ό,τι έχω μόνο εγώ",
     File.Exists(Path.Combine(mine, "room_8.txt")));
 Check("δεύτερο τράβηγμα δεν έχει τίποτα να κάνει", ws2.Pull(mine).Count == 0);
+
+// ------------------------------------------------ κωδικοί σύνδεσης με email
+// Ο κωδικός ΕΙΝΑΙ το διαπιστευτήριο — δεν υπάρχει password από πίσω. Ό,τι
+// αφήσουμε χαλαρό εδώ είναι ανοιχτή πόρτα, όχι ταλαιπωρία.
+var codes = new LoginCodes(new NullLogger<LoginCodes>());
+
+var (r1, c1) = codes.Issue("a@x.com", "10.0.0.1");
+Check("ο κωδικός φτιάχνεται", r1 == CodeRequest.Sent && c1 is { Length: 6 }, c1 ?? "-");
+Check("είναι έξι ψηφία", c1!.All(char.IsAsciiDigit));
+Check("εκκρεμεί", codes.Pending("A@X.COM"));
+
+Check("λάθος κωδικός δεν περνά", !codes.Verify("a@x.com", "000000") || c1 == "000000");
+Check("άλλη διεύθυνση δεν περνά με τον ίδιο κωδικό", !codes.Verify("b@x.com", c1));
+Check("ο σωστός περνά", codes.Verify("A@X.com", c1));
+Check("…και καταναλώνεται — δεν ξαναδουλεύει", !codes.Verify("a@x.com", c1));
+Check("…και δεν εκκρεμεί πια", !codes.Pending("a@x.com"));
+
+// --- πέντε λάθος προσπάθειες καίνε τον κωδικό
+var (_, c2) = codes.Issue("burn@x.com", "10.0.0.2");
+var wrong = c2 == "111111" ? "222222" : "111111";
+for (var i = 0; i < 5; i++) codes.Verify("burn@x.com", wrong);
+Check("μετά από 5 λάθος, ούτε ο σωστός δεν περνά", !codes.Verify("burn@x.com", c2));
+
+// --- φραγμοί: η φόρμα δεν γίνεται μηχανή αποστολής email
+// ΠΡΟΣΟΧΗ σε ποιον έλεγχο: η αναμονή μετριέται από τον ΕΝΕΡΓΟ κωδικό, οπότε
+// πρέπει να υπάρχει ένας που δεν έχει καταναλωθεί.
+Check("πρώτος κωδικός για καθαρή διεύθυνση",
+    codes.Issue("cool@x.com", "10.0.0.1").Result == CodeRequest.Sent);
+Check("δεύτερος αμέσως μετά -> TooSoon",
+    codes.Issue("COOL@x.com", "10.0.0.1").Result == CodeRequest.TooSoon);
+Check("μετά από επιτυχή σύνδεση δεν κρατάει αναμονή",
+    codes.Verify("cool@x.com", "000000") == false);
+
+var perEmail = new LoginCodes(new NullLogger<LoginCodes>());
+var results = new List<CodeRequest>();
+for (var i = 0; i < 7; i++)
+    results.Add(perEmail.Issue($"spam{i}@x.com", "10.0.0.3").Result);
+Check("όριο ανά IP: οι πρώτες 10 περνούν, μετά όχι",
+    results.Take(7).All(x => x == CodeRequest.Sent));
+for (var i = 7; i < 12; i++) results.Add(perEmail.Issue($"spam{i}@x.com", "10.0.0.3").Result);
+Check("…και η 11η από την ίδια IP κόβεται",
+    results[10] == CodeRequest.TooMany && results[11] == CodeRequest.TooMany,
+    string.Join(",", results.Skip(9)));
+Check("άλλη IP δεν επηρεάζεται",
+    perEmail.Issue("other@x.com", "10.0.0.9").Result == CodeRequest.Sent);
+
+// --- δύο κωδικοί δεν είναι ποτέ ο ίδιος (πρακτικά)
+var seen = new HashSet<string>();
+var many = new LoginCodes(new NullLogger<LoginCodes>());
+for (var i = 0; i < 50; i++)
+{
+    var (_, c) = many.Issue($"u{i}@x.com", $"10.1.0.{i}");
+    if (c is not null) seen.Add(c);
+}
+Check("οι κωδικοί δεν επαναλαμβάνονται", seen.Count >= 45, $"{seen.Count} διαφορετικοί");
 
 Console.WriteLine(fails == 0 ? "ΟΛΑ ΣΩΣΤΑ" : $"{fails} ΑΠΟΤΥΧΙΕΣ");
 Environment.Exit(fails);

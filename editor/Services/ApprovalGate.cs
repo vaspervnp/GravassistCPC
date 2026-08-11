@@ -19,7 +19,8 @@ public sealed class ApprovalGate(RequestDelegate next)
     // περιμένουν, και να μπορούν να αποσυνδεθούν.
     private static readonly string[] Open =
         ["/accounts/logout", "/accounts/pending", "/accounts/me",
-         "/accounts/denied", "/accounts/google", "/accounts/login"];
+         "/accounts/denied", "/accounts/google", "/accounts/login",
+         "/accounts/google-login", "/accounts/code", "/accounts/verify"];
 
     public async Task Invoke(HttpContext ctx, AccountStore accounts)
     {

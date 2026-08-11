@@ -1,0 +1,74 @@
+@{
+    ViewData["Title"] = "Sign in";
+    var mailOn = ViewData["Mail"] is true;
+    var stage = (TempData["Stage"] as string) ?? (ViewData["Stage"] as string) ?? "start";
+    var email = (TempData["Email"] as string) ?? (ViewData["Email"] as string) ?? "";
+    var msg = TempData["Msg"] as string;
+    var ret = ViewData["ReturnUrl"] as string ?? "/";
+}
+
+<style>
+    .login { max-width: 26rem; display: grid; gap: 14px; }
+    .login form { display: grid; gap: 8px; }
+    .login input { width: 100%; }
+    .login .or { color: var(--edge); letter-spacing: 2px; font-size: 11px;
+                 text-align: center; }
+    .login .msg { color: var(--material); font-size: 12px; }
+    .login .code { font-size: 20px; letter-spacing: 6px; text-align: center; }
+</style>
+
+<div class="login">
+    <div class="panel">
+        <h2>Sign in</h2>
+        @if (msg is not null)
+        {
+            <div class="msg">@msg</div>
+        }
+
+        <a href="@Url.Action("GoogleLogin", new { returnUrl = ret })">
+            <button type="button" style="width:100%">Sign in with Google</button>
+        </a>
+
+        @if (mailOn)
+        {
+            <div class="or">— OR —</div>
+
+            @if (stage == "code")
+            {
+                <form method="post" asp-action="Verify">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@ret" />
+                    <input type="hidden" name="email" value="@email" />
+                    <label for="code">Code sent to <b>@email</b></label>
+                    <input class="code" id="code" name="code" inputmode="numeric"
+                           autocomplete="one-time-code" pattern="[0-9]{6}"
+                           maxlength="6" required autofocus placeholder="······" />
+                    <button type="submit">Sign in</button>
+                </form>
+                <form method="post" asp-action="SendCode">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@ret" />
+                    <input type="hidden" name="email" value="@email" />
+                    <button type="submit">Send another code</button>
+                </form>
+            }
+            else
+            {
+                <form method="post" asp-action="SendCode">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@ret" />
+                    <label for="email">Sign in with an email address</label>
+                    <input type="email" id="email" name="email" value="@email"
+                           placeholder="name@@example.com" required />
+                    <button type="submit">Send me a code</button>
+                </form>
+                <div class="hintline">
+                    No password. We email you a six-digit code that lasts
+                    @LoginCodes.Lifetime.TotalMinutes.ToString("0") minutes.
+                    A new address can ask to join here; the administrator has to
+                    approve it before the editor opens.
+                </div>
+            }
+        }
+    </div>
+</div>

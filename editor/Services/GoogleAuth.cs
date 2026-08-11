@@ -51,7 +51,12 @@ public static class GoogleAuth
             .AddAuthentication(o =>
             {
                 o.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                o.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+                // ΤΟ COOKIE, ΟΧΙ Η GOOGLE. Με challenge scheme τη Google, κάθε
+                // ανώνυμος πεταγόταν κατευθείαν στη Google και δεν έβλεπε ποτέ
+                // τη σελίδα σύνδεσης — άρα ούτε την επιλογή του email. Το
+                // cookie στέλνει στο LoginPath, και από κει η Google καλείται
+                // ρητά από το κουμπί της.
+                o.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
             })
             .AddCookie(o =>
             {

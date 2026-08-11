@@ -16,5 +16,6 @@
     <Compile Include="../editor/Services/UserWorkspace.cs" />
     <Compile Include="../editor/Services/AccountStore.cs" />
     <Compile Include="../editor/Services/ApprovalGate.cs" />
+    <Compile Include="../editor/Services/LoginCodes.cs" />
   </ItemGroup>
 </Project>
