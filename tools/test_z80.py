@@ -1074,6 +1074,51 @@ def main():
     check("Z80: …και μετά ξαναπονάει", energy24() < after,
           f"{after} -> {energy24()}")
 
+    # 25. Το κλειδί ανοίγει και ΠΥΛΗ που πατάς, όχι μόνο λουκέτο. Ο Z80
+    #     γράφει την ανοιχτή μορφή ΤΟΥ ΤΥΠΟΥ: καρφωμένο T_LOCK_OPEN θα
+    #     μεταμόρφωνε την πύλη σε λουκέτο, που είναι άλλο αντικείμενο.
+    t25 = Z80Test()
+    t25.stub("RENDER_ROOM")
+    t25.stub("DRAW_TILE")
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][10] = "G"          # πύλη που την ΠΑΤΑΣ
+    rows[22][30] = "K"          # λουκέτο ίδιου καναλιού, αλλού
+    room = P.Room(";\n" + "\n".join("".join(r) for r in rows) + "\n"
+                  + "\n".join(["gravity 0", "gate 10 22 3", "lock 30 22 3"]))
+    room.number, room.path = 1, ""
+    t25.poke(t25.sym("SET_BUF"), RF.build_set([room]))
+    for sym, val in (("SET_CUR", 1), ("JR_COUNT", 0), ("TRAIL_N", 0),
+                     ("PLATE_PREV", 0), ("HERO_CARRY", 0)):
+        t25.poke(t25.sym(sym), bytes((val,)))
+    t25.poke(t25.sym("SEALED"), bytes(32))
+    t25.poke(t25.sym("HERO_KEYS"), bytes(8))
+    t25.call("ROOM_LOAD", a=1)
+    cb25 = t25.sym("CELL_BUF")
+
+    def c25(c, r):
+        return t25.peek(cb25 + r * P.COLS + c)[0]
+
+    # Πάνω στην πύλη, ΧΩΡΙΣ κλειδί
+    t25.poke16(t25.sym("HERO_X"), 10 * P.CELL + 4)
+    t25.poke16(t25.sym("HERO_Y"), P.GRID_Y0 + 21 * P.CELL + 4)
+    t25.call("H_USE")
+    check("Z80: χωρίς κλειδί η πύλη μένει κλειστή", c25(10, 22) == P.GATE,
+          P.TYPE_NAMES[c25(10, 22)])
+
+    keys = bytearray(8)
+    keys[3] = 1
+    t25.poke(t25.sym("HERO_KEYS"), bytes(keys))
+    t25.call("H_USE")
+    check("Z80: με το κλειδί της, η πύλη που πατάς ανοίγει",
+          c25(10, 22) == P.GATE_OPEN, P.TYPE_NAMES[c25(10, 22)])
+    check("Z80: …και μένει ΠΥΛΗ, δεν γίνεται λουκέτο",
+          c25(10, 22) != P.LOCK_OPEN, P.TYPE_NAMES[c25(10, 22)])
+    check("Z80: …και ανοίγει και το λουκέτο του ίδιου καναλιού",
+          c25(30, 22) == P.LOCK_OPEN, P.TYPE_NAMES[c25(30, 22)])
+    check("Z80: …και ξοδεύτηκε ΕΝΑ κλειδί",
+          t25.peek(t25.sym("HERO_KEYS"), 8)[3] == 0)
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

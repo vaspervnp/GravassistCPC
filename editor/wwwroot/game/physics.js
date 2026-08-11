@@ -362,7 +362,9 @@
     /// πολλές απλές κλειδαριές θα ξεκλείδωνε ολόκληρη με ένα κλειδί.
     openLocks(cell, ident) {
       this.sfx.push("unlock");
-      this.room.cells[cell[1]][cell[0]] = T.LOCK_OPEN;
+      const here = this.room.cells[cell[1]][cell[0]];
+      this.room.cells[cell[1]][cell[0]] =
+        OPEN_OF[here] !== undefined ? OPEN_OF[here] : T.LOCK_OPEN;
       if (!ident) return;
       // ΚΑΙ ΠΥΛΕΣ, ΜΟΝΙΜΑ: ο διακόπτης γυρίζει, η πλάκα κρατά όσο πατιέται,
       // το κλειδί ανοίγει και ξοδεύεται.
@@ -433,7 +435,10 @@
       if (this.room.cell(ec, er) === T.EXIT) { this.won = true; return true; }
 
       const kid = sc ? this.room.attr(sc[0], sc[1]) : 0;
-      if (st === T.LOCK && this.keys[kid]) {
+      // ΚΑΙ Η ΠΥΛΗ: στέκεσαι πάνω της και πατάς ενεργοποίηση, όπως στο
+      // λουκέτο. Το κλειδί άνοιγε ήδη πύλες του καναλιού του ξεκλειδώνοντας
+      // λουκέτο — το να μην ανοίγει αυτήν που πατάς ήταν ασυνέπεια.
+      if ((st === T.LOCK || st === T.GATE) && this.keys[kid]) {
         this.keys[kid]--;
         this.openLocks(sc, kid);
         return true;

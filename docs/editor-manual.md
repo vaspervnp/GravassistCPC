@@ -323,13 +323,13 @@ does.
 |---|---|
 | **Switch (`S`)** | A toggle. Step on it and its targets flip; step on it again and they flip back. Not consumed. |
 | **Pressure plate (`p`)** | Active only while pressed, by the hero **or by a crate**. Leaving a crate on a plate holds it down while you walk away. |
-| **Key (`k`)** | Opens its targets **permanently** and is consumed. |
+| **Key (`k`)** | Opens its targets **permanently** and is consumed. Stand on a lock **or a gate** of its channel and press the action key. |
 
 **Targets** — the *Wiring — targets* panel:
 
 | | Open means |
 |---|---|
-| **Gate (`G`)** | Not solid — you pass through. |
+| **Gate (`G`)** | Not solid — you pass through. A gate can also be opened directly: stand on it holding a key of its channel and press the action key. |
 | **Lock (`K`)** | Unlocked — you pass through. |
 | **Spikes (`^ v < >`)** | Retracted into the floor: still solid, but harmless. |
 

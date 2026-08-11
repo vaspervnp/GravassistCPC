@@ -750,6 +750,23 @@ def main():
         h.update(0)
     check("…και μετά ξαναπονάει", h.energy < after, f"{after} -> {h.energy}")
 
+    # --- Το κλειδί ανοίγει και ΠΥΛΗ που πατάς.
+    rm = wroom([(10, 22, "G"), (30, 22, "K")],
+               ["gate 10 22 3", "lock 30 22 3"])
+    h = P.Hero(rm, 10 * P.CELL + 4, P.GRID_Y0 + 21 * P.CELL + 4, 0)
+    h.use()
+    check("χωρίς κλειδί η πύλη μένει κλειστή", rm.cells[22][10] == P.GATE,
+          P.TYPE_NAMES[rm.cells[22][10]])
+    h.keys[3] = 1
+    h.use()
+    # Η ανοιχτή μορφή ΤΟΥ ΤΥΠΟΥ: καρφωμένο LOCK_OPEN θα μεταμόρφωνε την πύλη
+    # σε λουκέτο, που είναι άλλο αντικείμενο και ανοίγει με άλλον τρόπο.
+    check("με το κλειδί της, η πύλη που πατάς ανοίγει ΩΣ ΠΥΛΗ",
+          rm.cells[22][10] == P.GATE_OPEN, P.TYPE_NAMES[rm.cells[22][10]])
+    check("…και ανοίγει και το λουκέτο του ίδιου καναλιού",
+          rm.cells[22][30] == P.LOCK_OPEN, P.TYPE_NAMES[rm.cells[22][30]])
+    check("…και ξοδεύτηκε ένα κλειδί", h.keys[3] == 0)
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

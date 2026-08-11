@@ -655,7 +655,11 @@ class Hero:
             return True
 
         kid = self.room.attr(*sc) if sc else 0
-        if st == LOCK and self.keys[kid]:
+        # ΚΑΙ Η ΠΥΛΗ, ΟΧΙ ΜΟΝΟ ΤΟ ΛΟΥΚΕΤΟ. Στέκεσαι πάνω της και πατάς
+        # ενεργοποίηση, ακριβώς όπως στο λουκέτο: αφού το κλειδί ανοίγει ήδη
+        # πύλες όταν ξεκλειδώνεις λουκέτο του ίδιου καναλιού, το να μην
+        # ανοίγει την πύλη που πατάς ήταν ασυνέπεια, όχι κανόνας.
+        if st in (LOCK, GATE) and self.keys[kid]:
             self.keys[kid] -= 1
             self.open_locks(sc, kid)
             return True
@@ -695,7 +699,10 @@ class Hero:
         ξεκλείδωνε ολόκληρη με ένα κλειδί — δηλαδή η προεπιλογή θα άλλαζε
         νόημα σε όποιον δεν καλωδίωσε τίποτα.
         """
-        self.room.cells[cell[1]][cell[0]] = LOCK_OPEN
+        # Ανοιχτή μορφή ΤΟΥ ΤΥΠΟΥ που πάτησες: λουκέτο -> ξεκλείδωτο,
+        # πύλη -> ανοιχτή. Καρφωμένο LOCK_OPEN θα μεταμόρφωνε την πύλη.
+        here = self.room.cells[cell[1]][cell[0]]
+        self.room.cells[cell[1]][cell[0]] = self.OPEN_OF.get(here, LOCK_OPEN)
         self.moved_cells.append(cell)
         if not ident:
             return
