@@ -329,7 +329,7 @@ does.
 
 | | Open means |
 |---|---|
-| **Gate (`G`)** | Not solid — you pass through. A gate can also be opened directly: stand on it holding a key of its channel and press the action key. |
+| **Gate (`G`)** | Not solid — you pass through. A gate can also be opened directly: stand on it holding a key of its channel and press the action key — the in-game hint says so when you are carrying the right key. |
 | **Lock (`K`)** | Unlocked — you pass through. |
 | **Spikes (`^ v < >`)** | Retracted into the floor: still solid, but harmless. |
 

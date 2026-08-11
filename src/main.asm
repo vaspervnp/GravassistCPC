@@ -126,6 +126,7 @@ MSG_GPLATE      equ  9          ; …με πλάκα πίεσης
 MSG_GBOTH       equ  10         ; …και με τα δύο
 MSG_GDEAD       equ  11         ; …χωρίς τίποτα: λάθος του σχεδιαστή
 MSG_AUTOKEY     equ  12         ; μάζεψες κλειδί που ανοίγει με την επαφή
+MSG_GKEY        equ  13         ; …και ΚΡΑΤΑΣ το κλειδί της: άνοιξέ την
 MSG_HOLD        equ  150        ; frames = 3 δευτερόλεπτα
 
 LINEBUF_W         equ  24     ; πλάτος buffer γραμμής σε bytes
@@ -1422,6 +1423,18 @@ hp_gahead:      call h_ahead
                 ld   a,(cell_row)
                 ld   c,a
 hp_gmsg:        call cell_attr
+                and  7
+                ld   (hp_chan),a
+                jr   z,hp_gdrv          ; κανάλι 0: κανένα κλειδί δεν ταιριάζει
+                ld   e,a
+                ld   d,0
+                ld   hl,hero_keys
+                add  hl,de
+                ld   a,(hl)
+                or   a
+                ld   a,MSG_GKEY
+                ret  nz                 ; το κρατάς: πες πώς ανοίγει ΤΩΡΑ
+hp_gdrv:        ld   a,(hp_chan)
                 call gate_drivers       ; A: bit0 = διακόπτης, bit1 = πλάκα
                 or   a
                 ld   a,MSG_GDEAD
@@ -1436,6 +1449,8 @@ hp_gmsg:        call cell_attr
                 ret  z
                 ld   a,MSG_GPLATE
                 ret
+
+hp_chan         db 0
 
 hp_none:        ld   a,MSG_NONE
                 ret
@@ -1577,7 +1592,7 @@ msg_left        db 0            ; frames που του μένουν
 hint_ptr:       dw hs_exit, hs_unlock, hs_nokey, hs_tp
                 dw hs_drop, hs_take, hs_plate, hs_gate
                 dw hs_gsw, hs_gplate, hs_gboth, hs_gdead
-                dw hs_autokey
+                dw hs_autokey, hs_gkey
 
 ; Το μήκος το μετράει ο ASSEMBLER, όχι εγώ: μια χειρόγραφη αρίθμηση κατά ένα
 ; παραπάνω τυπώνει ένα byte σκουπίδι στο τέλος — και δεν φαίνεται με το μάτι.
@@ -1620,6 +1635,9 @@ hs_gdead_e:
 hs_autokey:     db hs_autokey_e-hs_autokey-1
                 db "This key unlocks on touch"
 hs_autokey_e:
+hs_gkey:        db hs_gkey_e-hs_gkey-1
+                db "Up or down to open with key"
+hs_gkey_e:
 
 ;---------------------------------------------------------------------
 ; scr_addr — διεύθυνση οθόνης για (στήλη byte, scanline)

@@ -1119,6 +1119,46 @@ def main():
     check("Z80: …και ξοδεύτηκε ΕΝΑ κλειδί",
           t25.peek(t25.sym("HERO_KEYS"), 8)[3] == 0)
 
+    # 26. Το μήνυμα στην κλειστή πύλη. Αν ΚΡΑΤΑΣ το κλειδί της, το «ψάξε τον
+    #     διακόπτη» είναι λάθος συμβουλή: η πύλη ανοίγει τώρα, με ένα πάτημα.
+    t26 = Z80Test()
+    t26.stub("RENDER_ROOM")
+    t26.stub("DRAW_TILE")
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][10] = "G"
+    rows[22][20] = "S"
+    room = P.Room(";\n" + "\n".join("".join(r) for r in rows) + "\n"
+                  + "\n".join(["gravity 0", "gate 10 22 3", "sw 20 22 3"]))
+    room.number, room.path = 1, ""
+    t26.poke(t26.sym("SET_BUF"), RF.build_set([room]))
+    for sym, val in (("SET_CUR", 1), ("JR_COUNT", 0), ("TRAIL_N", 0),
+                     ("PLATE_PREV", 0), ("HERO_CARRY", 0)):
+        t26.poke(t26.sym(sym), bytes((val,)))
+    t26.poke(t26.sym("SEALED"), bytes(32))
+    t26.poke(t26.sym("HERO_KEYS"), bytes(8))
+    t26.call("ROOM_LOAD", a=1)
+    t26.poke16(t26.sym("HERO_X"), 10 * P.CELL + 4)
+    t26.poke16(t26.sym("HERO_Y"), P.GRID_Y0 + 21 * P.CELL + 4)
+
+    t26.call("HINT_PICK")
+    check("κλειστή πύλη χωρίς κλειδί: λέει να βρεις τον διακόπτη",
+          t26.m.a == 8, f"μήνυμα {t26.m.a}")      # MSG_GSW
+
+    keys = bytearray(8)
+    keys[3] = 1
+    t26.poke(t26.sym("HERO_KEYS"), bytes(keys))
+    t26.call("HINT_PICK")
+    check("…αλλά με το κλειδί της λέει πώς ανοίγει ΤΩΡΑ",
+          t26.m.a == 13, f"μήνυμα {t26.m.a}")     # MSG_GKEY
+
+    keys[3] = 0
+    keys[5] = 1                                   # κλειδί ΑΛΛΟΥ καναλιού
+    t26.poke(t26.sym("HERO_KEYS"), bytes(keys))
+    t26.call("HINT_PICK")
+    check("…και κλειδί άλλου καναλιού δεν μετράει",
+          t26.m.a == 8, f"μήνυμα {t26.m.a}")
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

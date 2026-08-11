@@ -74,6 +74,9 @@
     const [ac, ar] = g;
     if (h.room.cell(ac, ar) === T.indexOf("GATE")) {
       const ch = h.room.attr(ac, ar);
+      // ΤΟ ΚΛΕΙΔΙ ΠΡΩΤΑ: αν το κρατάς, το «ψάξε τον διακόπτη» είναι λάθος
+      // συμβουλή — η πύλη ανοίγει τώρα, με ένα πάτημα.
+      if (ch && h.keys[ch]) return "Up or down to open with key";
       let sw = false, plate = false;
       for (const k in h.room.attrs) {
         if (h.room.attrs[k] !== ch) continue;
