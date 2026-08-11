@@ -132,6 +132,23 @@ public sealed class AdminController(AccountStore accounts, Mailer mail) : Contro
         return RedirectToAction(nameof(Index));
     }
 
+    /// <summary>
+    /// Σβήνει τον λογαριασμό από τη λίστα. Ο φάκελός του μένει.
+    /// Για αποκλεισμό υπάρχει η ανάκληση — ο σβησμένος ξαναεμφανίζεται ως
+    /// νέο αίτημα την επόμενη φορά που θα συνδεθεί.
+    /// </summary>
+    [HttpPost("delete")]
+    [ValidateAntiForgeryToken]
+    public IActionResult Delete(string email)
+    {
+        if (Guard() is { } stop) return stop;
+        TempData["Msg"] = accounts.Delete(email)
+            ? $"Deleted {AccountStore.Normalise(email)} from the list. "
+              + "Their levels folder is untouched."
+            : "Could not delete that address.";
+        return RedirectToAction(nameof(Index));
+    }
+
     [HttpPost("revoke")]
     [ValidateAntiForgeryToken]
     public IActionResult Revoke(string email)

@@ -550,7 +550,14 @@ The administrator sees an **Accounts** link in the header, leading to `/admin`:
   not configured the invitation still stands; you just have to pass the link on yourself,
   and the screen says so.
 - **Approve** an address that signed in and is waiting.
-- **Revoke** an address — this only stops them signing in. **Their folder is kept.**
+- **Revoke** an address — blocks it. It stays on the list as a "no", so asking again
+  changes nothing.
+- **Delete** an address — forgets it. If that address signs in again it appears as a
+  fresh request. Use Revoke for someone you want kept out, Delete for tidying the list.
+
+**Neither touches their folder under `levels/`.** No button on the admin screen destroys
+anybody's levels; files are removed by hand, if and when you decide to. The administrator
+can be neither revoked nor deleted.
 - Send a **test message** to yourself, to check the mail settings without going through
   the sign-in form (whose answers are deliberately vague, so they cannot be used to
   discover which addresses exist).
@@ -586,9 +593,11 @@ the client *secret*, not the client id.
 **Nobody receives sign-in codes.** Mail needs five environment variables:
 `gravassistSmtpHost`, `gravassistSmtpPort`, `gravassistSmtpUser`, `gravassistSmtpPass`
 and `gravassistMailFrom`; optionally `gravassistMailName`, `gravassistBaseUrl` (the
-public address used in invitation links) and `gravassistSmtpTls=false` (only for a relay
-on the same machine — over a network it would send the codes in clear text). Restart the
-editor afterwards, then press **Send me a test message** on the admin screen; if it
+public address used in invitation links) and **`gravassistSmtpTls=true`** to turn on
+STARTTLS. TLS is **off by default**: without it the SMTP password and the sign-in codes
+travel in clear text, which is fine for a relay on the same machine and not fine over a
+network, so the editor writes a warning to its log when it happens. Restart the editor
+afterwards, then press **Send me a test message** on the admin screen; if it
 fails, the mail server's exact error is in the editor's console log.
 
 Three things that usually go wrong: with Gmail you need an **App Password**, not your

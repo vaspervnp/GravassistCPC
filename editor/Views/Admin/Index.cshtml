@@ -82,6 +82,12 @@
                                 <input type="hidden" name="email" value="@a.Email" />
                                 <button type="submit">Approve</button>
                             </form>
+                            <form method="post" asp-action="Delete" class="row"
+                                  onsubmit="return confirm('Delete @a.Email from the list?\n\nTheir levels folder is kept. If they sign in again they will appear here as a new request \u2014 use Revoke instead to keep them blocked.');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="email" value="@a.Email" />
+                                <button type="submit">Delete</button>
+                            </form>
                         </td>
                     </tr>
                 }
@@ -118,6 +124,12 @@
                             <input type="hidden" name="email" value="@a.Email" />
                             <button type="submit">Revoke</button>
                         </form>
+                        <form method="post" asp-action="Delete" class="row"
+                              onsubmit="return confirm('Delete @a.Email from the list?\n\nTheir levels folder is kept. If they sign in again they will appear here as a new request \u2014 use Revoke instead to keep them blocked.');">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="email" value="@a.Email" />
+                            <button type="submit">Delete</button>
+                        </form>
                     </td>
                 </tr>
             }
@@ -130,10 +142,16 @@
             sees. Off by default.
         </div>
         <div class="hintline">
-            Revoking keeps the account&rsquo;s folder under <code>levels/</code>
-            &mdash; it only stops them signing in. The administrator cannot be
-            revoked, otherwise one wrong click would lock out the only person
-            who can unlock it.
+            <b>Revoke</b> blocks the account: it stays on this list as a
+            &ldquo;no&rdquo;, so asking again changes nothing. <b>Delete</b>
+            forgets it instead &mdash; if that address signs in again it shows
+            up as a fresh request. Use Revoke for someone you want kept out,
+            Delete for tidying the list.
+            <br />
+            Neither touches their folder under <code>levels/</code>; no button
+            on this screen destroys anybody&rsquo;s levels. The administrator
+            can be neither revoked nor deleted, otherwise one wrong click would
+            lock out the only person who can unlock it.
         </div>
     </div>
 

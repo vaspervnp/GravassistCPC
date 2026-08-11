@@ -33,7 +33,10 @@ dotnet run
 Για τη σύνδεση με κωδικό σε email χρειάζονται `gravassistSmtpHost`,
 `gravassistSmtpPort`, `gravassistSmtpUser`, `gravassistSmtpPass`,
 `gravassistMailFrom` (και προαιρετικά `gravassistMailName`,
-`gravassistBaseUrl`, `gravassistSmtpTls`). Αν λείπουν, ο editor **ξεκινά
+`gravassistBaseUrl`, `gravassistSmtpTls`). Το STARTTLS είναι **κλειστό**·
+ανοίγει με `gravassistSmtpTls=true`. Χωρίς αυτό ο κωδικός του λογαριασμού
+SMTP και οι κωδικοί σύνδεσης πάνε καθαρό κείμενο — εντάξει μόνο για relay
+στο ίδιο μηχάνημα, και ο editor το γράφει στο log αν ο server είναι ξένος. Αν λείπουν, ο editor **ξεκινά
 κανονικά** και απλώς δεν προσφέρει τη σύνδεση με email — σε αντίθεση με τη
 Google, όπου η απουσία θα σήμαινε ανοιχτό editor.
 

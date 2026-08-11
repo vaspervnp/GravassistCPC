@@ -119,6 +119,34 @@ var acc3 = new AccountStore(accEnv, accCfg);
 Check("χαλασμένο accounts.json δεν ρίχνει τον editor",
     acc3.IsAllowed(adminMail) && !acc3.IsAllowed("pending@x.com"));
 
+// --- διαγραφή: καθάρισμα λίστας, ΟΧΙ αποκλεισμός
+var del = new AccountStore(accEnv, accCfg);
+del.Invite("gone@x.com");
+Check("η διαγραφή βγάζει τον λογαριασμό",
+    del.Delete("GONE@x.com") && !del.IsAllowed("gone@x.com")
+    && del.All().All(a => a.Email != "gone@x.com"));
+Check("δεύτερη διαγραφή δεν βρίσκει τίποτα", !del.Delete("gone@x.com"));
+Check("ο διαχειριστής ΔΕΝ σβήνεται",
+    !del.Delete(adminMail) && del.IsAllowed(adminMail));
+Check("κενό email δεν σβήνει τίποτα", !del.Delete("") && !del.Delete(null));
+
+// Η ΚΡΙΣΙΜΗ ΔΙΑΦΟΡΑ: ο ανακληθείς μένει κομμένος αν ξαναζητήσει, ο
+// σβησμένος επανεμφανίζεται ως νέο αίτημα.
+del.Invite("blocked@x.com");
+del.Revoke("blocked@x.com");
+del.RecordPending("blocked@x.com");
+Check("ο ανακληθείς μένει «revoked», δεν ξαναγίνεται απλό αίτημα",
+    del.All().Single(a => a.Email == "blocked@x.com").Note == "revoked");
+
+del.Invite("forgotten@x.com");
+del.Delete("forgotten@x.com");
+del.RecordPending("forgotten@x.com");
+Check("ο σβησμένος ξαναεμφανίζεται ως νέο αίτημα",
+    del.All().Single(a => a.Email == "forgotten@x.com") is { Allowed: false, Note: "asked" });
+
+var del2 = new AccountStore(accEnv, accCfg);
+Check("η διαγραφή επιβιώνει restart", del2.All().All(a => a.Email != "gone@x.com"));
+
 // ------------------------------------------------------------------- ο φραγμός
 // Ο ApprovalGate είναι που εμποδίζει ΣΤΗΝ ΠΡΑΞΗ. Αν περάσει το αίτημα, το
 // επόμενο βήμα φτιάχνει φάκελο στα levels/ — γι' αυτό ο ψεύτικος «επόμενος»

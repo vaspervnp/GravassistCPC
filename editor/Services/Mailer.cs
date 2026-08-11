@@ -40,13 +40,18 @@ public sealed class Mailer(IConfiguration config, ILogger<Mailer> log)
         int.TryParse(config[PortVar], out var p) && p is > 0 and < 65536 ? p : 587;
 
     /// <summary>
-    /// STARTTLS; ΕΝΕΡΓΟ εκτός αν το κλείσεις ρητά με «false».
-    /// Υπάρχει μόνο για relay στο ίδιο μηχάνημα, που συχνά δεν σηκώνει TLS.
-    /// Πάνω από δίκτυο, κλείνοντάς το στέλνεις τους κωδικούς σύνδεσης
-    /// καθαρό κείμενο.
+    /// STARTTLS. ΚΛΕΙΣΤΟ από προεπιλογή· ανοίγει με <c>gravassistSmtpTls=true</c>.
+    ///
+    /// ΠΡΟΣΟΧΗ ΤΙ ΣΗΜΑΙΝΕΙ: χωρίς TLS, ο κωδικός του SMTP λογαριασμού και οι
+    /// εξαψήφιοι κωδικοί σύνδεσης ταξιδεύουν καθαρό κείμενο. Είναι εντάξει
+    /// μόνο για relay στο ίδιο μηχάνημα. Γι' αυτό η <see cref="SendAsync"/>
+    /// γκρινιάζει στο log όταν ο server ΔΕΝ είναι τοπικός.
     /// </summary>
     public bool UseTls =>
-        !string.Equals(config[TlsVar], "false", StringComparison.OrdinalIgnoreCase);
+        string.Equals(config[TlsVar], "true", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Ο SMTP server είναι στο ίδιο μηχάνημα;</summary>
+    private bool HostIsLocal => Host is "localhost" or "127.0.0.1" or "::1";
 
     /// <summary>Μπορεί να σταλεί email; Αλλιώς ο editor κρύβει τη σύνδεση με email.</summary>
     public bool IsConfigured => Host is not null && From is not null;
@@ -74,6 +79,15 @@ public sealed class Mailer(IConfiguration config, ILogger<Mailer> log)
                            + "({Host}, {From}).", to, HostVar, FromVar);
             return false;
         }
+
+        // Απροστάτευτη σύνδεση σε ΞΕΝΟ μηχάνημα: δεν το εμποδίζουμε — είναι
+        // ρύθμιση του διαχειριστή — αλλά δεν γίνεται και σιωπηλά, γιατί μαζί
+        // με το μήνυμα φεύγει και ο κωδικός του λογαριασμού SMTP.
+        if (!UseTls && !HostIsLocal)
+            log.LogWarning("SMTP ΧΩΡΙΣ TLS προς {Host}:{Port}. Ο κωδικός του "
+                           + "λογαριασμού και οι κωδικοί σύνδεσης πάνε καθαρό "
+                           + "κείμενο. Βάλε {Var}=true αν ο server το υποστηρίζει.",
+                           Host, Port, TlsVar);
 
         try
         {
