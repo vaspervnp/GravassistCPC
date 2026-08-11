@@ -1983,7 +1983,14 @@
         }
 
         async function newLevel() {
-            if (dirty && !confirm("There are unsaved changes. Continue?")) return;
+            // ΠΑΝΤΑ ρωτάει, όχι μόνο όταν υπάρχουν αλλαγές: το «New» κάθεται
+            // δίπλα στο «Open» και αδειάζει ό,τι βλέπεις. Ακόμα και σωσμένη
+            // δουλειά που κλείνεις κατά λάθος κοστίζει να την ξαναβρείς.
+            if (!confirm(dirty
+                    ? "Start a new empty level?\n\nThere are unsaved changes and they "
+                      + "will be lost. The file on disk is not touched."
+                    : "Start a new empty level?\n\nWhat is on screen is replaced. "
+                      + "The file on disk is not touched.")) return;
             const res = await fetch("/api/levels/new");
             if (!res.ok) { setStatus(await readError(res), "err"); return; }
             loadDocument(await res.json());

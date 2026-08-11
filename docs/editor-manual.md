@@ -226,7 +226,7 @@ that points at the room has to follow. The editor does that for you.
 | Button | What it does |
 |---|---|
 | **Open** | Loads the file selected in the dropdown. |
-| **New** | A blank 40x24 level with a solid border. Not written to disk until you save. |
+| **New** | A blank 40x24 level with a solid border. Not written to disk until you save. **Always asks first**, because it empties what is on screen. |
 | **New room** | Creates `room_<N>.txt` with the next free number and writes it immediately, so other rooms can point at it straight away. |
 | **Copy** | Copies the open room to the next free number. Its own doors and teleporters are kept — they point at *other* rooms and stay valid — but **nothing points at the copy yet**. |
 | **Move** | Renumbers the room: renames the file **and rewrites every `exit` line in every other file that pointed at the old number**. Type the target in the `to #` box first. |
@@ -367,9 +367,10 @@ What the editor guarantees about the file it writes: your header comments are pr
 exactly, every level row is exactly 40 valid characters over exactly 24 rows, and an
 invalid level is never written.
 
-**Unsaved work.** The editor tracks a dirty flag. Open, New and New room ask before
-discarding; Move refuses outright; closing the tab triggers the browser's own "leave
-site?" warning. **Test and Build always use the saved file**, never what is on screen —
+**Unsaved work.** The editor tracks a dirty flag. Open and New room ask before discarding;
+Move refuses outright; closing the tab triggers the browser's own "leave site?" warning.
+**New always asks**, dirty or not, because it empties what is on screen — the dialog says
+whether unsaved changes are at stake, and in both cases that the file on disk is untouched. **Test and Build always use the saved file**, never what is on screen —
 Test reminds you of this, Build does not.
 
 ---
