@@ -42,7 +42,8 @@ SFXID_THUD      equ  7          ; κιβώτιο που προσγειώνετα
 SFXID_EXIT      equ  8          ; έξοδος από δωμάτιο
 SFXID_ENTER     equ  9          ; είσοδος σε δωμάτιο
 SFXID_HURT      equ  10         ; χτύπημα (αγκάθια ή πτώση)
-SFX_COUNT       equ  11
+SFXID_OVER      equ  11         ; τέλος παιχνιδιού
+SFX_COUNT       equ  12
 
 ; Κάθε βήμα είναι 5 bytes: περίοδος τόνου (2), θόρυβος, ένταση, διάρκεια σε
 ; εκατοστά του δευτερολέπτου. Η περίοδος βγαίνει 125000/συχνότητα.
@@ -214,7 +215,7 @@ sfx_gate:       ld   hl,sfx_gatechg
 ; ---------------------------------------------------------------------------
 sfx_table:      dw   sfx_d_step, sfx_d_switch, sfx_d_gate, sfx_d_plate
                 dw   sfx_d_unlock, sfx_d_tele, sfx_d_drop, sfx_d_thud
-                dw   sfx_d_exit, sfx_d_enter, sfx_d_hurt
+                dw   sfx_d_exit, sfx_d_enter, sfx_d_hurt, sfx_d_over
 
 ; Βήμα: πολύ κοντός, ξερός κρότος. Λίγος θόρυβος για «πάτημα σε μέταλλο».
 sfx_d_step:     db   SFXCH_MOVE, 1
@@ -292,6 +293,18 @@ sfx_d_hurt:     db   SFXCH_ACT, 2
                 db   8, 14, 6
                 dw   1500
                 db   16, 10, 8
+
+; Τέλος: τέσσερις τόνοι που κατεβαίνουν και σβήνουν. Αργοί επίτηδες — ένα
+; γρήγορο εφέ θα ακουγόταν σαν λάθος, όχι σαν κλείσιμο.
+sfx_d_over:     db   SFXCH_ACT, 4
+                dw   478                ; ~262 Hz
+                db   0, 13, 14
+                dw   568                ; ~220 Hz
+                db   0, 12, 14
+                dw   716                ; ~175 Hz
+                db   0, 11, 18
+                dw   955                ; ~131 Hz
+                db   0, 9, 40
 
 ; ---------------------------------------------------------------------------
 ; Το μπλοκ που θέλει το SOUND QUEUE — 9 bytes, ίδια διάταξη με το musicplay.

@@ -350,6 +350,44 @@ tt_pen:         ld   (dt_tab),hl
                 ret
 
 ;---------------------------------------------------------------------
+; draw_banner — οποιοδήποτε κείμενο με τα γράμματα του τίτλου, ένα χρώμα
+; IN:  HL = πίνακας δεικτών γραμμάτων, B = πλήθος,
+;      A = στήλη byte, D = scanline, E = pen (2 ή 3)
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;
+; Ο ίδιος κώδικας με τον τίτλο. Το «GAME OVER» και το «THE END» ΠΡΕΠΕΙ να
+; μοιάζουν με την αρχική οθόνη — μια δεύτερη γραμματοσειρά θα έκανε το τέλος
+; να φαίνεται σαν άλλο πρόγραμμα.
+;---------------------------------------------------------------------
+draw_banner:    ld   (dt_col),a
+                ld   (dt_ptr),hl
+                ld   a,d
+                ld   (dt_row),a
+                ld   hl,font_x2_b       ; pen 2 (υλικό)
+                ld   a,e
+                cp   2
+                jr   z,db_pen
+                ld   hl,font_x2_a       ; pen 3 (ακμή)
+db_pen:         ld   (dt_tab),hl
+db_lp:          push bc
+                ld   a,d
+                ld   (dt_row),a
+                ld   hl,(dt_ptr)
+                ld   a,(hl)
+                inc  hl
+                ld   (dt_ptr),hl
+                push de
+                call draw_glyph
+                pop  de
+                ld   hl,dt_col
+                ld   a,(hl)
+                add  a,4
+                ld   (hl),a
+                pop  bc
+                djnz db_lp
+                ret
+
+;---------------------------------------------------------------------
 ; draw_glyph — ένα γράμμα 8x8 σε διπλό μέγεθος (16x16 pixel)
 ; IN: A = δείκτης γράμματος, (dt_col) = στήλη byte, (dt_row) = scanline,
 ;     (dt_tab) = πίνακας επέκτασης του χρώματος

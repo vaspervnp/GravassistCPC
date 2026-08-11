@@ -290,9 +290,23 @@
     hist.push([hero.x, hero.y]);
     if (hist.length > STUCK_FRAMES) hist.shift();
 
+    // ΜΗΔΕΝΙΚΗ ΕΝΕΡΓΕΙΑ = τέλος. Στον Amstrad βγαίνει η οθόνη GAME OVER με
+    // τα γράμματα του τίτλου· εδώ αρκεί το μήνυμα και η επαναφορά.
+    if (hero.energy <= 0) {
+      play("hurt");
+      note.textContent = "GAME OVER — press Restart";
+      hero.energy = 0;
+    }
+
     if (hero.won) {
       const dest = roomDestFor(hero);
       hero.won = false;
+      if (dest === 255) {          // ROOM_END: η πόρτα που κλείνει το παιχνίδι
+        note.textContent = "THE END — VASPER";
+        play("enter");
+        requestAnimationFrame(frame);
+        return;
+      }
       play("exit");
       if (dest && rooms["room_" + dest + ".txt"]) {
         const from = roomNumberOf(curName);

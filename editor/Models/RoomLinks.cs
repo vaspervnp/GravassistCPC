@@ -303,6 +303,13 @@ public static class TeleportGraph
 /// </summary>
 public static class RoomNaming
 {
+    /// <summary>
+    /// Ο προορισμός που σημαίνει «εδώ τελειώνει το παιχνίδι» — δες
+    /// <c>ROOM_END</c> στο src/endings.asm. ΟΧΙ 0: το 0 σημαίνει ήδη
+    /// «πόρτα χωρίς δηλωμένο προορισμό».
+    /// </summary>
+    public const int EndOfGame = 255;
+
     private static readonly Regex NamePattern = new(
         @"^room_(\d+)\.txt$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 

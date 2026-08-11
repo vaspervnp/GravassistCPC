@@ -573,7 +573,12 @@ h_use:          ld   bc,(hero_x)        ; Η ΠΟΡΤΑ ΠΡΩΤΗ, και απ�
                 call exit_dest
                 or   a
                 ret  z                  ; πόρτα χωρίς προορισμό: δεν κάνει τίποτα
-                ld   (pending_room),a
+                cp   ROOM_END           ; πόρτα «τέλος του παιχνιδιού»
+                jr   nz,hu_exsnd
+                ld   a,1
+                ld   (game_done),a
+                ret
+hu_exsnd:       ld   (pending_room),a
                 ld   a,SFXID_EXIT
                 jp   sfx_play
 

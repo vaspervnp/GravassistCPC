@@ -918,6 +918,42 @@ def main():
     t.call("GATE_TOGGLE", a=0)
     check("Z80: το κανάλι 0 δεν αγγίζει τίποτα", cell(10, 22) == before)
 
+    # 21. Οι οθόνες τέλους. Δεν ελέγχουμε pixel — ελέγχουμε ότι τρέχουν ως το
+    #     τέλος τους (φτάνουν στον βρόχο αναμονής) και ότι ο ήχος είναι ο
+    #     σωστός. Το KM_TEST_KEY γίνεται «κανένα πλήκτρο», οπότε ο βρόχος
+    #     αναμονής δεν τερματίζει ποτέ: αυτό ΕΙΝΑΙ η επιβεβαίωση ότι έφτασε.
+    t.m.memory[t.sym("KM_TEST_KEY")] = 0xAF         # XOR A -> Z
+    t.m.memory[t.sym("KM_TEST_KEY") + 1] = 0xC9
+
+    def run_screen(name, timeout=6.0):
+        t.calls.clear()
+        try:
+            t.call(name, timeout=timeout)
+            return "ret", list(t.calls)
+        except RuntimeError as e:
+            return t.where(t.m.pc), list(t.calls)
+
+    where, blocks = run_screen("GAME_OVER")
+    # Ο βρόχος αναμονής καλεί δύο stub του firmware, οπότε το «πού κόλλησε»
+    # πέφτει άλλοτε στον βρόχο και άλλοτε μέσα τους. Σημασία έχει ότι ΔΕΝ
+    # γύρισε: η οθόνη ζωγραφίστηκε και περιμένει πλήκτρο.
+    check("το GAME OVER περιμένει αντί να γυρίσει αμέσως", where != "ret", where)
+    check("…με τέσσερις τόνους στο κανάλι ενεργειών",
+          len(blocks) == 4 and all(b[0] == 1 for b in blocks),
+          f"{len(blocks)} μπλοκ")
+    tones = [b[3] | b[4] << 8 for b in blocks]
+    # Μεγαλύτερη περίοδος = χαμηλότερος τόνος. Ένα τέλος που ΑΝΕΒΑΙΝΕΙ
+    # ακούγεται σαν επιτυχία — ακριβώς το αντίθετο μήνυμα.
+    check("…που ΚΑΤΕΒΑΙΝΟΥΝ", tones == sorted(tones), str(tones))
+
+    where, blocks = run_screen("THE_END")
+    # Πού ακριβώς σταματά μέσα στον player δεν έχει σημασία και αλλάζει με
+    # κάθε νότα· σημασία έχει ότι ΔΕΝ γύρισε — περιμένει, με τη μουσική να παίζει.
+    check("το THE END περιμένει αντί να γυρίσει αμέσως", where != "ret", where)
+    check("…και παίζει τη μουσική του μενού, και στα τρία κανάλια",
+          {b[0] for b in blocks} == {1, 2, 4},
+          str(sorted({b[0] for b in blocks})))
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

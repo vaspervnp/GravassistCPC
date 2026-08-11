@@ -259,6 +259,10 @@ Each door gets a row in the **Exits** panel:
 | **Arrival** button | Click it, then click on the grid to pick that cell. `Esc` or right click cancels. |
 | gravity | The gravity the player arrives with. `— room` means "use the destination room's start gravity". |
 
+**Room 255 ends the game.** A door with destination `255` does not lead anywhere — it
+shows the *THE END* screen with the menu music. It is 255 and not 0 because 0 already
+means "no destination declared", and every door you forgot to wire would finish the game.
+
 The destination room number is drawn on the door cells in the grid, so you can read the
 map at a glance; a red `?` means it is unset. Hovering a row outlines the door and draws
 a green arrow to its arrival point.
@@ -408,6 +412,12 @@ game.
 | `Shift` | Run |
 | `↑` `↓` or `Space` | Action, and enter doors |
 | **Restart** button | Restores the pristine room |
+
+**Endings.** Run out of energy and the Amstrad shows a **GAME OVER** screen in the same
+big letters as the title, with a descending four-note sting, then returns to the menu.
+A door with destination 255 shows **THE END**, with the menu music playing. The browser
+test run has no title-sized letters, so it writes the same two messages in the note line
+under the canvas.
 
 **Sound.** The test run plays the same effects as the real game — footsteps, switch,
 gate, pressure plate, unlock, teleport, dropping a crate, a crate landing, entering and

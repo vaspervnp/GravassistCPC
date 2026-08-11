@@ -327,6 +327,14 @@ public sealed class LevelDocument
                 continue;
             }
 
+            // 255 δεν είναι αίθουσα: είναι η πόρτα που ΤΕΛΕΙΩΝΕΙ το παιχνίδι.
+            // Χωρίς αυτή την εξαίρεση ο σχεδιαστής θα έπαιρνε προειδοποίηση
+            // για αρχείο room_255.txt που δεν πρόκειται να υπάρξει ποτέ.
+            if (room == RoomNaming.EndOfGame)
+            {
+                continue;
+            }
+
             if (!roomExists(room))
             {
                 warnings.Add($"The exit at {where} leads to room {room}, " +

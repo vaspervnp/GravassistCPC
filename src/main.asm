@@ -249,14 +249,31 @@ ml_anim:        ld   a,(hero_zone)      ; παράσιτα όσο είναι σ�
                 ld   a,SFXID_ENTER
                 call sfx_play
 ml_esc:
+                ; ΔΥΟ ΤΡΟΠΟΙ ΝΑ ΤΕΛΕΙΩΣΕΙ ΜΙΑ ΠΑΡΤΙΔΑ, και οι δύο εδώ, στο τέλος
+                ; του frame: μέσα στην ενημέρωση θα άλλαζε οθόνη με τη μισή
+                ; κατάσταση υπολογισμένη.
+                ld   a,(game_done)
+                or   a
+                jr   nz,ml_end
+                ld   a,(hero_energy)
+                or   a
+                jr   z,ml_dead
 
                 ld   a,K_ESC
                 call KM_TEST_KEY
                 jp   z,main_loop        ; jp: ο βρόχος ξεπερνά το εύρος του jr
                 ret                     ; επιστροφή στη BASIC
 
+ml_dead:        call game_over
+                jr   ml_again
+ml_end:         xor  a
+                ld   (game_done),a
+                call the_end
+ml_again:       jp   main               ; από την αρχή: μενού και πρώτη αίθουσα
+
 ml_dir          db   0
 ml_grav         db   0
+game_done       db   0   ; 1 = πέρασε την πόρτα τέλους
 
 ;---------------------------------------------------------------------
 ; set_palette — τα 4 pens του MODE 1
@@ -1673,6 +1690,7 @@ linetab         ds   400, 0
                 include "menu.asm"
                 include "musicplay.asm"
                 include "sfx.asm"
+                include "endings.asm"
 
 ;--- δεδομένα ---------------------------------------------------------
                 include "gfx_hero.asm"

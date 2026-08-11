@@ -13,7 +13,7 @@ SRC   = src/main.asm
 ROOMS = $(wildcard levels/room_*.txt)
 DEPS  = src/rotate.asm src/level.asm src/hero.asm src/tables.asm src/rooms.asm \
         src/gamedefs.asm src/roomfile.asm src/menu.asm src/musicplay.asm src/music.asm \
-        src/sfx.asm
+        src/sfx.asm src/endings.asm
 GFX   = src/gfx_hero.asm src/gfx_objects.asm
 PNG   = assets/hero.png assets/objects.png
 BAS   = src/loader.bas
