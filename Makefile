@@ -75,9 +75,23 @@ $(DSK): $(BIN) $(BASD) $(SETS) $(SPLASH)
 	@# Η οθόνη υποδοχής: MODE 0 με δική της παλέτα, 16 KB ωμά pixel. Φορτώνεται
 	@# από τον BASIC loader στο #C000 πριν καν μπει το παιχνίδι στη μνήμη.
 	$(DISK) $(DSK) -i $(SPLASH) -t 1 -c C000 -e C000 -f
-	@for s in $(SETS); do \
+	@# ΤΑ ΣΕΤ ΞΑΝΑΠΑΡΑΓΟΝΤΑΙ ΕΔΩ, ΣΤΗΝ ΕΚΤΕΛΕΣΗ. Το $$(SETS) υπολογίζεται με
+	@# $$(shell) ΚΑΤΑ ΤΗΝ ΑΝΑΓΝΩΣΗ του Makefile και με το stderr κρυμμένο: αν
+	@# το roomfile.py αποτύχει — π.χ. οι αίθουσες δεν χωρούν στον buffer του
+	@# CPC — η λίστα βγαίνει ΚΕΝΗ, ο βρόχος δεν τρέχει καμία φορά, και η
+	@# δισκέτα φεύγει χωρίς αίθουσες με exit 0. Το παιχνίδι το ανακαλύπτει
+	@# στον emulator: «ROOMS01.BIN not found».
+	$(PY) tools/roomfile.py
+	@sets=$$(ls build/ROOMS*.BIN 2>/dev/null); \
+	if [ -z "$$sets" ]; then \
+	    echo "ΣΦΑΛΜΑ: δεν παρήχθη κανένα ROOMSnn.BIN."; \
+	    echo "        Η δισκέτα θα έβγαινε ΧΩΡΙΣ αίθουσες."; \
+	    exit 1; \
+	fi; \
+	for s in $$sets; do \
 	    $(DISK) $(DSK) -i $$s -t 1 -c 0000 -e 0000 -f; \
 	done
+	@$(PY) tools/checkdsk.py $(DSK)
 	@echo "----------------------------------------------"
 	@echo "  Έτοιμο: $(DSK)"
 	@echo "  Στον emulator:  RUN\"GRAV\""
