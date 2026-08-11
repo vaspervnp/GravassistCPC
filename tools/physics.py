@@ -603,10 +603,15 @@ class Hero:
             nc, nr = c + dx, r + dy
             if not (0 <= nc < COLS and 0 <= nr < ROWS):
                 continue
-            if self.room.cells[nr][nc] != EMPTY:
+            # ΚΑΙ ΠΑΝΩ ΣΕ ΠΛΑΚΑ, όχι μόνο σε κενό: ένα κιβώτιο που πέφτει
+            # από ψηλά πρέπει να πατάει την πλάκα, όπως ακριβώς κι αν το
+            # άφηνες εκεί με το χέρι. Πριν σταματούσε ένα κελί πιο πάνω και
+            # η πλάκα έμενε ελεύθερη — η παγίδα «γιατί δεν άνοιξε η πύλη;».
+            dest = self.room.cells[nr][nc]
+            if dest not in (EMPTY, PLATE):
                 continue
             self.room.cells[r][c] = EMPTY
-            self.room.cells[nr][nc] = CRATE
+            self.room.cells[nr][nc] = PLATE_DOWN if dest == PLATE else CRATE
             self.moved_cells += [(c, r), (nc, nr)]
 
     def set_gravity(self, g):

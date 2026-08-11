@@ -994,6 +994,46 @@ def main():
           t.peek(t.sym("GAME_DONE"))[0] == 0
           and t.peek(t.sym("TRAIL_N"))[0] == 0)
 
+    # 23. Κιβώτιο που ΠΕΦΤΕΙ πάνω σε πλάκα την πατάει, στον πραγματικό Z80.
+    #
+    #     ΔΙΚΗ ΤΟΥ ΜΗΧΑΝΗ: οι 22 προηγούμενες ενότητες μοιράζονται την ίδια
+    #     και αφήνουν πίσω τους κατάσταση που σταματά τα κιβώτια. Ο έλεγχος
+    #     της πτώσης θέλει καθαρή αφετηρία, αλλιώς δείχνει «δεν έπεσε» για
+    #     λόγο άσχετο με αυτό που μετράμε.
+    t23 = Z80Test()
+    t23.stub("RENDER_ROOM")
+    t23.stub("DRAW_TILE")
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][10] = "p"          # πλάκα στο πάτωμα
+    rows[14][10] = "B"          # κιβώτιο οκτώ κελιά ψηλότερα
+    rows[22][30] = "G"          # η πύλη του ίδιου καναλιού
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + "\n".join(
+        ["gravity 0", "plate 10 22 1", "gate 30 22 1"])
+    room = P.Room(text)
+    room.number, room.path = 1, ""
+    t23.poke(t23.sym("SET_BUF"), RF.build_set([room]))
+    for sym, val in (("SET_CUR", 1), ("JR_COUNT", 0), ("TRAIL_N", 0),
+                     ("PLATE_PREV", 0)):
+        t23.poke(t23.sym(sym), bytes((val,)))
+    t23.poke(t23.sym("SEALED"), bytes(32))
+    t23.call("ROOM_LOAD", a=1)
+    t23.poke16(t23.sym("HERO_X"), 5 * P.CELL + 4)
+    t23.poke16(t23.sym("HERO_Y"), P.GRID_Y0 + 21 * P.CELL + 4)
+    t23.poke(t23.sym("CRATES_ON"), b"\x01")
+    for _ in range(200):
+        t23.call("HERO_UPDATE", a=0)
+
+    cb23 = t23.sym("CELL_BUF")
+
+    def cell23(c, r):
+        return t23.peek(cb23 + r * P.COLS + c)[0]
+
+    check("Z80: το κιβώτιο που πέφτει ΠΑΤΑΕΙ την πλάκα",
+          cell23(10, 22) == P.PLATE_DOWN, P.TYPE_NAMES[cell23(10, 22)])
+    check("Z80: …και η πύλη του καναλιού ανοίγει",
+          cell23(30, 22) == P.GATE_OPEN, P.TYPE_NAMES[cell23(30, 22)])
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

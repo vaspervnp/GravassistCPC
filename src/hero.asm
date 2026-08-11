@@ -856,9 +856,16 @@ cs_collp:       ld   a,(cs_row)
                 call cell_addr
                 ld   a,(hl)
                 or   a
+                jr   z,cs_free
+                ; ΚΑΙ ΠΑΝΩ ΣΕ ΠΛΑΚΑ: το κιβώτιο που πέφτει από ψηλά την
+                ; πατάει, όπως κι αν το άφηνες εκεί με το χέρι. Πριν
+                ; σταματούσε ένα κελί πιο πάνω και η πλάκα έμενε ελεύθερη.
+                cp   T_PLATE
                 jr   nz,cs_blocked      ; ο δρόμος κλειστός
-                ld   a,T_CRATE
-                call cell_set
+                ld   a,T_PLATE_DOWN
+                jr   cs_write
+cs_free:        ld   a,T_CRATE
+cs_write:       call cell_set
                 ld   a,(cs_moved)
                 inc  a
                 ld   (cs_moved),a

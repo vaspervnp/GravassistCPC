@@ -701,6 +701,26 @@ def main():
               base_of(pon) == base_of(poff),
               f"{base_of(pon)} vs {base_of(poff)}")
 
+    # --- Κιβώτιο που ΠΕΦΤΕΙ πάνω σε πλάκα την πατάει.
+    #     Σταματούσε ένα κελί πιο πάνω και η πλάκα έμενε ελεύθερη: έστηνες
+    #     τη μηχανή σωστά και η πύλη δεν άνοιγε, χωρίς να φαίνεται γιατί.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][10] = "p"          # πλάκα στο πάτωμα
+    rows[14][10] = "B"          # κιβώτιο οκτώ κελιά ψηλότερα
+    rows[22][30] = "G"
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + "\n".join(
+        ["gravity 0", "plate 10 22 1", "gate 30 22 1"])
+    rm = P.Room(text)
+    h = P.Hero(rm, 5 * P.CELL + 4, P.GRID_Y0 + 21 * P.CELL + 4, 0)
+    h.crates_on = True
+    for _ in range(200):
+        h.update(0)
+    check("το κιβώτιο που πέφτει ΠΑΤΑΕΙ την πλάκα",
+          rm.cells[22][10] == P.PLATE_DOWN, P.TYPE_NAMES[rm.cells[22][10]])
+    check("…και η πύλη του καναλιού ανοίγει",
+          rm.cells[22][30] == P.GATE_OPEN, P.TYPE_NAMES[rm.cells[22][30]])
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

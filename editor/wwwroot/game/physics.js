@@ -283,9 +283,12 @@
       for (const [c, r] of cells) {
         const nc = c + dx, nr = r + dy;
         if (nc < 0 || nr < 0 || nc >= D.COLS || nr >= D.ROWS) continue;
-        if (this.room.cells[nr][nc] !== T.EMPTY) continue;
+        // ΚΑΙ ΠΑΝΩ ΣΕ ΠΛΑΚΑ: το κιβώτιο που πέφτει την πατάει, όπως κι αν
+        // το άφηνες εκεί με το χέρι.
+        const dest = this.room.cells[nr][nc];
+        if (dest !== T.EMPTY && dest !== T.PLATE) continue;
         this.room.cells[r][c] = T.EMPTY;
-        this.room.cells[nr][nc] = T.CRATE;
+        this.room.cells[nr][nc] = dest === T.PLATE ? T.PLATE_DOWN : T.CRATE;
         moved = true;
       }
       // Η ΑΚΜΗ, ακριβώς όπως στο src/hero.asm: ο πίνακας κελιών δεν έχει πού
