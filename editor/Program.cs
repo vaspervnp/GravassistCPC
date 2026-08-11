@@ -1,9 +1,29 @@
 using GravassistEditor.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 
 // Level editor του GRAVASSIST — τοπικό εργαλείο, χωρίς εξαρτήσεις από internet.
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
+
+// ΠΙΣΩ ΑΠΟ REVERSE PROXY. Ο proxy τερματίζει το HTTPS και μιλά στον editor με
+// σκέτο HTTP: χωρίς αυτό ο Kestrel βλέπει «http://localhost:5202» και χτίζει
+// ΛΑΘΟΣ redirect_uri προς τη Google (http αντί https, λάθος host), οπότε η
+// σύνδεση σκάει με redirect_uri_mismatch. Επηρεάζει και το cookie: με
+// SameAsRequest θα έφευγε χωρίς τη σημαία Secure.
+//
+// Ο καθαρισμός των KnownNetworks/KnownProxies σημαίνει «εμπιστέψου τα
+// X-Forwarded-* από οποιονδήποτε». Στέκει ΜΟΝΟ επειδή ο editor δεν είναι
+// προσβάσιμος απευθείας — μόνο μέσω του proxy. Αν κάποτε ακούσει σε δημόσια
+// διεύθυνση, αυτά τα δύο πρέπει να ξαναμπούν, αλλιώς ο καθένας δηλώνει ό,τι
+// scheme και IP θέλει.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 builder.Services.AddHttpContextAccessor();
 // Ο προσωπικός φάκελος κάθε λογαριασμού μέσα στο levels/.
 builder.Services.AddSingleton<UserWorkspace>();
@@ -19,6 +39,11 @@ builder.Services.AddScoped<LevelStore>();
 GoogleAuth.Add(builder);
 
 var app = builder.Build();
+
+// ΠΡΩΤΟ απ' όλα: διορθώνει scheme και host του αιτήματος πριν τα διαβάσει
+// οτιδήποτε άλλο. Το Configure<ForwardedHeadersOptions> από μόνο του δεν
+// κάνει τίποτα — χωρίς αυτή τη γραμμή οι επιλογές μένουν αχρησιμοποίητες.
+app.UseForwardedHeaders();
 
 // Προειδοποίηση αν ο κατάλογος τύπων ξέφυγε από το CHARS του tools/physics.py.
 PhysicsCharsCheck.Run(
