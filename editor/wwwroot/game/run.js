@@ -305,7 +305,7 @@
     }
     if (ended) {
       note.textContent = ended === "GAME OVER"
-        ? "GAME OVER — press Restart" : "THE END — VASPER";
+        ? "GAME OVER — press Restart" : "THE END";
       return;                     // ο κόσμος παγώνει· η εικόνα μένει ως έχει
     }
 

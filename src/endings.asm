@@ -151,4 +151,4 @@ eg_w2:          call MC_WAIT_FLYBACK
                 ret
 
 txt_retry:      db   24,"Press Space to try again"
-txt_thanks:     db   20,"Press Space - VASPER"
+txt_thanks:     db   11,"Press Space"
