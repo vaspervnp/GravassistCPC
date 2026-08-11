@@ -28,6 +28,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 builder.Services.AddHttpContextAccessor();
+// Πού είναι το repo (tools/, Makefile, levels/). Βρίσκεται ψάχνοντας προς
+// τα πάνω — ο τρέχων κατάλογος ΔΕΝ είναι αξιόπιστος σε deployment.
+builder.Services.AddSingleton<RepoLayout>();
 // Ο προσωπικός φάκελος κάθε λογαριασμού μέσα στο levels/.
 builder.Services.AddSingleton<UserWorkspace>();
 // Ποιοι λογαριασμοί επιτρέπονται· ο διαχειριστής πάντα.
@@ -52,9 +55,14 @@ var app = builder.Build();
 app.UseForwardedHeaders();
 
 // Προειδοποίηση αν ο κατάλογος τύπων ξέφυγε από το CHARS του tools/physics.py.
+// Η διαδρομή ακολουθεί τη ρίζα του repo, όχι τον τρέχοντα κατάλογο.
+var layout = app.Services.GetRequiredService<RepoLayout>();
+var physics = app.Configuration["PhysicsPath"];
 PhysicsCharsCheck.Run(
-    Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath,
-        builder.Configuration["PhysicsPath"] ?? "../tools/physics.py")),
+    string.IsNullOrWhiteSpace(physics)
+        ? Path.Combine(layout.RepoRoot ?? app.Environment.ContentRootPath,
+                       "tools", "physics.py")
+        : Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, physics)),
     app.Logger);
 
 if (!app.Environment.IsDevelopment())

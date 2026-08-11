@@ -14,11 +14,12 @@ namespace GravassistEditor.Controllers;
 [ApiController]
 [Route("api/build")]
 public sealed class BuildController(
-    ILogger<BuildController> log, LevelStore store) : ControllerBase
+    ILogger<BuildController> log, LevelStore store, RepoLayout layout) : ControllerBase
 {
-    // Η ρίζα του repo: ο editor τρέχει από τον υποφάκελο editor/.
-    private static string RepoRoot =>
-        Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), ".."));
+    // Η ρίζα του repo. ΔΕΝ βγαίνει από τον τρέχοντα κατάλογο: αυτό ίσχυε μόνο
+    // με «dotnet run» μέσα από το editor/, και σε deployment έψαχνε τα
+    // tools/ μέσα στο bin/.
+    private string? RepoRoot => layout.RepoRoot;
 
     /// <summary>
     /// ΕΝΑ χτίσιμο τη φορά. Το make δουλεύει σε ΚΟΙΝΟ build/ μέσα στο repo:
@@ -38,6 +39,14 @@ public sealed class BuildController(
         if (req.Room is < 0 or > 9999)
             return BadRequest(new { error = "Invalid room number." });
 
+        if (RepoRoot is null)
+            return BadRequest(new
+            {
+                error = "The editor cannot find the repository (Makefile and tools/). "
+                        + $"Set \"{RepoLayout.PathKey}\" in appsettings.json or the "
+                        + $"{RepoLayout.PathVar} environment variable to its full path.",
+            });
+
         var script = req.Room > 0
             ? $"python3 tools/genasm.py --start {req.Room} && make"
             : "python3 tools/genasm.py && make";
@@ -52,7 +61,7 @@ public sealed class BuildController(
         await BuildLock.WaitAsync();
         try
         {
-            (code, output) = await RunAsync(script, store.RootPath);
+            (code, output) = await RunAsync(script, store.RootPath, RepoRoot);
             ok = code == 0 && System.IO.File.Exists(dsk);
             // Το αντίγραφο παίρνεται ΜΕΣΑ στο κλείδωμα: το κοινό build/
             // ανήκει στον επόμενο μόλις το αφήσουμε.
@@ -96,11 +105,11 @@ public sealed class BuildController(
                     "application/octet-stream", name);
     }
 
-    private static async Task<(int, string)> RunAsync(string script, string levels)
+    private static async Task<(int, string)> RunAsync(string script, string levels, string repo)
     {
         var psi = new ProcessStartInfo("/bin/bash")
         {
-            WorkingDirectory = RepoRoot,
+            WorkingDirectory = repo,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };

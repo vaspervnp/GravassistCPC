@@ -15,13 +15,14 @@ namespace GravassistEditor.Services;
 /// levels/, οπότε κρατάμε ΜΟΝΟ ασφαλείς χαρακτήρες και επαληθεύουμε στο τέλος
 /// ότι η διαδρομή που φτιάχτηκε είναι όντως μέσα στη ρίζα.
 /// </summary>
-public sealed class UserWorkspace(IWebHostEnvironment env, IConfiguration config)
+public sealed class UserWorkspace(RepoLayout layout)
 {
-    /// <summary>Η ρίζα με τα κοινά αρχεία — και ο γονέας των προσωπικών φακέλων.</summary>
-    public string SharedRoot { get; } = Path.GetFullPath(
-        Path.IsPathRooted(config["LevelsPath"] ?? "../levels")
-            ? config["LevelsPath"] ?? "../levels"
-            : Path.Combine(env.ContentRootPath, config["LevelsPath"] ?? "../levels"));
+    /// <summary>
+    /// Η ρίζα με τα κοινά αρχεία — και ο γονέας των προσωπικών φακέλων.
+    /// Έρχεται από το <see cref="RepoLayout"/>: ήταν «content root + ../levels»,
+    /// που σε deployment έδειχνε μέσα στο bin/.
+    /// </summary>
+    public string SharedRoot { get; } = layout.LevelsRoot;
 
     /// <summary>
     /// Μετατρέπει έναν λογαριασμό σε ασφαλές όνομα φακέλου.

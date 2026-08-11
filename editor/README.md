@@ -96,8 +96,13 @@ python3 -c "import sys; sys.path.insert(0,'tools'); import physics; physics.load
 
 | Κλειδί | Προεπιλογή | Τι κάνει |
 |---|---|---|
-| `LevelsPath` | `../levels` | Ο φάκελος με τα `.txt` (σχετικά ως προς το `editor/`) |
-| `PhysicsPath` | `../tools/physics.py` | Το αρχείο από το οποίο διαβάζεται το `CHARS` για τον έλεγχο συμφωνίας |
+| `RepoPath` | *(κενό)* | Η ρίζα του repo. Κενό = βρίσκεται ανεβαίνοντας από τον φάκελο της εφαρμογής, ψάχνοντας `Makefile` + `tools/genasm.py`. Παρακάμπτεται και με `gravassistRepo`. |
+| `LevelsPath` | *(κενό)* | Ο φάκελος με τα `.txt`. Κενό = `<ρίζα repo>/levels` |
+| `PhysicsPath` | *(κενό)* | Το αρχείο από το οποίο διαβάζεται το `CHARS`. Κενό = `<ρίζα repo>/tools/physics.py` |
+
+**ΜΗΝ ξαναγράψεις σχετικές διαδρομές ως προς τον τρέχοντα κατάλογο.** Σε
+deployment η διεργασία ξεκινά από το `bin/`, όχι από το `editor/` — έτσι
+έσπασε το «Build .dsk» μια φορά, ψάχνοντας το `tools/` μέσα στο `bin/`.
 
 ## API
 

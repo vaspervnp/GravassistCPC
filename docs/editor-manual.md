@@ -605,6 +605,13 @@ normal password; use port **587**, because the built-in SMTP client does STARTTL
 implicit TLS on 465; and the *from* address usually has to match the SMTP account, or the
 provider rejects the message or files it as spam.
 
+**Build .dsk says it cannot find `tools/genasm.py`, with a path that goes through
+`bin/`.** The editor locates the repository by walking up from its own folder looking for
+`Makefile` and `tools/genasm.py`. If your deployment puts the binaries somewhere with no
+repository above them, say where it is: set `RepoPath` in `appsettings.json` or the
+`gravassistRepo` environment variable to the full path. The resolved locations are printed
+at startup — `Ρίζα repo: … Πίστες: …` — so check the console log first.
+
 **The build says `rasm: command not found`.** Run `make toolchain` — it prints the
 resolved path of each tool and marks the ones it cannot find. Fix `dir` in
 `toolchain.json`, or give an absolute path for that tool.

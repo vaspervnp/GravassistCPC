@@ -13,6 +13,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="../editor/Services/RepoLayout.cs" />
     <Compile Include="../editor/Services/UserWorkspace.cs" />
     <Compile Include="../editor/Services/AccountStore.cs" />
     <Compile Include="../editor/Services/ApprovalGate.cs" />

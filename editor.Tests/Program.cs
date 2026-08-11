@@ -17,7 +17,9 @@ var cfg = new ConfigurationBuilder()
     .AddInMemoryCollection(new Dictionary<string, string?> { ["LevelsPath"] = root })
     .Build();
 var env = new Env();
-var ws = new UserWorkspace(env, cfg);
+UserWorkspace Workspace(IConfiguration c) =>
+    new(new RepoLayout(env, c, new NullLogger<RepoLayout>()));
+var ws = Workspace(cfg);
 
 ClaimsPrincipal U(params (string, string)[] cs) =>
     new(new ClaimsIdentity(cs.Select(c => new Claim(c.Item1, c.Item2)), "test"));
@@ -64,6 +66,51 @@ Check("…και ΔΕΝ βλέπει τα αρχεία του πρώτου",
     File.ReadAllText(Path.Combine(dir2, "room_1.txt")) == "ένα");
 Check("οι φάκελοι χρηστών δεν αντιγράφονται σε νέους",
     !Directory.Exists(Path.Combine(dir2, "a_at_b.com")));
+
+// ------------------------------------------------------------ ρίζα του repo
+// ΤΟ BUG ΠΟΥ ΕΦΤΑΣΕ ΣΕ DEPLOYMENT: η ρίζα υπολογιζόταν ως «τρέχων κατάλογος
+// + ..», που ισχύει μόνο με dotnet run μέσα από το editor/. Σε πραγματικό
+// deployment η διεργασία ξεκινά από το bin/, και ο editor έψαχνε το
+// tools/genasm.py εκεί μέσα.
+var fake = Path.Combine(Path.GetTempPath(), "gravassist-repo-test");
+if (Directory.Exists(fake)) Directory.Delete(fake, true);
+Directory.CreateDirectory(Path.Combine(fake, "tools"));
+Directory.CreateDirectory(Path.Combine(fake, "editor", "bin", "Debug", "net10.0"));
+File.WriteAllText(Path.Combine(fake, "Makefile"), "all:");
+File.WriteAllText(Path.Combine(fake, "tools", "genasm.py"), "# ...");
+
+Check("η ρίζα αναγνωρίζεται", RepoLayout.Looks(fake));
+Check("ένας τυχαίος κατάλογος ΔΕΝ περνά για ρίζα",
+    !RepoLayout.Looks(Path.GetTempPath()));
+Check("βρίσκεται από την ίδια τη ρίζα", RepoLayout.Find(fake) == fake);
+Check("βρίσκεται ΑΠΟ ΜΕΣΑ ΑΠΟ ΤΟ bin/ — η περίπτωση του deployment",
+    RepoLayout.Find(Path.Combine(fake, "editor", "bin", "Debug", "net10.0")) == fake,
+    RepoLayout.Find(Path.Combine(fake, "editor", "bin", "Debug", "net10.0")) ?? "null");
+Check("χωρίς ρίζα από πάνω -> null",
+    RepoLayout.Find(Path.GetTempPath()) is null || !Directory.Exists(
+        Path.Combine(Path.GetTempPath(), "Makefile")));
+Check("κενή αφετηρία -> null", RepoLayout.Find(null) is null && RepoLayout.Find("") is null);
+
+// Το Makefile χωρίς το tools/genasm.py δεν αρκεί: θέλουμε ΚΑΙ ΤΑ ΔΥΟ, αλλιώς
+// ένας οποιοσδήποτε φάκελος με Makefile θα περνούσε για ρίζα.
+var half = Path.Combine(Path.GetTempPath(), "gravassist-half");
+if (Directory.Exists(half)) Directory.Delete(half, true);
+Directory.CreateDirectory(half);
+File.WriteAllText(Path.Combine(half, "Makefile"), "all:");
+Check("μόνο Makefile δεν αρκεί", !RepoLayout.Looks(half));
+
+// --- οι πίστες ακολουθούν τη ρίζα όταν δεν έχουν οριστεί ρητά
+var auto = new RepoLayout(new Env { ContentRootPath = Path.Combine(fake, "editor") },
+    new ConfigurationBuilder().Build(), new NullLogger<RepoLayout>());
+Check("χωρίς ρύθμιση, τα levels βγαίνουν από τη ρίζα",
+    auto.RepoRoot == fake && auto.LevelsRoot == Path.Combine(fake, "levels"),
+    auto.LevelsRoot);
+
+var told = new RepoLayout(new Env { ContentRootPath = Path.Combine(fake, "editor") },
+    new ConfigurationBuilder().AddInMemoryCollection(
+        new Dictionary<string, string?> { ["gravassistRepo"] = fake }).Build(),
+    new NullLogger<RepoLayout>());
+Check("το gravassistRepo παρακάμπτει την αναζήτηση", told.RepoRoot == fake);
 
 // ---------------------------------------------------------------- λογαριασμοί
 // Η λίστα εγκεκριμένων είναι ο ΜΟΝΟΣ φραγμός ανάμεσα σε «συνδέθηκα με Google»
@@ -227,7 +274,7 @@ File.WriteAllText(Path.Combine(shared, "room_9.txt"), "μόνο κοινό");
 var cfg2 = new ConfigurationBuilder()
     .AddInMemoryCollection(new Dictionary<string, string?> { ["LevelsPath"] = shared })
     .Build();
-var ws2 = new UserWorkspace(env, cfg2);
+var ws2 = Workspace(cfg2);
 var mine = ws2.PathFor(U((ClaimTypes.Email, "w@x.com")));
 
 File.WriteAllText(Path.Combine(mine, "room_1.txt"), "δικό μου ένα");   // αλλαγμένο
