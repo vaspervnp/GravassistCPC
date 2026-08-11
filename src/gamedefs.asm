@@ -49,9 +49,9 @@ RTAB_OFF        equ 16
 GTAB_OFF        equ 15
 
 ; --- σετ αιθουσών σε αρχείο (tools/roomfile.py) --------------
-SET_ROOMS       equ 40
+SET_ROOMS       equ 4
 SET_NUMBERS     equ 5          ; offset του numbers[] στην κεφαλή
-SET_OFFS        equ 45         ; offset του offs[]
+SET_OFFS        equ 9         ; offset του offs[]
 LVL_CELLS       equ 960
 ; Πόσες αλλαγές κελιών θυμάται το παιχνίδι συνολικά. Κάθε εγγραφή
 ; είναι 4 bytes· γεμάτο ημερολόγιο σημαίνει ότι οι παλιότερες

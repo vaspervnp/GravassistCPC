@@ -40,7 +40,11 @@ $(GFX): $(PNG) tools/sprites.py tools/cpcgfx.py tools/stickman.py tools/placehol
 
 # Πίνακες γεωμετρίας + δωμάτιο: παράγονται από το ΙΔΙΟ μοντέλο με την
 # προσομοίωση, ώστε Z80 και Python να μην μπορούν να αποκλίνουν αριθμητικά.
-src/gamedefs.asm src/tables.asm src/rooms.asm: tools/genasm.py tools/physics.py $(ROOMS)
+# ΚΑΙ ΤΟ roomfile.py: το gamedefs.asm ενσωματώνει το SET_ROOMS του, οπότε
+# χωρίς αυτή την εξάρτηση μια αλλαγή εκεί άφηνε τον Z80 με τον ΠΑΛΙΟ αριθμό
+# ενώ τα .BIN γράφονταν με τον νέο — ο φορτωτής διάβαζε τους πίνακες σε λάθος
+# θέση και κρεμούσε μέσα στον αποσυμπιεστή.
+src/gamedefs.asm src/tables.asm src/rooms.asm: tools/genasm.py tools/physics.py tools/roomfile.py $(ROOMS)
 	$(PY) tools/genasm.py
 
 # Η μουσική: νότες σε περιόδους του AY. Γεννιέται ώστε το src/music.asm να μην
