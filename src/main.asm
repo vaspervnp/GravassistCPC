@@ -231,6 +231,9 @@ ml_anim:        ld   a,(hero_zone)      ; παράσιτα όσο είναι σ�
                 call draw_hero          ; μόνο εγγραφές στην οθόνη
                 call draw_hud
                 call hint_msg
+if DEMO_MODE
+                call demo_mark
+endif
 
                 ; Η αλλαγή αίθουσας γίνεται στο ΤΕΛΟΣ του frame, όχι μέσα στην
                 ; ενημέρωση: το render_room ξαναζωγραφίζει όλη την οθόνη και δεν

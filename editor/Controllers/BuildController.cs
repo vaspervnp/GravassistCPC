@@ -47,9 +47,13 @@ public sealed class BuildController(
                         + $"{RepoLayout.PathVar} environment variable to its full path.",
             });
 
+        // Το --demo είναι σημαία ΣΥΝΑΡΜΟΛΟΓΗΣΗΣ: το genasm.py το γράφει στο
+        // gamedefs.asm και ο κώδικας του DEMO μπαίνει ή δεν μπαίνει καθόλου
+        // στο binary. Γι' αυτό αλλάζοντας το κουτάκι ξαναχτίζεται το παιχνίδι.
+        var demo = req.Demo ? " --demo" : "";
         var script = req.Room > 0
-            ? $"python3 tools/genasm.py --start {req.Room} && make"
-            : "python3 tools/genasm.py && make";
+            ? $"python3 tools/genasm.py --start {req.Room}{demo} && make"
+            : $"python3 tools/genasm.py{demo} && make";
 
         // Το χτίσιμο γίνεται πάνω στις ΔΙΚΕΣ ΤΟΥ αίθουσες: χωρίς αυτό, ο
         // καθένας θα έχτιζε τη δισκέτα κάποιου άλλου χωρίς να το καταλάβει.
@@ -135,4 +139,5 @@ public sealed class BuildController(
     }
 }
 
-public sealed record BuildRequest(int Room);
+/// <param name="Demo">Δισκέτα επίδειξης: γράφει DEMO σε κάθε οθόνη.</param>
+public sealed record BuildRequest(int Room, bool Demo = false);

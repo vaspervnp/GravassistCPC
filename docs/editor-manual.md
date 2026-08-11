@@ -489,6 +489,12 @@ everything. To see what will actually run:
 make toolchain
 ```
 
+**DEMO.** Tick the box next to the button and the disc is built as a demo: the word
+**DEMO** appears under the title and in the bottom-right corner of every screen. It is an
+*assembly-time* switch, not a setting the game reads — with the box unticked the code is
+not in the binary at all, so a normal disc costs nothing for it. Changing the box
+therefore rebuilds the game.
+
 **On the Amstrad or in an emulator:** insert the disk and type
 
 ```

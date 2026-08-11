@@ -41,6 +41,15 @@ menu_show:      ld   a,1
                 call set_palette
                 call draw_frame
                 call draw_title
+if DEMO_MODE
+                ld   a,INK_HERO_PEN     ; κάτω από τον τίτλο, κεντραρισμένο
+                call TXT_SET_PEN
+                ld   h,19
+                ld   l,(TITLE_Y+26)/8+1
+                ld   de,demo_txt
+                ld   b,4
+                call menu_puts
+endif
                 call menu_arena
                 call menu_text
                 call menu_keys
@@ -79,7 +88,11 @@ menu_loop:      ld   hl,(menu_tick)     ; κάθε MENU_PAGE frames, άλλαξ�
                 xor  1
                 ld   (key_page),a
                 call menu_keys
-mk_no:          call music_step
+mk_no:
+if DEMO_MODE
+                call demo_mark
+endif
+                call music_step
                 ld   a,1                ; ΠΑΝΤΑ μπροστά: ο γύρος βγαίνει μόνος
                 call hero_update
                 call anim_frame
@@ -348,6 +361,31 @@ tt_pen:         ld   (dt_tab),hl
                 pop  bc
                 djnz tt_lp
                 ret
+
+if DEMO_MODE
+;---------------------------------------------------------------------
+; demo_mark — η λέξη DEMO κάτω δεξιά
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;
+; Καλείται ΚΑΘΕ ΚΑΡΕ στο παιχνίδι, όχι μία φορά: η γραμμή 25 είναι μέσα στο
+; πεδίο παιχνιδιού και ο ήρωας ή τα πλακίδια τη σβήνουν περνώντας από πάνω.
+;
+; Όλο το μπλοκ μπαίνει στο binary ΜΟΝΟ σε δισκέτα επίδειξης· η κανονική δεν
+; πληρώνει ούτε ένα byte.
+;---------------------------------------------------------------------
+DEMO_COL        equ 36
+DEMO_ROW        equ 25
+
+demo_mark:      ld   a,INK_HERO_PEN
+                call TXT_SET_PEN
+                ld   h,DEMO_COL
+                ld   l,DEMO_ROW
+                ld   de,demo_txt
+                ld   b,4
+                jp   menu_puts
+
+demo_txt:       db   "DEMO"
+endif
 
 ;---------------------------------------------------------------------
 ; draw_banner — οποιοδήποτε κείμενο με τα γράμματα του τίτλου, ένα χρώμα

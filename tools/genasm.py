@@ -461,6 +461,10 @@ def pack_mode1(row8):
 
 
 START_ROOM = None       # ορίζεται από --start· αλλιώς η πρώτη αίθουσα
+# Δισκέτα επίδειξης: γράφει DEMO κάτω από τον τίτλο και σε κάθε οθόνη. Είναι
+# σημαία ΣΥΝΑΡΜΟΛΟΓΗΣΗΣ και όχι ρύθμιση: χωρίς αυτήν ο κώδικας δεν μπαίνει
+# καν στο binary, και μια κανονική δισκέτα δεν πληρώνει τίποτα σε bytes.
+DEMO = False
 
 
 def defs_asm(rooms=()):
@@ -511,6 +515,7 @@ def defs_asm(rooms=()):
             "μόλις την ακουμπήσεις",
             f"SPIKE_TICKS     equ {P.SPIKE_TICKS}",
             f"HURT_FRAMES     equ {P.HURT_FRAMES}",
+            f"DEMO_MODE       equ {1 if DEMO else 0}"           "   ; 1 = δισκέτα επίδειξης",
             f"ENERGY_MAX      equ {P.ENERGY_MAX}",
             f"ENERGY_PICK     equ {P.ENERGY_PICK}",
             f"SPIKE_DMG       equ {P.SPIKE_DMG}",
@@ -650,6 +655,7 @@ def rooms_asm(rooms):
 if __name__ == "__main__":
     if "--start" in sys.argv:
         START_ROOM = int(sys.argv[sys.argv.index("--start") + 1])
+    DEMO = "--demo" in sys.argv
     rooms = P.all_rooms()
     if not rooms:
         sys.exit("δεν βρέθηκε καμία levels/room_<N>.txt")

@@ -276,6 +276,8 @@
                 color:#9ab; white-space:nowrap; cursor:pointer; }
 
     /* Η αρχική βαρύτητα της αίθουσας, κάτω από τα κουμπιά αρχείου. */
+    .demobox { display: inline-flex; align-items: center; gap: 4px;
+               color: var(--edge); font-size: 12px; }
     .gravline {
         display: flex;
         align-items: center;
@@ -350,6 +352,10 @@
                         title="Builds build/gravassist.dsk starting from this room">
                     Build .dsk
                 </button>
+                <label class="demobox"
+                       title="Writes DEMO under the title and in the corner of every screen">
+                    <input type="checkbox" id="demo-mode" /> DEMO
+                </label>
                 <button id="btn-export" type="button"
                         title="Downloads every level in your folder as one .zip">
                     Export .zip
@@ -2295,7 +2301,10 @@
                 const res = await fetch("/api/build", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ room: room })
+                    body: JSON.stringify({
+                        room: room,
+                        demo: document.getElementById("demo-mode").checked
+                    })
                 });
                 const b = await res.json();
                 if (!b.ok) {
@@ -2304,6 +2313,8 @@
                 }
                 downloadDsk(b.download);
                 setStatus("Ready: " + b.bytes + " bytes, room " + room
+                          + (document.getElementById("demo-mode").checked
+                             ? " (DEMO)" : "")
                           + " — downloading the .dsk…", "ok");
             } catch (e) {
                 setStatus("Build error: " + e, "err");

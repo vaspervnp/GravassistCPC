@@ -80,6 +80,9 @@ game_over:      call eg_clear
                 call draw_banner
                 ld   hl,txt_retry
                 call eg_sub
+if DEMO_MODE
+                call demo_mark
+endif
                 call sfx_reset
                 ld   a,SFXID_OVER
                 call sfx_play
@@ -98,6 +101,9 @@ the_end:        call eg_clear
                 call draw_banner
                 ld   hl,txt_thanks
                 call eg_sub
+if DEMO_MODE
+                call demo_mark
+endif
                 call sfx_reset
                 call music_start        ; η ΙΔΙΑ μουσική με το μενού
 eg_endlp:       call music_step
