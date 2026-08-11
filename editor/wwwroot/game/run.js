@@ -354,11 +354,16 @@
 
     screen.clear();
     screen.tiles(room);
-    if (hero.paraOpen)
-      screen.sprite(R.paraSprite(hero.g, paraFrame),
-                    hero.x + G.off(hero.g, 0, -14)[0],
-                    hero.y + G.off(hero.g, 0, -14)[1]);
-    screen.sprite(R.heroSprite(hero.g, animFrame()), hero.x, hero.y);
+    // ΑΝΑΒΟΣΒΗΝΕΙ ΟΣΟ ΕΙΝΑΙ ΑΤΡΩΤΟΣ — 4 καρέ μέσα, 4 έξω, ίδιος ρυθμός με
+    // τον Amstrad (bit 2 του μετρητή). Παραλείπεται μόνο ο ήρωας· η αίθουσα
+    // ζωγραφίζεται κανονικά.
+    if (!(hero.hurtLeft & 4)) {
+      if (hero.paraOpen)
+        screen.sprite(R.paraSprite(hero.g, paraFrame),
+                      hero.x + G.off(hero.g, 0, -14)[0],
+                      hero.y + G.off(hero.g, 0, -14)[1]);
+      screen.sprite(R.heroSprite(hero.g, animFrame()), hero.x, hero.y);
+    }
     screen.hud(hero);
     screen.flush();
 

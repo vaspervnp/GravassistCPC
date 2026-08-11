@@ -104,6 +104,7 @@
       // Ήχοι που «γεννήθηκαν» σε αυτό το καρέ. Ο run.js τα παίζει και τα
       // αδειάζει· το μοντέλο δεν ξέρει τίποτα για ήχο.
       this.sfx = []; this.stepPx = 0; this.crateMoved = false;
+      this.hurtLeft = 0;
     }
 
     // --- πρωτογενείς έλεγχοι ---------------------------------------
@@ -265,7 +266,14 @@
         this.hurt(1 + Math.floor((this.fallDist - K.FALL_SAFE) / 12));
       this.fallDist = 0; this.fallV = K.FALL_V0; this.fallAcc = 0;
     }
-    hurt(n) { this.energy = Math.max(0, this.energy - n); this.sfx.push("hurt"); }
+    // Άτρωτος για HURT_FRAMES καρέ μετά από κάθε χτύπημα: αλλιώς η ζημιά
+    // ερχόταν ξανά όσο ακουμπούσες και η ενέργεια εξατμιζόταν.
+    hurt(n) {
+      if (this.hurtLeft) return;
+      this.energy = Math.max(0, this.energy - n);
+      this.hurtLeft = K.HURT_FRAMES;
+      this.sfx.push("hurt");
+    }
 
     // --- αντικείμενα ------------------------------------------------
     crateStep() {
@@ -478,6 +486,7 @@
       if (this.noflip() && this.g !== 0) { this.g = 0; this.state = "FALL"; }
       this.platesStep();
       this.sfx.length = 0;
+      if (this.hurtLeft) this.hurtLeft--;
       this.crateStep();
       this.touchObjects();
       const k = this.groundDepth(0);

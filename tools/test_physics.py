@@ -475,6 +475,10 @@ def main():
     check(f"αγκάθια: ένα χτύπημα ανά {P.SPIKE_TICKS} frames",
           h.energy == P.ENERGY_MAX - P.SPIKE_DMG,
           f"ενέργεια {h.energy}/{P.ENERGY_MAX}")
+    # Η ΑΤΡΩΣΙΑ ΥΠΕΡΙΣΧΥΕΙ ΤΟΥ SPIKE_TICKS. Το τεστ καλεί touch_objects()
+    # απευθείας, που ΔΕΝ μετράει τα καρέ ατρωσίας — αυτό το κάνει η update().
+    # Χωρίς αυτό, το δεύτερο χτύπημα δεν θα ερχόταν ποτέ.
+    h.hurt_left = 0
     h.touch_objects()
     check("αγκάθια: δεύτερο χτύπημα στο επόμενο διάστημα",
           h.energy == P.ENERGY_MAX - 2 * P.SPIKE_DMG, f"ενέργεια {h.energy}")
@@ -720,6 +724,31 @@ def main():
           rm.cells[22][10] == P.PLATE_DOWN, P.TYPE_NAMES[rm.cells[22][10]])
     check("…και η πύλη του καναλιού ανοίγει",
           rm.cells[22][30] == P.GATE_OPEN, P.TYPE_NAMES[rm.cells[22][30]])
+
+    # --- Ατρωσία μετά από χτύπημα.
+    #     Χωρίς αυτή, στα αγκάθια η ζημιά ερχόταν κάθε SPIKE_TICKS καρέ όσο
+    #     ακουμπούσες: ένα λάθος ισοδυναμούσε με θάνατο.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][10] = "^"
+    hrm = P.Room(";\n" + "\n".join("".join(r) for r in rows) + "\ngravity 0")
+    h = P.Hero(hrm, 10 * P.CELL + 4, P.GRID_Y0 + 21 * P.CELL + 4, 0)
+    full = h.energy
+    h.update(0)
+    check("το πρώτο άγγιγμα αγκαθιού πονάει", h.energy < full,
+          f"{full} -> {h.energy}")
+    after = h.energy
+    check("…ο μετρητής ξεκινά γεμάτος", h.hurt_left == P.HURT_FRAMES,
+          str(h.hurt_left))
+    # HURT_FRAMES-1: ο μετρητής μπήκε ΜΕΣΑ στο καρέ της ζημιάς και μειώνεται
+    # στην ΑΡΧΗ κάθε επόμενου, οπότε στο τελευταίο από αυτά είναι ακόμα 1.
+    for _ in range(P.HURT_FRAMES - 1):
+        h.update(0)
+    check("…και σε ΟΛΑ τα καρέ ατρωσίας δεν ξαναπονάει",
+          h.energy == after, f"{after} -> {h.energy}")
+    for _ in range(P.SPIKE_TICKS + 1):
+        h.update(0)
+    check("…και μετά ξαναπονάει", h.energy < after, f"{after} -> {h.energy}")
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0

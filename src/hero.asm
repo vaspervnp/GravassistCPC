@@ -30,6 +30,12 @@ HST_FALL        equ 2
 ;   IN: A = κατεύθυνση βάδισης: -1 πίσω, 0 ακίνητος, +1 μπροστά
 ;=====================================================================
 hero_update:    ld   (h_d),a
+                ld   a,(hero_hurt)      ; ο χρόνος ατρωσίας τρέχει
+                or   a
+                jr   z,hu_nohurt
+                dec  a
+                ld   (hero_hurt),a
+hu_nohurt:      ld   a,(h_d)
                 push af
                 call plate_step         ; οι πλάκες κρατούν τις πύλες τους
                 pop  af
@@ -334,6 +340,10 @@ ht_nospike:     xor  a                  ; δεν πατάς αγκάθι: ο μ�
                 ; κάθε frame η ενέργεια εξατμιζόταν σε κλάσμα δευτερολέπτου —
                 ; το να πατήσεις αγκάθι ήταν στην πράξη θάνατος.
 ht_hurt:        ld   hl,spike_tick
+                ld   a,(hero_hurt)      ; άτρωτος: μόνο ο μετρητής τρέχει
+                or   a
+                jr   nz,ht_tick
+                ld   hl,spike_tick
                 ld   a,(hl)
                 or   a
                 jr   nz,ht_tick
@@ -346,6 +356,8 @@ ht_hset:        ld   (hero_energy),a
                 ld   (hud_dirty),a
                 ld   a,SFXID_HURT
                 call sfx_play
+                ld   a,HURT_FRAMES
+                ld   (hero_hurt),a
                 ld   hl,spike_tick
 ht_tick:        inc  (hl)
                 ld   a,(hl)
@@ -619,7 +631,8 @@ hu_noexit:      call h_support          ; ΤΑ ΥΠΟΛΟΙΠΑ από το κε
                 jp   hu_redraw          ; και περνά από μέσα.
 
 hu_kid          db 0
-hero_zone       db 0     ; μέσα σε ζώνη κλειδώματος βαρύτητας;
+hero_zone       db 0
+hero_hurt       db 0     ; καρέ ατρωσίας που απομένουν     ; μέσα σε ζώνη κλειδώματος βαρύτητας;
 
 hu_notlock:     ld   bc,(hero_x)        ; τηλεμεταφορά: κρίνεται από το κελί του
                 ld   de,(hero_y)        ; ΣΩΜΑΤΟΣ, όχι των ποδιών
@@ -1125,7 +1138,12 @@ hl_div:         or   a
                 jr   c,hl_dmg
                 inc  b
                 jr   hl_div
-hl_dmg:         ld   a,(hero_energy)
+hl_dmg:         ld   a,(hero_hurt)      ; άτρωτος: η πτώση δεν πονάει
+                or   a
+                ret  nz
+                ld   a,HURT_FRAMES
+                ld   (hero_hurt),a
+                ld   a,(hero_energy)
                 sub  b
                 jr   nc,hl_set
                 xor  a                  ; 0 = θάνατος

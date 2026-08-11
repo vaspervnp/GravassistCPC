@@ -1034,6 +1034,46 @@ def main():
     check("Z80: …και η πύλη του καναλιού ανοίγει",
           cell23(30, 22) == P.GATE_OPEN, P.TYPE_NAMES[cell23(30, 22)])
 
+    # 24. Ατρωσία μετά από χτύπημα, στον πραγματικό Z80. Δική της μηχανή:
+    #     το χτύπημα εξαρτάται από μετρητές που οι προηγούμενες ενότητες
+    #     έχουν ήδη κουνήσει.
+    t24 = Z80Test()
+    t24.stub("RENDER_ROOM")
+    t24.stub("DRAW_TILE")
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][10] = "^"          # αγκάθια στο πάτωμα
+    room = P.Room(";\n" + "\n".join("".join(r) for r in rows) + "\ngravity 0")
+    room.number, room.path = 1, ""
+    t24.poke(t24.sym("SET_BUF"), RF.build_set([room]))
+    for sym, val in (("SET_CUR", 1), ("JR_COUNT", 0), ("TRAIL_N", 0),
+                     ("PLATE_PREV", 0)):
+        t24.poke(t24.sym(sym), bytes((val,)))
+    t24.poke(t24.sym("SEALED"), bytes(32))
+    t24.call("ROOM_LOAD", a=1)
+    t24.poke16(t24.sym("HERO_X"), 10 * P.CELL + 4)
+    t24.poke16(t24.sym("HERO_Y"), P.GRID_Y0 + 21 * P.CELL + 4)
+
+    def energy24():
+        return t24.peek(t24.sym("HERO_ENERGY"))[0]
+
+    full = energy24()
+    t24.call("HERO_UPDATE", a=0)
+    check("Z80: το πρώτο άγγιγμα αγκαθιού πονάει", energy24() < full,
+          f"{full} -> {energy24()}")
+    check("Z80: …και ανάβει ο μετρητής ατρωσίας",
+          t24.peek(t24.sym("HERO_HURT"))[0] == P.HURT_FRAMES,
+          str(t24.peek(t24.sym("HERO_HURT"))[0]))
+    after = energy24()
+    for _ in range(P.HURT_FRAMES - 1):
+        t24.call("HERO_UPDATE", a=0)
+    check("Z80: …και σε ΟΛΑ τα καρέ ατρωσίας δεν ξαναπονάει",
+          energy24() == after, f"{after} -> {energy24()}")
+    for _ in range(P.SPIKE_TICKS + 2):
+        t24.call("HERO_UPDATE", a=0)
+    check("Z80: …και μετά ξαναπονάει", energy24() < after,
+          f"{after} -> {energy24()}")
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

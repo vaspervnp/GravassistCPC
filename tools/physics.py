@@ -446,6 +446,11 @@ SPIKE_DMG  = 2
 # κάθε frame η ενέργεια εξατμιζόταν σε κλάσμα δευτερολέπτου και το να πατήσεις
 # αγκάθι ήταν πρακτικά θάνατος· τώρα προλαβαίνεις να φύγεις.
 SPIKE_TICKS = 10
+# Καρέ ατρωσίας μετά από κάθε χτύπημα. ΧΩΡΙΣ ΑΥΤΟ ένα λάθος πάνω σε αγκάθια
+# ή μια κακή προσγείωση ξεκοκάλιζε την ενέργεια πριν προλάβεις να φύγεις:
+# η ζημιά ερχόταν ξανά και ξανά όσο ακουμπούσες. Με το διάλειμμα, ένα λάθος
+# κοστίζει μία φορά και έχεις χρόνο να ξεφύγεις.
+HURT_FRAMES = 40
 # Πόσα διαφορετικά κανάλια διακοπτών και ταυτότητες κλειδιών. Ένα byte θα
 # χωρούσε 256, αλλά 8 φτάνουν για puzzle και κρατούν το inventory μικρό.
 ATTR_MAX = 8
@@ -510,6 +515,7 @@ class Hero:
         self.para_open = 0      # ανοιγμένο αυτή τη στιγμή
         self.won = False
         self.crate_tick = 0
+        self.hurt_left = 0      # καρέ ατρωσίας που απομένουν
         self.walk_acc = 0
         self.spike_tick = 0
         self.plate_on = {}      # κανάλι -> πατημένο; (για ΑΚΜΗ, όχι κάθε frame)
@@ -868,7 +874,11 @@ class Hero:
             self.spike_tick = 0
 
     def hurt(self, n):
+        # Άτρωτος: το χτύπημα αγνοείται ΕΝΤΕΛΩΣ, δεν συσσωρεύεται.
+        if self.hurt_left:
+            return
         self.energy = max(0, self.energy - n)
+        self.hurt_left = HURT_FRAMES
 
     def noflip(self):
         """Είναι μέσα σε ζώνη όπου απαγορεύεται η αλλαγή βαρύτητας;"""
@@ -923,6 +933,8 @@ class Hero:
             self.g = 0
             self.state = "FALL"
         self.plates_step()
+        if self.hurt_left:
+            self.hurt_left -= 1
         self.crate_step()
         self.touch_objects()        # και στον αέρα: μαζεύεις πέφτοντας
         k = self.ground_depth(0)

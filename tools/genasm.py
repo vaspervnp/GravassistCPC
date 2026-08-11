@@ -510,6 +510,7 @@ def defs_asm(rooms=()):
             f"T_LOCK_AUTO     equ {P.LOCK_AUTO}    ; bit: η κλειδαριά ανοίγει "
             "μόλις την ακουμπήσεις",
             f"SPIKE_TICKS     equ {P.SPIKE_TICKS}",
+            f"HURT_FRAMES     equ {P.HURT_FRAMES}",
             f"ENERGY_MAX      equ {P.ENERGY_MAX}",
             f"ENERGY_PICK     equ {P.ENERGY_PICK}",
             f"SPIKE_DMG       equ {P.SPIKE_DMG}",

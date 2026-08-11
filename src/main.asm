@@ -893,8 +893,16 @@ dhu_y0:         ld   (dh_yy),a
 dhu_y1:         ld   (dh_y1),a
 
 dh_line:        call dh_bgline          ; φόντο -> linebuf
+                ; ΑΝΑΒΟΣΒΗΝΕΙ ΟΣΟ ΕΙΝΑΙ ΑΤΡΩΤΟΣ. Παραλείπουμε ΜΟΝΟ το sprite,
+                ; όχι τη σχεδίαση: το φόντο γράφεται κανονικά, οπότε ο ήρωας
+                ; σβήνεται σωστά. Αν παραλείπαμε όλο το draw_hero, θα έμενε
+                ; παγωμένος στην οθόνη.
+                ld   a,(hero_hurt)
+                and  4                  ; 4 καρέ μέσα, 4 έξω
+                jr   nz,dh_blink
                 call dh_sprline         ; ο ήρωας από πάνω
                 call dh_paraline        ; και το αλεξίπτωτο
+dh_blink:
                 ld   a,(dh_yy)
                 ld   b,a
                 ld   a,(dh_c0)
