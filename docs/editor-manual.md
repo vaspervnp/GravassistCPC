@@ -24,8 +24,9 @@ of the project documentation is in Greek.
 13. [Building the disk](#13-building-the-disk)
 14. [The file format](#14-the-file-format)
 15. [Limits](#15-limits)
-16. [Administration](#16-administration)
-17. [Troubleshooting](#17-troubleshooting)
+16. [Sharing your rooms](#16-sharing-your-rooms)
+17. [Administration](#17-administration)
+18. [Troubleshooting](#18-troubleshooting)
 
 ---
 
@@ -37,7 +38,7 @@ anonymous mode. Signing in proves who you are; it does not by itself grant acces
 - If your account is **allowed**, you go straight to the editor.
 - If it is not, you land on a **Waiting for approval** page. Your address is recorded so
   the administrator can see the request and approve it. Nothing is created for you until
-  they do. See [§16](#16-administration).
+  they do. See [§17](#17-administration).
 
 Once you are in, you get **your own folder** under `levels/`, named after your account.
 The first time it is created, every existing `*.txt` in the shared `levels/` folder is
@@ -400,6 +401,27 @@ download is taken from your own build, so you never receive somebody else's disk
 If it fails, the status line shows the **last 40 lines** of the build output — the
 assembler error is in there.
 
+**Where the build tools live.** The assembler (`rasm`) and the disk tool (`iDSK`) are not
+hard-coded. They are configured in **`toolchain.json`** at the repository root:
+
+```json
+{
+  "dir": "/usr/local/bin",
+  "rasm": "rasm",
+  "idsk": "iDSK",
+  "python": "python3"
+}
+```
+
+`dir` is looked in first; anything not found there is taken from `PATH`. An absolute path
+under `rasm` or `idsk` overrides `dir` entirely. Environment variables
+(`GRAVASSIST_RASM`, `GRAVASSIST_IDSK`) beat the file, and `make ASM=… DISK=…` beats
+everything. To see what will actually run:
+
+```
+make toolchain
+```
+
 **On the Amstrad or in an emulator:** insert the disk and type
 
 ```
@@ -475,7 +497,39 @@ rooms of scattered detail do not.
 
 ---
 
-## 16. Administration
+## 16. Sharing your rooms
+
+Everything you draw is saved in **your own folder**. Nobody else sees it, and it is not
+what `git` tracks. The shared `levels/` folder is the common set: it is what the
+repository stores, and what every new account is seeded from.
+
+Moving rooms between the two is a **separate permission** that the administrator grants
+per account. If you have it, two extra buttons appear in the File panel:
+
+| Button | Direction | What it does |
+|---|---|---|
+| **Publish** | yours → shared | Copies your rooms over the shared ones. |
+| **Pull shared** | shared → yours | Replaces your rooms with the shared ones. |
+
+Both **overwrite**, so neither runs blind: the editor first asks the server what would
+change and shows you the file names, marked `new` or `changed`, before you confirm.
+Neither ever deletes: a room that exists only on one side stays where it is. Only `.txt`
+files move — your built `.dsk` stays in your folder.
+
+**Pull replaces work you saved but did not publish.** That is what it is for — an account
+with this permission works on the common set rather than keeping a private branch.
+
+For the same reason, **signing in pulls automatically** if you have this permission: your
+folder is aligned with the shared one at the moment you sign in, so you never start from a
+stale copy and publish somebody else's work backwards. Accounts without the permission are
+never touched — their folder is theirs.
+
+Publishing does **not** commit anything to git. It writes the files; committing them is
+still a separate step outside the editor.
+
+---
+
+## 17. Administration
 
 One account is the **administrator**. It is always allowed and cannot be revoked —
 otherwise one wrong click would lock out the only person who can unlock it.
@@ -485,6 +539,10 @@ The administrator sees an **Accounts** link in the header, leading to `/admin`:
 - **Invite** an address — it can sign in immediately.
 - **Approve** an address that signed in and is waiting.
 - **Revoke** an address — this only stops them signing in. **Their folder is kept.**
+- Turn **Publish** on or off for an address — see [§16](#16-sharing-your-rooms). Off by
+  default: designing rooms in your own folder is not the same as overwriting what
+  everybody sees. A revoked account cannot publish whatever its flag says, and the
+  administrator can always publish.
 
 Anyone who signs in without an invitation is recorded as waiting and sees the "Waiting for
 approval" page. No folder is created for them until they are approved.
@@ -494,7 +552,7 @@ is nobody else's business.
 
 ---
 
-## 17. Troubleshooting
+## 18. Troubleshooting
 
 **The editor will not start**, and the console says the Google secrets are missing.
 The client id and secret come from environment variables and nothing else — not from a
@@ -509,6 +567,10 @@ variables there, a launcher that does not use a login shell will not see them.
 **Sign-in bounces or fails at the last step.** The redirect URI registered in the Google
 Cloud console must be exactly `<your address>/accounts/google`, and the secret must be
 the client *secret*, not the client id.
+
+**The build says `rasm: command not found`.** Run `make toolchain` — it prints the
+resolved path of each tool and marks the ones it cannot find. Fix `dir` in
+`toolchain.json`, or give an absolute path for that tool.
 
 **"Save first: Move works on the files."** Renumbering operates on what is on disk. Save,
 then move.

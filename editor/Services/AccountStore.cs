@@ -6,7 +6,14 @@ namespace GravassistEditor.Services;
 /// <param name="Email">Πεζά, όπως τα δίνει η Google.</param>
 /// <param name="Allowed">Εγκεκριμένος; Αλλιώς περιμένει έγκριση.</param>
 /// <param name="Note">«invited» ή «asked» — πώς μπήκε στη λίστα.</param>
-public sealed record Account(string Email, bool Allowed, string Note, DateTime Seen);
+/// <param name="Publish">
+/// Μπορεί να δημοσιεύσει τις αίθουσές του στο κοινό <c>levels/</c>; Χωριστό
+/// δικαίωμα από την πρόσβαση: η δημοσίευση πατά πάνω στα αρχεία που βλέπουν
+/// ΟΛΟΙ και είναι ο σπόρος κάθε νέου λογαριασμού. Προεπιλογή όχι — και οι
+/// παλιές εγγραφές, που δεν έχουν καν το πεδίο, διαβάζονται ως όχι.
+/// </param>
+public sealed record Account(string Email, bool Allowed, string Note, DateTime Seen,
+                             bool Publish = false);
 
 /// <summary>
 /// Ποιοι λογαριασμοί επιτρέπονται.
@@ -54,6 +61,36 @@ public sealed class AccountStore
         if (key == AdminEmail) return true;
         lock (_lock)
             return _all.TryGetValue(key, out var a) && a.Allowed;
+    }
+
+    /// <summary>
+    /// Επιτρέπεται να γράψει στο κοινό <c>levels/</c>; Ο διαχειριστής πάντα.
+    /// Ένας λογαριασμός που έχασε την πρόσβαση δεν δημοσιεύει, ό,τι κι αν λέει
+    /// η σημαία του — αλλιώς η ανάκληση θα ήταν μισή.
+    /// </summary>
+    public bool CanPublish(string? email)
+    {
+        var key = Normalise(email);
+        if (key.Length == 0) return false;
+        if (key == AdminEmail) return true;
+        lock (_lock)
+            return _all.TryGetValue(key, out var a) && a.Allowed && a.Publish;
+    }
+
+    /// <summary>Δίνει ή αφαιρεί το δικαίωμα δημοσίευσης.</summary>
+    public bool SetPublish(string? email, bool publish)
+    {
+        var key = Normalise(email);
+        // Ο διαχειριστής δημοσιεύει πάντα· δεν υπάρχει σημαία να αλλάξει.
+        if (key.Length == 0 || key == AdminEmail) return false;
+        lock (_lock)
+        {
+            if (!_all.TryGetValue(key, out var a)) return false;
+            _all[key] = a with { Publish = publish };
+            Save();
+        }
+
+        return true;
     }
 
     /// <summary>Όλοι οι λογαριασμοί: πρώτα όσοι περιμένουν έγκριση.</summary>
@@ -111,7 +148,11 @@ public sealed class AccountStore
         if (key.Length < 3 || !key.Contains('@') || key.Contains(' ')) return false;
         lock (_lock)
         {
-            _all[key] = new Account(key, allowed, note, DateTime.UtcNow);
+            // Το δικαίωμα δημοσίευσης ΔΙΑΤΗΡΕΙΤΑΙ: μια επανέγκριση δεν πρέπει
+            // να αλλάζει σιωπηλά και μια δεύτερη ρύθμιση. Όσο ο λογαριασμός
+            // είναι ανακληθείς δεν δημοσιεύει έτσι κι αλλιώς (δες CanPublish).
+            var publish = _all.TryGetValue(key, out var old) && old.Publish;
+            _all[key] = new Account(key, allowed, note, DateTime.UtcNow, publish);
             Save();
         }
 

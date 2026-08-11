@@ -7,7 +7,10 @@ Puzzle game όπου ο παίκτης αλλάζει την **κατεύθυν�
 - **Visual reference (δεσμευτικό): [docs/concept-art.md](docs/concept-art.md)** —
   διάβασέ το πριν σχεδιάσεις sprites, tiles, HUD ή παλέτα.
 
-## Toolchain (WSL, στο PATH)
+## Toolchain (WSL)
+Οι διαδρομές ΔΕΝ είναι καρφωμένες: ορίζονται στο [toolchain.json](toolchain.json)
+(κατάλογος + ονόματα). `make toolchain` δείχνει τι θα τρέξει τελικά. Παρακάμπτεται
+με `GRAVASSIST_RASM` / `GRAVASSIST_IDSK` ή με `make ASM=... DISK=...`.
 - Assembler: `rasm` (v3.2.5) — `/usr/local/bin/rasm`
 - Disk tool: `iDSK` (v0.20) — `/usr/local/bin/iDSK`
 - Emulator: RetroVirtualMachine / WinAPE από τη μεριά των Windows (δεν τρέχει από εδώ)

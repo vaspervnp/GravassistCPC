@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using GravassistEditor.Models;
 using GravassistEditor.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -146,6 +147,67 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             return Ok(new { name, touched, dto = ToDto(name, store.Load(name)) });
         }
         catch (LevelFormatException ex) { return BadRequest(new ErrorDto(ex.Message)); }
+        catch (IOException ex) { return BadRequest(new ErrorDto($"Write error: {ex.Message}")); }
+    }
+
+    // ---------------------------------------------------------- δημοσίευση
+    //
+    // Ο editor γράφει στον ΠΡΟΣΩΠΙΚΟ φάκελο του λογαριασμού. Η δημοσίευση
+    // αντιγράφει τις αίθουσές του στο ΚΟΙΝΟ levels/ — αυτό που παρακολουθεί το
+    // git και που σπέρνει κάθε νέο λογαριασμό. Γι' αυτό είναι χωριστό δικαίωμα
+    // που δίνει ο διαχειριστής, και γι' αυτό ελέγχεται ΕΔΩ και όχι μόνο
+    // κρύβοντας το κουμπί: κρυμμένο κουμπί ΔΕΝ είναι έλεγχος πρόσβασης.
+
+    private const string NoPublish =
+        "This account is not allowed to publish to the shared levels folder.";
+
+    private string? Email => User.FindFirstValue(ClaimTypes.Email);
+
+    /// <summary>GET /api/levels/publish — τι ΘΑ άλλαζε η δημοσίευση. Δεν γράφει.</summary>
+    [HttpGet("publish")]
+    public IActionResult PublishPreview([FromServices] AccountStore accounts,
+                                        [FromServices] UserWorkspace workspace)
+    {
+        if (!accounts.CanPublish(Email)) return StatusCode(403, new ErrorDto(NoPublish));
+        var changes = workspace.PublishPreview(store.RootPath)
+            .Select(c => new { name = c.Name, kind = c.Kind });
+        return Ok(new { shared = workspace.SharedRoot, changes });
+    }
+
+    /// <summary>POST /api/levels/publish — αντιγράφει τις αίθουσες στο κοινό levels/.</summary>
+    [HttpPost("publish")]
+    public IActionResult Publish([FromServices] AccountStore accounts,
+                                 [FromServices] UserWorkspace workspace)
+    {
+        if (!accounts.CanPublish(Email)) return StatusCode(403, new ErrorDto(NoPublish));
+        try
+        {
+            return Ok(new { written = workspace.Publish(store.RootPath) });
+        }
+        catch (IOException ex) { return BadRequest(new ErrorDto($"Write error: {ex.Message}")); }
+    }
+
+    /// <summary>GET /api/levels/pull — τι ΘΑ αντικαθιστούσε το τράβηγμα. Δεν γράφει.</summary>
+    [HttpGet("pull")]
+    public IActionResult PullPreview([FromServices] AccountStore accounts,
+                                     [FromServices] UserWorkspace workspace)
+    {
+        if (!accounts.CanPublish(Email)) return StatusCode(403, new ErrorDto(NoPublish));
+        var changes = workspace.PullPreview(store.RootPath)
+            .Select(c => new { name = c.Name, kind = c.Kind });
+        return Ok(new { shared = workspace.SharedRoot, changes });
+    }
+
+    /// <summary>POST /api/levels/pull — φέρνει τα κοινά levels/ πάνω στα δικά του.</summary>
+    [HttpPost("pull")]
+    public IActionResult Pull([FromServices] AccountStore accounts,
+                              [FromServices] UserWorkspace workspace)
+    {
+        if (!accounts.CanPublish(Email)) return StatusCode(403, new ErrorDto(NoPublish));
+        try
+        {
+            return Ok(new { written = workspace.Pull(store.RootPath) });
+        }
         catch (IOException ex) { return BadRequest(new ErrorDto($"Write error: {ex.Message}")); }
     }
 

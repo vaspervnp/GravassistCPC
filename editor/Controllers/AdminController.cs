@@ -52,6 +52,24 @@ public sealed class AdminController(AccountStore accounts) : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    /// <summary>
+    /// Δίνει ή αφαιρεί το δικαίωμα δημοσίευσης στο κοινό <c>levels/</c>.
+    /// Χωριστό από την πρόσβαση: το να σχεδιάζεις αίθουσες δεν σημαίνει ότι
+    /// γράφεις πάνω στα αρχεία που βλέπουν όλοι.
+    /// </summary>
+    [HttpPost("publish")]
+    [ValidateAntiForgeryToken]
+    public IActionResult Publish(string email, bool allow)
+    {
+        if (Guard() is { } stop) return stop;
+        TempData["Msg"] = accounts.SetPublish(email, allow)
+            ? (allow
+                ? $"{AccountStore.Normalise(email)} can now publish to the shared levels."
+                : $"{AccountStore.Normalise(email)} can no longer publish.")
+            : "Could not change that address.";
+        return RedirectToAction(nameof(Index));
+    }
+
     [HttpPost("revoke")]
     [ValidateAntiForgeryToken]
     public IActionResult Revoke(string email)

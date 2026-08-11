@@ -68,6 +68,95 @@ public sealed class UserWorkspace(IWebHostEnvironment env, IConfiguration config
     }
 
     /// <summary>
+    /// Καλείται ΜΙΑ φορά, τη στιγμή της σύνδεσης, για λογαριασμούς που
+    /// δημοσιεύουν: ο φάκελός τους ευθυγραμμίζεται με τα κοινά <c>levels/</c>.
+    ///
+    /// Γιατί μόνο γι' αυτούς: δουλεύουν πάνω στο κοινό σύνολο και το γράφουν
+    /// πίσω· αν ξεκινούσαν από ένα παλιό αντίγραφο, το επόμενο «Publish» θα
+    /// γύριζε πίσω τη δουλειά κάποιου άλλου. Οι υπόλοιποι κρατούν το δικό τους
+    /// αντίγραφο και δεν πρέπει να τους το πατήσει τίποτα.
+    ///
+    /// Γιατί στη σύνδεση και όχι σε κάθε αίτημα: το τράβηγμα ΠΑΤΑΕΙ αρχεία.
+    /// Στη μέση της δουλειάς θα έσβηνε ό,τι έχεις σώσει και δεν έχεις
+    /// δημοσιεύσει, χωρίς να το ζητήσεις.
+    /// </summary>
+    /// <returns>Τα ονόματα που ενημερώθηκαν.</returns>
+    public List<string> SyncOnSignIn(ClaimsPrincipal user) => Pull(PathFor(user));
+
+    /// <summary>
+    /// Ποια αρχεία του χρήστη διαφέρουν από τα κοινά — δηλαδή τι ΘΑ άλλαζε μια
+    /// δημοσίευση. Δεν γράφει τίποτα.
+    ///
+    /// Γιατί χωριστά από τη <see cref="Publish"/>: η δημοσίευση πατά πάνω στα
+    /// αρχεία που βλέπουν όλοι. Ο χρήστης πρέπει να δει ΟΝΟΜΑΣΤΙΚΑ τι θα
+    /// αλλάξει πριν το κάνει, όχι μετά.
+    /// </summary>
+    /// <returns>Ζεύγη (όνομα αρχείου, «new» ή «changed»).</returns>
+    public List<(string Name, string Kind)> PublishPreview(string userDir) =>
+        Diff(userDir, SharedRoot);
+
+    /// <summary>Τι θα άλλαζε ένα τράβηγμα των κοινών προς τον χρήστη.</summary>
+    public List<(string Name, string Kind)> PullPreview(string userDir) =>
+        Diff(SharedRoot, userDir);
+
+    /// <summary>
+    /// Αντιγράφει τα <c>*.txt</c> του χρήστη πάνω στα κοινά.
+    ///
+    /// ΜΟΝΟ .txt: η δισκέτα του χρήστη και οτιδήποτε άλλο μένει στον φάκελό
+    /// του. ΔΕΝ ΣΒΗΝΕΙ ΠΟΤΕ κοινό αρχείο — αν ο χρήστης διέγραψε μια αίθουσα
+    /// τοπικά, η κοινή μένει· η διαγραφή της δουλειάς κάποιου άλλου δεν πρέπει
+    /// να είναι παρενέργεια ενός κουμπιού «δημοσίευση».
+    /// </summary>
+    /// <returns>Τα ονόματα που όντως γράφτηκαν.</returns>
+    public List<string> Publish(string userDir) => Copy(userDir, SharedRoot);
+
+    /// <summary>
+    /// Το αντίστροφο: φέρνει τα κοινά <c>*.txt</c> στον φάκελο του χρήστη.
+    ///
+    /// ΠΑΤΑΕΙ τα δικά του αρχεία όπου διαφέρουν — αυτό είναι το νόημα: ο
+    /// λογαριασμός που δημοσιεύει δουλεύει πάνω στο κοινό σύνολο, δεν κρατά
+    /// δικό του κλάδο. Ό,τι έχει σώσει και ΔΕΝ έχει δημοσιεύσει χάνεται, γι'
+    /// αυτό ο editor δείχνει ονομαστικά τι θα αντικατασταθεί πριν το κάνει.
+    /// Αρχεία που υπάρχουν μόνο σ' αυτόν ΔΕΝ σβήνονται.
+    /// </summary>
+    public List<string> Pull(string userDir) => Copy(SharedRoot, userDir);
+
+    private static List<(string Name, string Kind)> Diff(string from, string to)
+    {
+        var list = new List<(string, string)>();
+        if (!Directory.Exists(from)) return list;
+        foreach (var src in Directory.EnumerateFiles(from, "*.txt").OrderBy(p => p))
+        {
+            var name = Path.GetFileName(src);
+            var dst = Path.Combine(to, name);
+            if (!File.Exists(dst)) list.Add((name, "new"));
+            else if (!SameBytes(src, dst)) list.Add((name, "changed"));
+        }
+
+        return list;
+    }
+
+    private static List<string> Copy(string from, string to)
+    {
+        var done = new List<string>();
+        foreach (var (name, _) in Diff(from, to))
+        {
+            File.Copy(Path.Combine(from, name), Path.Combine(to, name), overwrite: true);
+            done.Add(name);
+        }
+
+        return done;
+    }
+
+    private static bool SameBytes(string a, string b)
+    {
+        var fa = new FileInfo(a);
+        var fb = new FileInfo(b);
+        if (fa.Length != fb.Length) return false;
+        return File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
+    }
+
+    /// <summary>
     /// Αντιγράφει τα κοινά αρχεία στον νέο φάκελο. Μόνο ΑΡΧΕΙΑ της ρίζας —
     /// οι φάκελοι των άλλων χρηστών δεν αντιγράφονται ποτέ.
     /// </summary>

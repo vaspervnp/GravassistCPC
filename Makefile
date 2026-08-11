@@ -1,7 +1,10 @@
 # GRAVASSIST - Amstrad CPC 6128, MODE 1, Z80
-ASM   = rasm
-DISK  = iDSK
-PY    = python3
+# Τα εργαλεία δεν είναι καρφωμένα: ο κατάλογός τους ορίζεται στο
+# toolchain.json (δες tools/toolchain.py). Με `?=` κερδίζει πάντα ό,τι δώσεις
+# στη γραμμή εντολών ή στο περιβάλλον: `make ASM=/opt/rasm2/rasm`.
+PY   ?= $(shell python3 tools/toolchain.py python 2>/dev/null || echo python3)
+ASM  ?= $(shell $(PY) tools/toolchain.py rasm 2>/dev/null || echo rasm)
+DISK ?= $(shell $(PY) tools/toolchain.py idsk 2>/dev/null || echo iDSK)
 
 SRC   = src/main.asm
 # ΟΛΕΣ οι αίθουσες, όχι μόνο μία: το src/rooms.asm τις ενσωματώνει όλες, οπότε
@@ -23,6 +26,12 @@ SETS  = $(shell $(PY) -c "import sys;sys.path.insert(0,'tools');import roomfile;
         print(' '.join('build/'+n for _,n,_ in roomfile.all_sets()))" 2>/dev/null)
 
 all: $(DSK)
+
+# Τι εργαλεία θα χρησιμοποιηθούν και αν βρίσκονται.
+.PHONY: toolchain
+toolchain:
+	@$(PY) tools/toolchain.py --all
+	@echo "  (το Makefile θα τρέξει: ASM=$(ASM)  DISK=$(DISK)  PY=$(PY))"
 
 # Τα sprites παράγονται από τα PNG — το PNG είναι η αυθεντία (docs/sprites.md)
 $(GFX): $(PNG) tools/sprites.py tools/cpcgfx.py tools/stickman.py tools/placeholders.py

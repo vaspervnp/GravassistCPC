@@ -69,10 +69,11 @@
     <div class="panel">
         <h2>Allowed (@(allowed.Count + 1))</h2>
         <table>
-            <tr><th>Account</th><th>How</th><th></th></tr>
+            <tr><th>Account</th><th>How</th><th>Publish</th><th></th></tr>
             <tr>
                 <td class="who">@ViewData["Admin"]</td>
                 <td class="note">administrator</td>
+                <td class="note">always</td>
                 <td></td>
             </tr>
             @foreach (var a in allowed)
@@ -80,6 +81,14 @@
                 <tr>
                     <td class="who">@a.Email</td>
                     <td class="note">@a.Note</td>
+                    <td>
+                        <form method="post" asp-action="Publish" class="row">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="email" value="@a.Email" />
+                            <input type="hidden" name="allow" value="@((!a.Publish).ToString().ToLowerInvariant())" />
+                            <button type="submit">@(a.Publish ? "on — turn off" : "off — turn on")</button>
+                        </form>
+                    </td>
                     <td>
                         <form method="post" asp-action="Revoke" class="row">
                             @Html.AntiForgeryToken()
@@ -90,6 +99,13 @@
                 </tr>
             }
         </table>
+        <div class="hintline">
+            <b>Publish</b> lets that account copy its own rooms over the shared
+            <code>levels/</code> folder &mdash; the files git tracks, and the
+            ones every new account is seeded from. Everyone can design rooms in
+            their own folder; only these accounts can overwrite what everybody
+            sees. Off by default.
+        </div>
         <div class="hintline">
             Revoking keeps the account&rsquo;s folder under <code>levels/</code>
             &mdash; it only stops them signing in. The administrator cannot be

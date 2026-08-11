@@ -160,6 +160,85 @@ Check("η σελίδα αναμονής δεν στέλνει στον εαυτ�
 Check("ο ασύνδετος περνά (τον πιάνει η σύνδεση, όχι ο φραγμός)",
     (await Ask("/", null)).passed);
 
+// ------------------------------------------------------------- δημοσίευση
+// Η δημοσίευση γράφει πάνω στα ΚΟΙΝΑ αρχεία — αυτά που σπέρνουν κάθε νέο
+// λογαριασμό. Το ποιος επιτρέπεται δεν κρίνεται από το αν φαίνεται το κουμπί.
+var pub = new AccountStore(accEnv, accCfg);
+Check("κανείς δεν δημοσιεύει από προεπιλογή",
+    !pub.CanPublish("someone@x.com"));
+pub.Invite("writer@x.com");
+Check("ούτε καν ο εγκεκριμένος", !pub.CanPublish("writer@x.com"));
+Check("ο διαχειριστής δημοσιεύει πάντα", pub.CanPublish(adminMail));
+Check("ο διαχειριστής δεν έχει σημαία να αλλάξει",
+    !pub.SetPublish(adminMail, false) && pub.CanPublish(adminMail));
+Check("σε άγνωστο λογαριασμό δεν δίνεται",
+    !pub.SetPublish("ghost@x.com", true) && !pub.CanPublish("ghost@x.com"));
+
+Check("ο διαχειριστής το δίνει",
+    pub.SetPublish("WRITER@x.com", true) && pub.CanPublish("writer@x.com"));
+Check("…και το παίρνει πίσω",
+    pub.SetPublish("writer@x.com", false) && !pub.CanPublish("writer@x.com"));
+
+pub.SetPublish("writer@x.com", true);
+pub.Revoke("writer@x.com");
+Check("ο ανακληθείς ΔΕΝ δημοσιεύει, ό,τι κι αν λέει η σημαία του",
+    !pub.CanPublish("writer@x.com"));
+Check("η επανέγκριση δεν αλλάζει σιωπηλά τη σημαία",
+    pub.Approve("writer@x.com") && pub.CanPublish("writer@x.com"));
+
+var pub2 = new AccountStore(accEnv, accCfg);
+Check("η σημαία επιβιώνει restart", pub2.CanPublish("writer@x.com"));
+
+// --- αντιγραφή προς τα κοινά και πίσω
+var shared = Path.Combine(Path.GetTempPath(), "gravassist-pub-test");
+if (Directory.Exists(shared)) Directory.Delete(shared, true);
+Directory.CreateDirectory(shared);
+File.WriteAllText(Path.Combine(shared, "room_1.txt"), "κοινό ένα");
+File.WriteAllText(Path.Combine(shared, "room_9.txt"), "μόνο κοινό");
+var cfg2 = new ConfigurationBuilder()
+    .AddInMemoryCollection(new Dictionary<string, string?> { ["LevelsPath"] = shared })
+    .Build();
+var ws2 = new UserWorkspace(env, cfg2);
+var mine = ws2.PathFor(U((ClaimTypes.Email, "w@x.com")));
+
+File.WriteAllText(Path.Combine(mine, "room_1.txt"), "δικό μου ένα");   // αλλαγμένο
+File.WriteAllText(Path.Combine(mine, "room_7.txt"), "καινούριο");      // νέο
+File.WriteAllBytes(Path.Combine(mine, "gravassist.dsk"), [1, 2, 3]);   // ΟΧΙ .txt
+
+var prev = ws2.PublishPreview(mine).OrderBy(c => c.Name).ToList();
+Check("η προεπισκόπηση λέει ΤΙ θα αλλάξει, χωρίς να γράψει",
+    string.Join(",", prev.Select(c => $"{c.Name}:{c.Kind}"))
+        == "room_1.txt:changed,room_7.txt:new"
+    && File.ReadAllText(Path.Combine(shared, "room_1.txt")) == "κοινό ένα",
+    string.Join(",", prev.Select(c => $"{c.Name}:{c.Kind}")));
+
+var wrote = ws2.Publish(mine);
+Check("η δημοσίευση γράφει ακριβώς αυτά", string.Join(",", wrote.OrderBy(x => x))
+    == "room_1.txt,room_7.txt");
+Check("…και το κοινό πήρε το περιεχόμενό μου",
+    File.ReadAllText(Path.Combine(shared, "room_1.txt")) == "δικό μου ένα");
+Check("η δισκέτα ΔΕΝ δημοσιεύεται",
+    !File.Exists(Path.Combine(shared, "gravassist.dsk")));
+Check("αρχείο που έχει μόνο το κοινό ΔΕΝ σβήνεται",
+    File.Exists(Path.Combine(shared, "room_9.txt")));
+Check("δεύτερη δημοσίευση δεν έχει τίποτα να κάνει", ws2.Publish(mine).Count == 0);
+
+// --- το αντίστροφο: τράβηγμα
+File.WriteAllText(Path.Combine(shared, "room_1.txt"), "άλλαξε αλλού");   // αλλαγμένο
+File.WriteAllText(Path.Combine(shared, "room_4.txt"), "καινούρια κοινή"); // νέο για μένα
+File.WriteAllText(Path.Combine(mine, "room_8.txt"), "μόνο δικό μου");
+var pulled = ws2.Pull(mine);
+Check("το τράβηγμα φέρνει ό,τι διαφέρει",
+    string.Join(",", pulled.OrderBy(x => x)) == "room_1.txt,room_4.txt",
+    string.Join(",", pulled));
+Check("…μαζί με ό,τι δεν είχα καθόλου",
+    File.ReadAllText(Path.Combine(mine, "room_4.txt")) == "καινούρια κοινή");
+Check("…πατώντας το δικό μου",
+    File.ReadAllText(Path.Combine(mine, "room_1.txt")) == "άλλαξε αλλού");
+Check("…χωρίς να σβήνει ό,τι έχω μόνο εγώ",
+    File.Exists(Path.Combine(mine, "room_8.txt")));
+Check("δεύτερο τράβηγμα δεν έχει τίποτα να κάνει", ws2.Pull(mine).Count == 0);
+
 Console.WriteLine(fails == 0 ? "ΟΛΑ ΣΩΣΤΑ" : $"{fails} ΑΠΟΤΥΧΙΕΣ");
 Environment.Exit(fails);
 

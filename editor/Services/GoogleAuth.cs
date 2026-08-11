@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
@@ -68,6 +69,39 @@ public static class GoogleAuth
                 o.ClientSecret = config[SecretVar]!;
                 o.CallbackPath = CallbackPath;
                 o.SaveTokens = false;   // δεν καλούμε κανένα API της Google
+
+                // ΤΗ ΣΤΙΓΜΗ ΤΗΣ ΣΥΝΔΕΣΗΣ, και μόνο τότε: όποιος έχει δικαίωμα
+                // δημοσίευσης ξεκινά με τα κοινά levels/. Δουλεύει πάνω στο
+                // κοινό σύνολο και το γράφει πίσω· ένα παλιό αντίγραφο θα
+                // γύριζε πίσω τη δουλειά κάποιου άλλου στο επόμενο «Publish».
+                o.Events.OnTicketReceived = ctx =>
+                {
+                    var services = ctx.HttpContext.RequestServices;
+                    var accounts = services.GetRequiredService<AccountStore>();
+                    var email = ctx.Principal?.FindFirstValue(ClaimTypes.Email);
+                    if (ctx.Principal is null || !accounts.CanPublish(email))
+                        return Task.CompletedTask;
+
+                    var log = services.GetRequiredService<ILoggerFactory>()
+                                      .CreateLogger(nameof(GoogleAuth));
+                    try
+                    {
+                        var names = services.GetRequiredService<UserWorkspace>()
+                                            .SyncOnSignIn(ctx.Principal);
+                        if (names.Count > 0)
+                            log.LogInformation(
+                                "Sign-in sync: {Count} level(s) pulled from the shared folder ({Names}).",
+                                names.Count, string.Join(", ", names));
+                    }
+                    catch (IOException ex)
+                    {
+                        // Η σύνδεση ΔΕΝ πρέπει να αποτύχει επειδή κόλλησε μια
+                        // αντιγραφή αρχείων. Μπαίνει με ό,τι έχει ήδη.
+                        log.LogWarning(ex, "Sign-in sync failed; continuing with the existing folder.");
+                    }
+
+                    return Task.CompletedTask;
+                };
             });
 
         // ΟΛΑ κλειστά από προεπιλογή: ένας editor που γράφει αρχεία στον δίσκο

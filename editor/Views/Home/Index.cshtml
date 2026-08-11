@@ -351,6 +351,20 @@
                 </button>
                 <input type="text" id="file-name" placeholder="name.txt" />
                 <button id="btn-save" type="button">Save</button>
+                @* Μόνο για όσους το έδωσε ο διαχειριστής. Ο πραγματικός
+                   έλεγχος είναι στον LevelsController — εδώ απλώς δεν
+                   δείχνουμε πόρτα που δεν ανοίγει. *@
+                @if (ViewData["CanPublish"] is true)
+                {
+                    <button id="btn-publish" type="button"
+                            title="Copies your rooms over the shared levels/ folder that everyone is seeded from">
+                        Publish
+                    </button>
+                    <button id="btn-pull" type="button"
+                            title="Replaces your rooms with the shared levels/ ones">
+                        Pull shared
+                    </button>
+                }
             </div>
             <div class="gravline">
                 <label for="room-gravity">Start gravity</label>
@@ -1958,9 +1972,9 @@
             if (exitGroups.length) renderExitPanel();
         }
 
-        async function openLevel(name) {
+        async function openLevel(name, force) {
             if (!name) { setStatus("No level to open.", "err"); return; }
-            if (dirty && !confirm("There are unsaved changes. Continue?")) return;
+            if (!force && dirty && !confirm("There are unsaved changes. Continue?")) return;
             const res = await fetch("/api/levels/" + encodeURIComponent(name));
             if (!res.ok) { setStatus(await readError(res), "err"); return; }
             loadDocument(await res.json());
@@ -2119,6 +2133,70 @@
             if (dirty) setStatus("Note: the test run uses the saved file.");
             window.open("/game/play.html?level=" + encodeURIComponent(name), "_blank");
         });
+
+        // --- Δημοσίευση και τράβηγμα (μόνο για όσους το έδωσε ο διαχειριστής)
+        //
+        // Και οι δύο ενέργειες ΠΑΤΑΝΕ αρχεία, οπότε καμία δεν γίνεται στα
+        // τυφλά: πρώτα ρωτάμε τον server τι θα αλλάξει και το δείχνουμε
+        // ονομαστικά. Ένα «are you sure?» χωρίς λίστα δεν είναι επιλογή, είναι
+        // τελετή.
+        async function syncLevels(url, verb, question, btn) {
+            btn.disabled = true;
+            try {
+                const pre = await fetch(url, { headers: { "Accept": "application/json" } });
+                if (!pre.ok) {
+                    const e = await pre.json().catch(function () { return {}; });
+                    setStatus(e.error || ("Error " + pre.status), "err");
+                    return;
+                }
+                const p = await pre.json();
+                if (!p.changes.length) {
+                    setStatus("Nothing to " + verb + " — the two folders already match.", "ok");
+                    return;
+                }
+                const list = p.changes
+                    .map(function (c) { return "  " + c.name + " (" + c.kind + ")"; })
+                    .join("\n");
+                if (!confirm(question + "\n\n" + list + "\n\n" + p.shared)) return;
+
+                const res = await fetch(url, { method: "POST" });
+                const b = await res.json();
+                if (!res.ok) {
+                    setStatus(b.error || ("Error " + res.status), "err");
+                    return;
+                }
+                setStatus(b.written.length + " level(s) " + verb + "ed: "
+                          + b.written.join(", "), "ok");
+                if (verb === "pull") {
+                    await refreshFileList(fileList.value);
+                    const open = fileName.value.trim();
+                    if (open && b.written.indexOf(open) >= 0) await openLevel(open, true);
+                }
+            } catch (e) {
+                setStatus("Sync error: " + e, "err");
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        const btnPublish = document.getElementById("btn-publish");
+        if (btnPublish) {
+            btnPublish.addEventListener("click", function (ev) {
+                syncLevels("/api/levels/publish", "publish",
+                    "These levels will be copied OVER the shared folder that "
+                    + "everyone is seeded from:", ev.currentTarget);
+            });
+        }
+
+        const btnPull = document.getElementById("btn-pull");
+        if (btnPull) {
+            btnPull.addEventListener("click", function (ev) {
+                syncLevels("/api/levels/pull", "pull",
+                    "Your copies of these levels will be REPLACED by the shared "
+                    + "ones. Anything you saved but did not publish is lost:",
+                    ev.currentTarget);
+            });
+        }
 
         // Ξεκινά το κατέβασμα χωρίς να φύγει η σελίδα: ένα window.location θα
         // ακύρωνε τη σελίδα του editor και θα έχανε ό,τι δεν έχει σωθεί.
