@@ -110,14 +110,14 @@ tile_gfx:
                 db #02,#04
                 db #00,#00
                 ; 11 ONEWAY_L
-                db #00,#33
-                db #01,#33
-                db #07,#3B
-                db #01,#33
-                db #01,#33
-                db #07,#3B
-                db #01,#33
-                db #00,#33
+                db #CC,#00
+                db #CC,#08
+                db #CD,#0E
+                db #CC,#08
+                db #CC,#08
+                db #CD,#0E
+                db #CC,#08
+                db #CC,#00
                 ; 12 ONEWAY_D
                 db #00,#00
                 db #02,#04
@@ -128,14 +128,14 @@ tile_gfx:
                 db #FF,#FF
                 db #FF,#FF
                 ; 13 ONEWAY_R
-                db #CC,#00
-                db #CC,#08
-                db #CD,#0E
-                db #CC,#08
-                db #CC,#08
-                db #CD,#0E
-                db #CC,#08
-                db #CC,#00
+                db #00,#33
+                db #01,#33
+                db #07,#3B
+                db #01,#33
+                db #01,#33
+                db #07,#3B
+                db #01,#33
+                db #00,#33
                 ; 14 GRAVLOCK
                 db #0A,#0A
                 db #00,#00

@@ -669,6 +669,20 @@ def main():
         check(f"{P.TYPE_NAMES[st]}: η βάση απέναντι από τις μύτες",
               base == want, f"βάση {base}, περίμενα {want}")
 
+    # Τα one-way έχουν τον ΑΝΤΙΘΕΤΟ κανόνα από τα αγκάθια: η γεμάτη μπάρα
+    # κάθεται ΠΑΝΩ στη φορά, γιατί από εκεί δεν περνάς. Ίδια συνέπεια αν
+    # ζωγραφιστεί ανάποδα: το σχήμα δείχνει στέρεο εκεί που περνάς.
+    for ow in (P.ONEWAY_U, P.ONEWAY_L, P.ONEWAY_D, P.ONEWAY_R):
+        px = GA.tile_pixels(ow)
+        sides = {"top": sum(1 for u in range(8) if px[0][u]),
+                 "bottom": sum(1 for u in range(8) if px[7][u]),
+                 "left": sum(1 for v in range(8) if px[v][0]),
+                 "right": sum(1 for v in range(8) if px[v][7])}
+        solid = max(sides, key=sides.get)
+        want = face_side[P.FACING[ow]]
+        check(f"{P.TYPE_NAMES[ow]}: η μπάρα ΠΑΝΩ στη φορά",
+              solid == want, f"μπάρα {solid}, περίμενα {want}")
+
     # Και τα τραβηγμένα: η ίδια πλευρά με το αντίστοιχο βγαλμένο.
     for on, off in P.SPIKE_OFF.items():
         pon, poff = GA.tile_pixels(on), GA.tile_pixels(off)
