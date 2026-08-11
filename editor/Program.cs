@@ -19,8 +19,11 @@ builder.Services.AddControllersWithViews();
 // scheme και IP θέλει.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    options.ForwardedHeaders =
-        ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor 
+                             | ForwardedHeaders.XForwardedProto 
+                             | ForwardedHeaders.XForwardedHost;
+    
+    // Allow headers from local proxy
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 });
