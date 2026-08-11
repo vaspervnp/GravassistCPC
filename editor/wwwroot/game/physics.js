@@ -87,6 +87,9 @@
       this.parachute = 0; this.paraOpen = 0; this.won = false;
       this.crateTick = 0; this.walkAcc = 0; this.worldG = g; this.cratesOn = false;
       this.face = 1; this.carry = 0; this.warp = false;
+      // Ήχοι που «γεννήθηκαν» σε αυτό το καρέ. Ο run.js τα παίζει και τα
+      // αδειάζει· το μοντέλο δεν ξέρει τίποτα για ήχο.
+      this.sfx = []; this.stepPx = 0; this.crateMoved = false;
     }
 
     // --- πρωτογενείς έλεγχοι ---------------------------------------
@@ -248,7 +251,7 @@
         this.hurt(1 + Math.floor((this.fallDist - K.FALL_SAFE) / 12));
       this.fallDist = 0; this.fallV = K.FALL_V0; this.fallAcc = 0;
     }
-    hurt(n) { this.energy = Math.max(0, this.energy - n); }
+    hurt(n) { this.energy = Math.max(0, this.energy - n); this.sfx.push("hurt"); }
 
     // --- αντικείμενα ------------------------------------------------
     crateStep() {
@@ -257,6 +260,7 @@
       this.crateTick = 0;
       const [dx, dy] = D.GSTEP[this.worldG];
       const cells = [];
+      let moved = false;
       for (let r = 0; r < D.ROWS; r++)
         for (let c = 0; c < D.COLS; c++)
           if (this.room.cells[r][c] === T.CRATE) cells.push([c, r]);
@@ -268,7 +272,12 @@
         if (this.room.cells[nr][nc] !== T.EMPTY) continue;
         this.room.cells[r][c] = T.EMPTY;
         this.room.cells[nr][nc] = T.CRATE;
+        moved = true;
       }
+      // Η ΑΚΜΗ, ακριβώς όπως στο src/hero.asm: ο πίνακας κελιών δεν έχει πού
+      // να κρατήσει «έπεφτα» ανά κιβώτιο, οπότε ο ήχος είναι ένας για όλα.
+      if (this.crateMoved && !moved) this.sfx.push("thud");
+      this.crateMoved = moved;
     }
     touchObjects() {
       const [col, row] = this.bodyCell();
@@ -288,6 +297,7 @@
         // ΤΟ ΠΑΤΑΣ, ΔΕΝ ΤΟ ΞΟΔΕΥΕΙΣ: γυρίζει κάθε πόρτα του καναλιού του και
         // μένει εκεί. Ακμή και όχι κράτημα, αλλιώς οι πόρτες ανοιγοκλείνουν
         // 50 φορές το δευτερόλεπτο.
+        this.sfx.push("switch");
         this.toggleGates(this.room.attr(col, row));
       }
       this.prevBody = col + "," + row;
@@ -326,6 +336,7 @@
     /// Η ταυτότητα 0 = ακαλωδίωτη και ανοίγει μόνη της, αλλιώς κάθε πίστα με
     /// πολλές απλές κλειδαριές θα ξεκλείδωνε ολόκληρη με ένα κλειδί.
     openLocks(cell, ident) {
+      this.sfx.push("unlock");
       this.room.cells[cell[1]][cell[0]] = T.LOCK_OPEN;
       if (!ident) return;
       for (const k in this.room.attrs) {
@@ -352,19 +363,31 @@
         const want = held.has(ch);
         if (this.plateOn[ch] === want) continue;
         this.plateOn[ch] = want;
+        if (want) this.sfx.push("plate");
         this.setGates(ch, want);
       }
     }
 
     setGates(channel, opened) {
-      for (const [c, r] of this.room.gateCells(channel))
-        this.room.cells[r][c] = opened ? T.GATE_OPEN : T.GATE;
+      let changed = false;
+      for (const [c, r] of this.room.gateCells(channel)) {
+        const want = opened ? T.GATE_OPEN : T.GATE;
+        if (this.room.cells[r][c] === want) continue;
+        this.room.cells[r][c] = want;
+        changed = true;
+      }
+      // ΕΝΑΣ ήχος ανά ενέργεια, όχι ένας ανά πύλη: τέσσερις πύλες στο ίδιο
+      // κανάλι θα έδιναν ριπή από τέσσερα «άνοιξε».
+      if (changed) this.sfx.push("gate");
     }
 
     toggleGates(channel) {
+      let changed = false;
       for (const [c, r] of this.room.gateCells(channel)) {
         this.room.cells[r][c] = this.room.cells[r][c] === T.GATE ? T.GATE_OPEN : T.GATE;
+        changed = true;
       }
+      if (changed) this.sfx.push("gate");
     }
     aheadCell() {
       const rs = D.RSTEP[this.g];
@@ -410,7 +433,7 @@
       if (v === T.PLATE) this.room.cells[r][c] = T.PLATE_DOWN;
       else if (v === T.EMPTY) this.room.cells[r][c] = T.CRATE;
       else return false;
-      this.carry = 0; return true;
+      this.carry = 0; this.sfx.push("drop"); return true;
     }
     // Στο ΔΗΛΩΜΕΝΟ κελί. Αδήλωτη τηλεμεταφορά δεν κάνει τίποτα — παλιά έψαχνε
     // "τον άλλον στο δωμάτιο", που δούλευε μόνο με ακριβώς δύο.
@@ -420,6 +443,7 @@
       this.x = d[0] * D.CELL + D.CELL / 2;
       this.y = D.GRID_Y0 + d[1] * D.CELL + D.CELL / 2;
       this.warp = true;
+      this.sfx.push("tele");
       return true;
     }
     setGravity(g) { this.worldG = g; this.g = g; this.cratesOn = true; }
@@ -433,6 +457,7 @@
       // «κανονικού» παιχνιδιού μέσα στο δωμάτιο.
       if (this.noflip() && this.g !== 0) { this.g = 0; this.state = "FALL"; }
       this.platesStep();
+      this.sfx.length = 0;
       this.crateStep();
       this.touchObjects();
       const k = this.groundDepth(0);
@@ -444,7 +469,15 @@
         this.walkAcc += K.WALK_V * (run ? 2 : 1);
         const steps = this.walkAcc >> 8;
         this.walkAcc &= 0xFF;
-        for (let i = 0; i < steps; i++) this.doWalk(walk);
+        for (let i = 0; i < steps; i++) {
+          this.doWalk(walk);
+          // ΑΝΑ 32 PIXEL. Ο αριθμός δεν είναι αυθαίρετος: στον Amstrad ο ήχος
+          // δένεται στα δύο καρέ επαφής του οκτάκαρου κύκλου βάδισης, που
+          // διαρκεί 64 px — δηλαδή ένα πάτημα ανά 32 px. Ανά κελί (8 px) ο
+          // browser έβγαζε 15 βήματα το δευτερόλεπτο, πενταπλάσια από το
+          // παιχνίδι, και ακουγόταν σαν πολυβόλο.
+          if (++this.stepPx >= 32) { this.stepPx = 0; this.sfx.push("step"); }
+        }
       }
       else if (this.slipping()) this.fallStep();
       else this.state = "IDLE";

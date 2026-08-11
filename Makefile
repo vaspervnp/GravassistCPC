@@ -12,7 +12,8 @@ SRC   = src/main.asm
 # απαρατήρητη και το «Χτίσιμο .dsk» θα έβγαζε δισκέτα με παλιά δεδομένα.
 ROOMS = $(wildcard levels/room_*.txt)
 DEPS  = src/rotate.asm src/level.asm src/hero.asm src/tables.asm src/rooms.asm \
-        src/gamedefs.asm src/roomfile.asm src/menu.asm src/musicplay.asm src/music.asm
+        src/gamedefs.asm src/roomfile.asm src/menu.asm src/musicplay.asm src/music.asm \
+        src/sfx.asm
 GFX   = src/gfx_hero.asm src/gfx_objects.asm
 PNG   = assets/hero.png assets/objects.png
 BAS   = src/loader.bas

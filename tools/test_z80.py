@@ -726,6 +726,17 @@ def main():
     check("ζώνη κλειδώματος: Z80 και μοντέλο ταυτίζονται 200 frames",
           diverged is None, str(diverged))
 
+    # Η σημαία που διαβάζει ο ήχος: χωρίς αυτήν τα παράσιτα δεν ξέρουν πότε
+    # να ξεκινήσουν. Ο ήρωας είναι ΜΕΣΑ στη ζώνη μετά τα 200 frames.
+    check("η ζώνη αφήνει σημάδι για τον ήχο",
+          t.peek(t.sym("HERO_ZONE"))[0] == 1,
+          str(t.peek(t.sym("HERO_ZONE"))[0]))
+    t.poke16(t.sym("HERO_X"), 30 * P.CELL + 4)   # έξω από τη ζώνη
+    t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + 21 * P.CELL + 4)
+    t.call("HERO_UPDATE", a=0)
+    check("…και σβήνει μόλις βγει", t.peek(t.sym("HERO_ZONE"))[0] == 0,
+          str(t.peek(t.sym("HERO_ZONE"))[0]))
+
     # 18. Αυτόματη κλειδαριά: ανοίγει με ΤΗΝ ΕΠΑΦΗ, χωρίς πλήκτρο. Η σημαία
     #     ζει στο bit 3 της ίδιας τιμής, οπότε κάθε σύγκριση ταυτότητας
     #     πρέπει να κάνει AND 7 — αλλιώς η αυτόματη κλειδαριά «2» δεν
@@ -778,6 +789,85 @@ def main():
         stand(12, 21)
     check("η χειροκίνητη ΔΕΝ ανοίγει με την επαφή",
           cell(12, 22) == P.LOCK, P.TYPE_NAMES[cell(12, 22)])
+
+    # 19. ΗΧΟΣ. Δεν ελέγχουμε πώς ακούγεται — ελέγχουμε ότι ο σωστός ήχος
+    #     μπαίνει στην ουρά τη σωστή στιγμή, ΜΙΑ φορά. Αυτό δεν φαίνεται από
+    #     τη μνήμη: το μπλοκ είναι κοινό και κρατά μόνο το τελευταίο, οπότε
+    #     παγιδεύουμε τις ίδιες τις κλήσεις στο SOUND QUEUE.
+    t.trace("SOUND_QUEUE")
+
+    def sfx():
+        """Τα κανάλια των ήχων που μπήκαν στην ουρά από την τελευταία κλήση."""
+        out = [b[0] for b in t.calls]
+        t.calls.clear()
+        return out
+
+    def blocks():
+        out = list(t.calls)
+        t.calls.clear()
+        return out
+
+    t.calls.clear()
+    t.call("SFX_PLAY", a=1)             # SFXID_SWITCH
+    b = blocks()
+    check("ο διακόπτης βάζει δύο μπλοκ στο κανάλι ενεργειών",
+          len(b) == 2 and all(x[0] == 1 for x in b), str([x[0] for x in b]))
+    check("…με τους τόνους του πίνακα, όχι σκουπίδια",
+          (b[0][3] | b[0][4] << 8, b[1][3] | b[1][4] << 8) == (595, 298),
+          str((b[0][3] | b[0][4] << 8, b[1][3] | b[1][4] << 8)))
+
+    t.call("SFX_PLAY", a=0)             # SFXID_STEP
+    b = blocks()
+    check("το βήμα πάει σε ΑΛΛΟ κανάλι από τις ενέργειες",
+          len(b) == 1 and b[0][0] == 2, str([x[0] for x in b]))
+
+    t.call("SFX_PLAY", a=99)
+    check("άγνωστος αριθμός εφέ δεν παίζει τίποτα", not sfx())
+
+    # Γεμάτη ουρά: το εφέ κόβεται, δεν επαναλαμβάνεται στο άπειρο.
+    t.trace("SOUND_QUEUE", carry=False)
+    t.calls.clear()
+    t.call("SFX_PLAY", a=5)             # SFXID_TELE, τέσσερα βήματα
+    check("με γεμάτη ουρά δοκιμάζει ΜΙΑ φορά και τα παρατά",
+          len(t.calls) == 1, f"{len(t.calls)} κλήσεις")
+    t.trace("SOUND_QUEUE", carry=True)
+
+    # --- Τα παράσιτα της ζώνης
+    t.call("SFX_RESET")
+    t.calls.clear()
+    t.call("SFX_AMB", a=1)              # μόλις μπήκε
+    b = blocks()
+    check("μπαίνοντας στη ζώνη ακούγονται παράσιτα αμέσως",
+          len(b) == 1 and b[0][0] == 4, str([x[0] for x in b]))
+    check("…είναι θόρυβος χωρίς τόνο, και σιγανός",
+          b[0][3] == 0 and b[0][4] == 0 and b[0][5] > 0 and b[0][6] <= 4,
+          f"τόνος={b[0][3] | b[0][4] << 8} θόρ={b[0][5]} έντ={b[0][6]}")
+
+    for _ in range(7):
+        t.call("SFX_AMB", a=1)
+    check("δεν ξαναστέλνει σε κάθε καρέ", not t.calls, f"{len(t.calls)}")
+    t.call("SFX_AMB", a=1)
+    check("…αλλά ανανεώνει πριν σωπάσει", len(sfx()) == 1)
+
+    t.call("SFX_AMB", a=0)
+    b = blocks()
+    check("βγαίνοντας από τη ζώνη αδειάζει το κανάλι ΑΜΕΣΩΣ",
+          len(b) == 1 and b[0][0] == 4 + 0x80 and b[0][6] == 0,
+          f"chan={b[0][0]:#04x} vol={b[0][6]}")
+    t.call("SFX_AMB", a=0)
+    check("…και μετά σιωπή, όχι ριπή από flush", not sfx())
+
+    # --- Ο ήχος της πύλης παίζει ΜΙΑ φορά, όχι μία ανά πύλη
+    t.poke(t.sym("SFX_GATECHG"), b"\x00")
+    t.call("SFX_GATE")
+    check("χωρίς αλλαγή πύλης δεν ακούγεται τίποτα", not sfx())
+    t.poke(t.sym("SFX_GATECHG"), b"\x01")
+    t.call("SFX_GATE")
+    # Ο ήχος της πύλης είναι ανοδική σκάλα τριών βημάτων — τρία μπλοκ, ΕΝΑΣ
+    # ήχος. Το ζητούμενο είναι να μην ακουστεί ΞΑΝΑ, όχι να είναι ένα μπλοκ.
+    check("με αλλαγή ακούγεται", len(sfx()) == 3)
+    t.call("SFX_GATE")
+    check("…και η σημαία καθαρίζει, δεν ξαναχτυπά", not sfx())
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0

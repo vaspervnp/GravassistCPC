@@ -56,7 +56,9 @@ class Z80Test:
         # RET σε όλο το jumpblock του firmware.
         for a in range(FIRMWARE_LO, FIRMWARE_HI + 1):
             self.m.memory[a] = 0xC9
-        self.m.memory[SENTINEL] = 0x76          # HALT: σταματά το run()
+        self.m.memory[SENTINEL] = 0x76
+        self.traps = {}                 # διεύθυνση -> (bytes, carry)
+        self.calls = []                 # τα μπλοκ που πέρασαν από τις παγίδες          # HALT: σταματά το run()
 
     # ---------------------------------------------------------------- build
     def _build(self):
@@ -114,12 +116,46 @@ class Z80Test:
         deadline = time.time() + timeout
         while not self.m.halted:
             self.m.ticks_to_stop = 1_000_000
-            self.m.run()
+            event = self.m.run()
+            if self.traps and (event & self.m._BREAKPOINT_HIT) \
+                    and self.m.pc in self.traps:
+                self._trapped()
+                continue
             if time.time() > deadline:
                 raise RuntimeError(
                     f"η {name} δεν επέστρεψε σε {timeout}s — "
                     f"κόλλησε στο #{self.m.pc:04X} ({self.where(self.m.pc)})")
         return self
+
+    # ------------------------------------------------------------ παγίδες
+    #
+    # ΓΙΑΤΙ ΧΡΕΙΑΖΕΤΑΙ: όλο το jumpblock του firmware είναι σκέτο RET, οπότε
+    # μια κλήση σε αυτό δεν αφήνει κανένα ίχνος. Για τον ήχο αυτό δεν φτάνει —
+    # το ερώτημα δεν είναι «τι έγραψε στη μνήμη» αλλά «ΠΟΣΕΣ φορές κάλεσε την
+    # ουρά και με τι». Ένας κοινός buffer κρατά μόνο το τελευταίο μπλοκ, άρα
+    # δεν μπορεί να δείξει ούτε πλήθος ούτε σειρά.
+    #
+    # Η παγίδα σταματά ΠΡΙΝ εκτελεστεί η εντολή στη διεύθυνση, καταγράφει, και
+    # μετά κάνει το RET με το χέρι.
+
+    def trace(self, name, nbytes=9, carry=True):
+        """Καταγράφει κάθε κλήση στη διεύθυνση: HL και το μπλοκ που δείχνει.
+
+        carry=True σημαίνει «η ουρά δέχτηκε τον ήχο». Με False δοκιμάζουμε τι
+        κάνει ο κώδικας σε γεμάτη ουρά.
+        """
+        addr = self.sym(name) if isinstance(name, str) else name
+        self.traps[addr] = (nbytes, carry)
+        self.m.set_breakpoint(addr)
+        return self
+
+    def _trapped(self):
+        nbytes, carry = self.traps[self.m.pc]
+        self.calls.append(self.peek(self.m.hl, nbytes))
+        ret = self.peek16(self.m.sp)        # η CALL έχει ήδη σπρώξει τη διεύθυνση
+        self.m.sp = (self.m.sp + 2) & 0xFFFF
+        self.m.pc = ret
+        self.m.f = (self.m.f | 0x01) if carry else (self.m.f & 0xFE)
 
     def where(self, addr):
         """Το κοντινότερο σύμβολο πριν από τη διεύθυνση — για τα μηνύματα."""

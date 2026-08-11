@@ -178,10 +178,106 @@
     return { walk, run: keys.has("ShiftLeft") || keys.has("ShiftRight") };
   }
 
+  // --- Ήχος --------------------------------------------------------------
+  //
+  // Οι ΙΔΙΟΙ ήχοι με τον Amstrad (src/sfx.asm), με τους ίδιους αριθμούς:
+  // περίοδος AY -> συχνότητα = 125000/περίοδος. Δεν είναι εξομοίωση του AY,
+  // είναι η ίδια μελωδία με ημιτονοειδή/θόρυβο — αρκεί για να δοκιμάζεις τον
+  // σχεδιασμό χωρίς emulator.
+  //
+  // Ο ήχος ΞΕΚΙΝΑ ΜΕ ΤΟ ΠΡΩΤΟ ΠΛΗΚΤΡΟ: οι browsers δεν αφήνουν AudioContext
+  // πριν ο χρήστης αγγίξει τη σελίδα, και ένα context που ξεκίνησε
+  // «suspended» μένει βουβό για πάντα χωρίς κανένα μήνυμα.
+  const SFX = {
+    // περίοδος, θόρυβος(0-31), ένταση(0-15), διάρκεια σε εκατοστά
+    step:   [[420, 20, 5, 2]],
+    switch: [[595, 0, 12, 3], [298, 0, 11, 4]],
+    gate:   [[478, 0, 10, 5], [379, 0, 11, 5], [319, 0, 12, 7]],
+    plate:  [[758, 18, 9, 5]],
+    unlock: [[239, 0, 11, 4], [159, 0, 12, 8]],
+    tele:   [[568, 0, 9, 2], [379, 0, 10, 2], [239, 0, 11, 2], [142, 0, 12, 5]],
+    drop:   [[893, 14, 8, 4]],
+    thud:   [[1250, 24, 13, 5], [1667, 20, 7, 6]],
+    exit:   [[319, 0, 11, 5], [478, 0, 10, 8]],
+    enter:  [[478, 0, 10, 5], [319, 0, 12, 8]],
+    hurt:   [[1000, 8, 14, 6], [1500, 16, 10, 8]],
+  };
+
+  let actx = null, noiseBuf = null, hum = null;
+
+  function audioOn() {
+    if (actx) return actx;
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return null;
+    actx = new C();
+    // Ένα buffer λευκού θορύβου, ξαναχρησιμοποιείται από όλους.
+    noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    return actx;
+  }
+
+  function play(name) {
+    const seq = SFX[name];
+    if (!seq || !audioOn()) return;
+    let at = actx.currentTime;
+    for (const [period, noise, vol, dur] of seq) {
+      const len = dur / 100;
+      const g = actx.createGain();
+      // Η ένταση 0-15 του AY δεν είναι γραμμική· το τετράγωνο πλησιάζει
+      // αρκετά και κρατά τα σιγανά σιγανά.
+      const peak = Math.pow(vol / 15, 2) * 0.25;
+      g.gain.setValueAtTime(peak, at);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+      g.connect(actx.destination);
+      if (period > 0) {
+        const o = actx.createOscillator();
+        o.type = "square";              // ο AY βγάζει τετραγωνικό
+        o.frequency.value = 125000 / period;
+        o.connect(g); o.start(at); o.stop(at + len);
+      }
+      if (noise > 0) {
+        const n = actx.createBufferSource();
+        n.buffer = noiseBuf; n.loop = true;
+        const f = actx.createBiquadFilter();
+        f.type = "lowpass";
+        f.frequency.value = 125000 / (noise * 4);   // μεγάλη περίοδος = μπάσος
+        const ng = actx.createGain();
+        ng.gain.value = 0.5;
+        n.connect(f); f.connect(ng); ng.connect(g);
+        n.start(at); n.stop(at + len);
+      }
+      at += len;
+    }
+  }
+
+  // Τα παράσιτα της ζώνης κλειδώματος: ΣΥΝΕΧΗΣ σιγανός θόρυβος, όχι εφέ.
+  function humSet(on) {
+    if (on && !hum) {
+      if (!audioOn()) return;
+      const n = actx.createBufferSource();
+      n.buffer = noiseBuf; n.loop = true;
+      const f = actx.createBiquadFilter();
+      f.type = "lowpass"; f.frequency.value = 1200;
+      const g = actx.createGain();
+      g.gain.value = 0.0;
+      g.gain.linearRampToValueAtTime(0.05, actx.currentTime + 0.08);
+      n.connect(f); f.connect(g); g.connect(actx.destination);
+      n.start();
+      hum = { n, g };
+    } else if (!on && hum) {
+      const h = hum; hum = null;
+      h.g.gain.linearRampToValueAtTime(0.0001, actx.currentTime + 0.08);
+      setTimeout(function () { try { h.n.stop(); } catch (e) {} }, 150);
+    }
+  }
+
   function frame() {
     const { walk, run } = input();
     hero.update(walk, run);      // το τρέξιμο είναι ΣΗΜΑΙΑ, όχι δεύτερη ενημέρωση
     tick += run ? 2 : 1;
+    for (const e of hero.sfx) play(e);
+    humSet(hero.noflip());
 
     if (hero.paraOpen) {
       if (paraFrame < D.PARA.frames.length - 1 && ++paraTick >= PARA_TICKS) {
@@ -197,6 +293,7 @@
     if (hero.won) {
       const dest = roomDestFor(hero);
       hero.won = false;
+      play("exit");
       if (dest && rooms["room_" + dest + ".txt"]) {
         const from = roomNumberOf(curName);
         const nr = rooms["room_" + dest + ".txt"];
@@ -218,6 +315,8 @@
         });
         trailEnter(from, dest);
         sealDoors(nr);
+        humSet(false);          // η ζώνη της παλιάς αίθουσας δεν ισχύει
+        play("enter");
         note.textContent = "Room " + dest + (arr ? " (door arrival point)" : "");
       } else if (dest) {
         note.textContent = "Room " + dest + " does not exist";

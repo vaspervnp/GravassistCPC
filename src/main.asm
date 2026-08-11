@@ -221,7 +221,9 @@ ml_nouse:       call read_walk
 ml_upd:         ld   a,(ml_dir)
                 call hero_update
 
-ml_anim:        call anim_frame
+ml_anim:        ld   a,(hero_zone)      ; παράσιτα όσο είναι σε ζώνη κλειδώματος
+                call sfx_amb
+                call anim_frame
                 call prep_hero          ; μετασχηματισμός sprite (εκτός vblank)
 
                 call MC_WAIT_FLYBACK
@@ -243,6 +245,9 @@ ml_anim:        call anim_frame
                 ld   (from_room),a      ; άφιξη δίπλα στην πόρτα επιστροφής
                 pop  af
                 call room_load
+                call sfx_reset          ; η ζώνη της παλιάς αίθουσας δεν ισχύει
+                ld   a,SFXID_ENTER
+                call sfx_play
 ml_esc:
 
                 ld   a,K_ESC
@@ -395,8 +400,26 @@ af_fall:        ld   a,(anim_tick)      ; FALL: 4 frames
                 rrca
                 and  3
                 add  a,18
-af_set:         ld   (anim_cur),a
-                ret
+af_set:         ld   hl,anim_cur
+                cp   (hl)
+                ld   (hl),a             ; το ld δεν πειράζει τα flags
+                ret  z                  ; ίδιο καρέ: δεν άλλαξε τίποτα
+
+                ; ΗΧΟΣ ΒΗΜΑΤΟΣ. Δένεται στο ΚΑΡΕ, όχι σε μετρητή: ο κύκλος
+                ; βάδισης είναι 2..9 και τα 2 και 6 είναι οι στιγμές επαφής,
+                ; οπότε ο ήχος πέφτει πάνω στο πόδι που πατάει. Στο τρέξιμο ο
+                ; anim_tick διπλασιάζεται, άρα ο ρυθμός ακολουθεί μόνος του.
+                cp   2
+                jr   z,af_foot
+                cp   6
+                ret  nz
+                ; Η κατάσταση WALK ισχύει και όταν στέκεσαι ακίνητος σε πάτωμα:
+                ; χωρίς αυτόν τον έλεγχο ο ήρωας θα περπατούσε επί τόπου.
+af_foot:        ld   a,(ml_dir)
+                or   a
+                ret  z
+                ld   a,SFXID_STEP
+                jp   sfx_play
 
 anim_tick       db   0
 anim_cur        db   0
@@ -1649,6 +1672,7 @@ linetab         ds   400, 0
                 include "roomfile.asm"
                 include "menu.asm"
                 include "musicplay.asm"
+                include "sfx.asm"
 
 ;--- δεδομένα ---------------------------------------------------------
                 include "gfx_hero.asm"

@@ -41,7 +41,12 @@ hero_update:    ld   (h_d),a
                 push af
                 xor  a
                 call h_noflip
-                jr   nc,hu_nolock
+                ld   a,0                ; ld: το xor θα χαλούσε το carry
+                jr   nc,hu_zoff
+                inc  a
+hu_zoff:        ld   (hero_zone),a      ; το διαβάζει ο ήχος στο main_loop
+                or   a
+                jr   z,hu_nolock
                 ld   a,(hero_g)
                 or   a
                 jr   z,hu_nolock
@@ -264,6 +269,9 @@ ht_swfire:      ld   a,b
                 call cell_attr          ; A = κανάλι του διακόπτη
                 call gate_toggle
                 pop  bc
+                ld   a,SFXID_SWITCH
+                call sfx_play
+                call sfx_gate           ; …και η πύλη, αν όντως άλλαξε καμία
                 jp   ht_spikes
 ht_swclr:       ld   a,#FF              ; έφυγες από τον διακόπτη
                 ld   (sw_prev),a
@@ -299,6 +307,8 @@ ht_swclr:       ld   a,#FF              ; έφυγες από τον διακό�
                 call cell_set
                 ld   a,(ht_kid)
                 call lock_open_all
+                ld   a,SFXID_UNLOCK
+                call sfx_play
 
 ht_spikes:      call h_support          ; αγκάθια: μόνο από τη μύτη
                 ld   e,a
@@ -334,6 +344,8 @@ ht_hurt:        ld   hl,spike_tick
 ht_hset:        ld   (hero_energy),a
                 ld   a,1
                 ld   (hud_dirty),a
+                ld   a,SFXID_HURT
+                call sfx_play
                 ld   hl,spike_tick
 ht_tick:        inc  (hl)
                 ld   a,(hl)
@@ -562,7 +574,8 @@ h_use:          ld   bc,(hero_x)        ; Η ΠΟΡΤΑ ΠΡΩΤΗ, και απ�
                 or   a
                 ret  z                  ; πόρτα χωρίς προορισμό: δεν κάνει τίποτα
                 ld   (pending_room),a
-                ret
+                ld   a,SFXID_EXIT
+                jp   sfx_play
 
 hu_noexit:      call h_support          ; ΤΑ ΥΠΟΛΟΙΠΑ από το κελί που ΠΑΤΑΣ:
                 ld   (h_cell),a         ; με τον ήρωα σε τοίχους και ταβάνια το
@@ -596,9 +609,12 @@ hu_noexit:      call h_support          ; ΤΑ ΥΠΟΛΟΙΠΑ από το κε
                 call cell_set
                 ld   a,(hu_kid)         ; …και μαζί ΟΛΕΣ όσες μοιράζονται την
                 call lock_open_all      ; ίδια ταυτότητα
+                ld   a,SFXID_UNLOCK
+                call sfx_play
                 jp   hu_redraw          ; και περνά από μέσα.
 
 hu_kid          db 0
+hero_zone       db 0     ; μέσα σε ζώνη κλειδώματος βαρύτητας;
 
 hu_notlock:     ld   bc,(hero_x)        ; τηλεμεταφορά: κρίνεται από το κελί του
                 ld   de,(hero_y)        ; ΣΩΜΑΤΟΣ, όχι των ποδιών
@@ -655,7 +671,8 @@ hu_drop:        ld   bc,(hero_x)
 hu_dcrate:      ld   hl,(cell_ptr)
                 ld   a,T_CRATE
                 call cell_set
-hu_dropped:
+hu_dropped:     ld   a,SFXID_DROP
+                call sfx_play
                 xor  a
                 ld   (hero_carry),a
                 inc  a
@@ -732,7 +749,8 @@ tp_next:        inc  hl                 ; προσπέρασε dcol, drow
 tp_found:       call hero_to_cell       ; HL -> dcol, drow
                 ld   a,1
                 ld   (hero_warp),a      ; η σχεδίαση σβήνει ΡΗΤΑ την παλιά θέση
-                ret
+                ld   a,SFXID_TELE
+                jp   sfx_play
 
 
 ;---------------------------------------------------------------------
@@ -757,6 +775,8 @@ crate_step:     ld   a,(crates_on)      ; ακίνητα μέχρι ο παίκ�
                 cp   CRATE_TICKS
                 ret  c
                 ld   (hl),0
+                xor  a
+                ld   (cs_moved),a       ; πόσα κουνήθηκαν σε αυτό το βήμα
 
                 ; ΤΗ ΦΟΡΑ ΤΟΥ ΠΑΙΚΤΗ, όχι του ήρωα: η δική του γυρίζει αυτόματα
                 ; σε κάθε γωνία που περπατάει, και τα κιβώτια θα άλλαζαν
@@ -834,6 +854,9 @@ cs_collp:       ld   a,(cs_row)
                 jr   nz,cs_blocked      ; ο δρόμος κλειστός
                 ld   a,T_CRATE
                 call cell_set
+                ld   a,(cs_moved)
+                inc  a
+                ld   (cs_moved),a
                 pop  bc
                 push bc
                 call draw_tile
@@ -865,8 +888,26 @@ cs_next:        ld   a,(cs_col)
                 ld   hl,cs_rn
                 dec  (hl)
                 jp   nz,cs_rowlp        ; jp: ο βρόχος ξεπερνά το εύρος του jr
-                ret
 
+                ; ΑΚΜΗ: κουνιόντουσαν και τώρα κανένα -> κάτι ακούμπησε.
+                ; Ανά κιβώτιο δεν γίνεται — ο πίνακας κελιών δεν έχει πού να
+                ; κρατήσει «έπεφτα» για το καθένα. Ο ήχος είναι ένας, όπως
+                ; ακριβώς θα άκουγες μια στοίβα να κάθεται.
+                ld   a,(cs_moved)
+                ld   hl,cs_wasmov
+                or   a
+                jr   nz,cs_still
+                ld   a,(hl)
+                or   a
+                jr   z,cs_quiet
+                ld   (hl),0
+                ld   a,SFXID_THUD
+                jp   sfx_play
+cs_still:       ld   (hl),1
+cs_quiet:       ret
+
+cs_moved        db 0
+cs_wasmov       db 0
 crate_tick      db 0
 cs_dx           db 0
 cs_dy           db 0
@@ -1077,7 +1118,8 @@ hl_dmg:         ld   a,(hero_energy)
                 jr   nc,hl_set
                 xor  a                  ; 0 = θάνατος
 hl_set:         ld   (hero_energy),a
-                ret
+                ld   a,SFXID_HURT
+                jp   sfx_play
 
 ;---------------------------------------------------------------------
 ; h_walk — ένα pixel βάδισης, με τους δύο κανόνες γωνίας

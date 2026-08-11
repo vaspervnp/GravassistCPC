@@ -388,6 +388,12 @@ game.
 | `↑` `↓` or `Space` | Action, and enter doors |
 | **Restart** button | Restores the pristine room |
 
+**Sound.** The test run plays the same effects as the real game — footsteps, switch,
+gate, pressure plate, unlock, teleport, dropping a crate, a crate landing, entering and
+leaving a room, taking damage, and a quiet hiss while you stand in a gravity-lock zone.
+Browsers refuse to make sound before you interact with the page, so **the first keypress
+turns the audio on**; until then the run is silent.
+
 **What it is not.** The browser physics is a hand transcription of the reference model in
 `tools/physics.py`, so it can drift; a separate parity check exists for that. The
 rendering is a canvas approximation of MODE 1, not real CPC output — no AY sound, no

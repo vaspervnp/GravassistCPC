@@ -244,7 +244,11 @@ gt_lp:          ld   a,(hl)
 gt_notshut:     cp   T_GATE_OPEN
                 jr   nz,gt_next
                 ld   a,T_GATE
-gt_put:         call cell_set
+gt_put:         push af                 ; το γύρισμα πάντα αλλάζει κάτι
+                ld   a,1
+                ld   (sfx_gatechg),a
+                pop  af
+                call cell_set
                 push bc
                 call draw_tile          ; φαίνεται αμέσως, χωρίς να περιμένει
                 pop  bc                 ; ξαναζωγράφισμα όλης της αίθουσας
@@ -388,14 +392,21 @@ ps_chlp:        ld   a,(ps_ch)
                 ld   c,0                ; Z = κλειστές, NZ = ανοιχτές
                 jr   z,ps_set
                 ld   c,1
-ps_set:         ld   a,(ps_ch)
+ps_set:         ld   a,c                ; C=1 πατήθηκε, 0 ελευθερώθηκε
+                or   a
+                jr   z,ps_noplate
+                push bc                 ; το gate_set θέλει το C
+                ld   a,SFXID_PLATE
+                call sfx_play
+                pop  bc
+ps_noplate:     ld   a,(ps_ch)
                 call gate_set
 ps_chnext:      ld   hl,ps_ch
                 inc  (hl)
                 ld   a,(hl)
                 cp   ATTR_MAX
                 jr   c,ps_chlp
-                ret
+                jp   sfx_gate           ; ΜΙΑ φορά, όχι μία ανά πύλη
 
 ; ps_bit — A = κανάλι (0..7) -> A = η μάσκα του bit του
 ; ΑΛΛΟΙΩΝΕΙ: AF, C
@@ -449,12 +460,22 @@ gs_lp:          ld   a,(hl)
                 jr   z,gs_isgate
                 cp   T_GATE_OPEN
                 jr   nz,gs_next
-gs_isgate:      ld   a,(gs_open)
+gs_isgate:      ld   (gs_cur),a         ; τι είναι ΤΩΡΑ η πύλη
+                ld   a,(gs_open)
                 or   a
                 ld   a,T_GATE
                 jr   z,gs_put
                 ld   a,T_GATE_OPEN
-gs_put:         call cell_set
+gs_put:         push hl                 ; ίδια κατάσταση; τότε δεν «άνοιξε»
+                ld   hl,gs_cur
+                cp   (hl)
+                pop  hl
+                jr   z,gs_next
+                push af
+                ld   a,1
+                ld   (sfx_gatechg),a
+                pop  af
+                call cell_set
                 push bc
                 call draw_tile
                 pop  bc
@@ -463,6 +484,7 @@ gs_next:        pop  hl
 
 gs_chan         db 0
 gs_open         db 0
+gs_cur          db 0
 
 ;---------------------------------------------------------------------
 ; cell_set — γράφει τύπο σε κελί ΚΑΙ το καταγράφει στο ημερολόγιο
