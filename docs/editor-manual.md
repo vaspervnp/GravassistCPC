@@ -242,6 +242,25 @@ them, but they are not part of the room chain and cannot be built or renumbered.
 
 **There is no delete button.** Remove a file from your folder by hand if you need to.
 
+### Taking your rooms with you
+
+Your folder lives on the server and nothing else reaches it, so two buttons move the
+whole set in and out:
+
+- **Export .zip** — downloads every `*.txt` in your folder as `gravassist-levels.zip`.
+- **Import .zip** — loads levels from a zip back into your folder. It shows you exactly
+  which files are **new** and which would be **changed**, and asks before writing.
+
+Import is careful with what it accepts, because a zip can come from anywhere:
+
+- Entries stored under a path are **ignored**, never written outside your folder.
+- Anything that is not a `.txt` is ignored; it does not fail the import.
+- Every level is validated first, and **if one is invalid nothing at all is written** —
+  half an import is worse than none, because doors end up pointing at rooms that were
+  not updated.
+- Files you have that the zip does not contain are left alone. Import adds and replaces;
+  it never deletes.
+
 ---
 
 ## 6. Doors between rooms

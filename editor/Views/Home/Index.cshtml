@@ -350,6 +350,16 @@
                         title="Builds build/gravassist.dsk starting from this room">
                     Build .dsk
                 </button>
+                <button id="btn-export" type="button"
+                        title="Downloads every level in your folder as one .zip">
+                    Export .zip
+                </button>
+                <button id="btn-import" type="button"
+                        title="Loads levels from a .zip back into your folder">
+                    Import .zip
+                </button>
+                <input type="file" id="zip-file" accept=".zip,application/zip"
+                       style="display:none" />
                 <input type="text" id="file-name" placeholder="name.txt" />
                 <button id="btn-save" type="button">Save</button>
                 @* Μόνο για όσους το έδωσε ο διαχειριστής. Ο πραγματικός
@@ -2202,6 +2212,63 @@
                     + "ones. Anything you saved but did not publish is lost:",
                     ev.currentTarget);
             });
+        }
+
+        // --- Εξαγωγή / εισαγωγή ολόκληρου του φακέλου ------------------
+        document.getElementById("btn-export").addEventListener("click", function () {
+            downloadDsk("/api/levels/export");
+            setStatus("Downloading every level as a .zip…", "ok");
+        });
+
+        document.getElementById("btn-import").addEventListener("click", function () {
+            document.getElementById("zip-file").click();
+        });
+
+        document.getElementById("zip-file").addEventListener("change", async function (ev) {
+            const f = ev.target.files && ev.target.files[0];
+            ev.target.value = "";               // ώστε το ίδιο αρχείο να ξαναδιαλέγεται
+            if (!f) return;
+            try {
+                // ΠΡΩΤΑ ΠΡΟΕΠΙΣΚΟΠΗΣΗ. Η εισαγωγή πατάει αρχεία· ένα «are you
+                // sure?» χωρίς λίστα δεν λέει τίποτα.
+                const plan = await sendZip(f, true);
+                if (!plan) return;
+                const bad = plan.changes.filter(c => c.kind === "error");
+                if (bad.length) {
+                    setStatus("Nothing imported — " + bad[0].name + ": " + bad[0].detail, "err");
+                    return;
+                }
+                const touched = plan.changes.filter(c => c.kind === "new" || c.kind === "changed");
+                if (!touched.length) {
+                    setStatus("The archive matches what you already have.", "ok");
+                    return;
+                }
+                const list = touched.map(c => "  " + c.name + " (" + c.kind + ")").join("\n");
+                const skipped = plan.changes.filter(c => c.kind === "skipped");
+                if (!confirm("Import these levels into your folder?\n\n" + list
+                        + (skipped.length ? "\n\nIgnored: " + skipped.length + " file(s)" : "")))
+                    return;
+
+                const done = await sendZip(f, false);
+                if (!done) return;
+                setStatus("Imported " + done.written + " level(s).", "ok");
+                await refreshFileList(fileList.value);
+            } catch (e) {
+                setStatus("Import error: " + e, "err");
+            }
+        });
+
+        async function sendZip(file, preview) {
+            const body = new FormData();
+            body.append("file", file);
+            const res = await fetch("/api/levels/import?preview=" + (preview ? "true" : "false"),
+                                    { method: "POST", body: body });
+            const b = await res.json().catch(function () { return null; });
+            if (!res.ok || !b) {
+                setStatus((b && b.error) || ("Error " + res.status), "err");
+                return null;
+            }
+            return b;
         }
 
         // Ξεκινά το κατέβασμα χωρίς να φύγει η σελίδα: ένα window.location θα

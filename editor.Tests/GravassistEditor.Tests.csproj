@@ -18,5 +18,9 @@
     <Compile Include="../editor/Services/AccountStore.cs" />
     <Compile Include="../editor/Services/ApprovalGate.cs" />
     <Compile Include="../editor/Services/LoginCodes.cs" />
+    <Compile Include="../editor/Services/LevelArchive.cs" />
+    <Compile Include="../editor/Models/LevelDocument.cs" />
+    <Compile Include="../editor/Models/RoomLinks.cs" />
+    <Compile Include="../editor/Models/TileType.cs" />
   </ItemGroup>
 </Project>

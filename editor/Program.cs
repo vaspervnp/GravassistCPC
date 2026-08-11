@@ -38,6 +38,8 @@ builder.Services.AddSingleton<AccountStore>();
 // Σύνδεση με κωδικό σε email: ο αποστολέας και οι κωδικοί στον αέρα.
 builder.Services.AddSingleton<Mailer>();
 builder.Services.AddSingleton<LoginCodes>();
+// Εξαγωγή/εισαγωγή όλων των πιστών ως .zip.
+builder.Services.AddSingleton<LevelArchive>();
 // SCOPED και όχι singleton: η ρίζα του εξαρτάται από ΠΟΙΟΣ ζητά. Ως singleton
 // θα κλείδωνε τον πρώτο χρήστη που θα συνδεόταν και όλοι οι υπόλοιποι θα
 // έγραφαν στα δικά του αρχεία.

@@ -370,6 +370,97 @@ for (var i = 0; i < 50; i++)
 }
 Check("οι κωδικοί δεν επαναλαμβάνονται", seen.Count >= 45, $"{seen.Count} διαφορετικοί");
 
+// -------------------------------------------------------- εξαγωγή / εισαγωγή
+// ΤΟ ZIP ΕΙΝΑΙ ΞΕΝΟ ΑΡΧΕΙΟ. Ό,τι έρθει από έξω και καταλήγει σε ΔΙΑΔΡΟΜΗ
+// ΑΡΧΕΙΟΥ ελέγχεται εδώ, όχι με το μάτι.
+var arc = new LevelArchive();
+var zdir = Path.Combine(Path.GetTempPath(), "gravassist-zip-test");
+if (Directory.Exists(zdir)) Directory.Delete(zdir, true);
+Directory.CreateDirectory(zdir);
+
+string Level(string mark)
+{
+    var rows = new List<string> { new string('#', 40) };
+    for (var i = 0; i < 22; i++) rows.Add("#" + new string('.', 38) + "#");
+    rows.Add(new string('#', 40));
+    var body = rows[21].ToCharArray();
+    body[2] = '@';
+    rows[21] = new string(body);
+    return $";  {mark}\n" + string.Join("\n", rows) + "\ngravity 0\n";
+}
+
+File.WriteAllText(Path.Combine(zdir, "room_1.txt"), Level("ena"));
+File.WriteAllText(Path.Combine(zdir, "room_2.txt"), Level("dyo"));
+File.WriteAllBytes(Path.Combine(zdir, "gravassist.dsk"), new byte[] { 1, 2, 3 });
+
+var zipBytes = arc.Export(zdir);
+using (var z = new System.IO.Compression.ZipArchive(new MemoryStream(zipBytes)))
+{
+    var names = z.Entries.Select(e => e.FullName).OrderBy(x => x).ToList();
+    Check("η εξαγωγή παίρνει ΜΟΝΟ τα .txt",
+          string.Join(",", names) == "room_1.txt,room_2.txt", string.Join(",", names));
+}
+
+byte[] MakeZip(params (string Name, string Body)[] items)
+{
+    using var ms = new MemoryStream();
+    using (var z = new System.IO.Compression.ZipArchive(
+               ms, System.IO.Compression.ZipArchiveMode.Create, true))
+        foreach (var (n, b) in items)
+        {
+            using var w = new StreamWriter(z.CreateEntry(n).Open());
+            w.Write(b);
+        }
+
+    return ms.ToArray();
+}
+
+// --- ΤΟ ΚΡΙΣΙΜΟ: zip slip
+var evil = Path.Combine(Path.GetTempPath(), "gravassist-pwned.txt");
+if (File.Exists(evil)) File.Delete(evil);
+var plan = arc.Import(new MemoryStream(
+    MakeZip(("../../../../../../tmp/gravassist-pwned.txt", Level("kako")))), zdir);
+Check("εγγραφή με διαδρομή ΔΕΝ γράφει έξω από τον φάκελο", !File.Exists(evil));
+Check("…και αναφέρεται ως παραλειφθείσα",
+      plan.Any(e => e.Kind == "skipped"), plan[0].Kind + ": " + plan[0].Detail);
+
+// --- κανονική εισαγωγή
+var round = arc.Import(new MemoryStream(zipBytes), zdir);
+Check("το ίδιο zip πάνω στα ίδια αρχεία δεν αλλάζει τίποτα",
+      round.All(e => e.Kind == "same"), string.Join(",", round.Select(e => e.Kind)));
+
+var plan2 = arc.Import(new MemoryStream(
+    MakeZip(("room_2.txt", Level("allagmeno")), ("room_7.txt", Level("kainourio")))), zdir);
+Check("νέο αρχείο γράφεται", File.Exists(Path.Combine(zdir, "room_7.txt")));
+Check("…και το αλλαγμένο ενημερώνεται",
+      File.ReadAllText(Path.Combine(zdir, "room_2.txt")).Contains("allagmeno"));
+Check("…με σωστό χαρακτηρισμό",
+      plan2.Single(e => e.Name == "room_7.txt").Kind == "new"
+      && plan2.Single(e => e.Name == "room_2.txt").Kind == "changed");
+
+// --- ΟΛΑ Ή ΤΙΠΟΤΑ: μια άκυρη πίστα δεν αφήνει μισή εισαγωγή
+var before = File.ReadAllText(Path.Combine(zdir, "room_1.txt"));
+var bad = arc.Import(new MemoryStream(
+    MakeZip(("room_1.txt", Level("nea")), ("room_8.txt", ";σκουπίδια\nxxx\n"))), zdir);
+Check("άκυρη πίστα -> ΚΑΜΙΑ δεν γράφεται",
+      File.ReadAllText(Path.Combine(zdir, "room_1.txt")) == before
+      && !File.Exists(Path.Combine(zdir, "room_8.txt")));
+Check("…και λέει ποια φταίει",
+      bad.Any(e => e.Kind == "error" && e.Name == "room_8.txt"),
+      string.Join(",", bad.Select(e => e.Name + ":" + e.Kind)));
+
+// --- σκουπίδια αντί για zip
+var junk = arc.Import(new MemoryStream("δεν είμαι zip"u8.ToArray()), zdir);
+Check("αρχείο που δεν είναι zip απορρίπτεται καθαρά",
+      junk.Count == 1 && junk[0].Kind == "error", junk[0].Detail);
+
+// --- ό,τι δεν είναι .txt αγνοείται, δεν ρίχνει την εισαγωγή
+var mixed = arc.Import(new MemoryStream(
+    MakeZip(("readme.md", "x"), ("room_3.txt", Level("tria")))), zdir);
+Check("μη-.txt αγνοείται και η υπόλοιπη εισαγωγή προχωρά",
+      File.Exists(Path.Combine(zdir, "room_3.txt"))
+      && mixed.Any(e => e.Name == "readme.md" && e.Kind == "skipped"));
+
 Console.WriteLine(fails == 0 ? "ΟΛΑ ΣΩΣΤΑ" : $"{fails} ΑΠΟΤΥΧΙΕΣ");
 Environment.Exit(fails);
 

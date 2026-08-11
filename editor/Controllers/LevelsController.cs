@@ -150,6 +150,47 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
         catch (IOException ex) { return BadRequest(new ErrorDto($"Write error: {ex.Message}")); }
     }
 
+    // ------------------------------------------------------------- αρχείο zip
+    //
+    // Ο φάκελος ζει στον server και ο χρήστης δεν τον φτάνει αλλιώς. Το zip
+    // είναι ο τρόπος να πάρει τη δουλειά του μαζί του, να τη δώσει σε άλλον ή
+    // να τη γυρίσει πίσω μετά από πείραμα.
+
+    /// <summary>GET /api/levels/export — όλες οι πίστες σε ένα .zip.</summary>
+    [HttpGet("export")]
+    public IActionResult Export([FromServices] LevelArchive archive)
+    {
+        var bytes = archive.Export(store.RootPath);
+        return File(bytes, "application/zip", "gravassist-levels.zip");
+    }
+
+    /// <summary>
+    /// POST /api/levels/import — εισαγωγή από .zip.
+    /// Με <c>preview=true</c> λέει μόνο τι ΘΑ γινόταν, χωρίς να γράψει.
+    /// </summary>
+    [HttpPost("import")]
+    [RequestSizeLimit(LevelArchive.MaxTotalBytes)]
+    public IActionResult Import(IFormFile file, bool preview,
+                                [FromServices] LevelArchive archive)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new ErrorDto("Choose a .zip file first."));
+        try
+        {
+            using var s = file.OpenReadStream();
+            var plan = preview ? archive.Plan(s, store.RootPath)
+                               : archive.Import(s, store.RootPath);
+            var errors = plan.Count(e => e.Kind == "error");
+            return Ok(new
+            {
+                ok = errors == 0,
+                written = preview ? 0 : plan.Count(e => e.Kind is "new" or "changed"),
+                changes = plan.Select(e => new { name = e.Name, kind = e.Kind, detail = e.Detail }),
+            });
+        }
+        catch (IOException ex) { return BadRequest(new ErrorDto($"Write error: {ex.Message}")); }
+    }
+
     // ---------------------------------------------------------- δημοσίευση
     //
     // Ο editor γράφει στον ΠΡΟΣΩΠΙΚΟ φάκελο του λογαριασμού. Η δημοσίευση
