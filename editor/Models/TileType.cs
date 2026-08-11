@@ -290,6 +290,50 @@ public static class TileCatalog
                   stroke="var(--fill)" stroke-width="0.5"/>
             """),
 
+        new TileType('u', "spike_u_off", MechGroup, "Spikes ↑ retracted",
+            "Retracted: solid but harmless — a plate you walk on. A switch, plate or key on the same channel pushes them back out.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <g>
+              <rect x="0" y="6" width="8" height="2" fill="var(--edge)"/>
+              <rect x="2" y="5" width="1" height="1" fill="var(--edge)"/>
+              <rect x="5" y="5" width="1" height="1" fill="var(--edge)"/>
+            </g>
+            """),
+
+        new TileType('j', "spike_d_off", MechGroup, "Spikes ↓ retracted",
+            "Retracted: solid but harmless — a plate you walk on. A switch, plate or key on the same channel pushes them back out.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <g transform="rotate(180 4 4)">
+              <rect x="0" y="6" width="8" height="2" fill="var(--edge)"/>
+              <rect x="2" y="5" width="1" height="1" fill="var(--edge)"/>
+              <rect x="5" y="5" width="1" height="1" fill="var(--edge)"/>
+            </g>
+            """),
+
+        new TileType('h', "spike_l_off", MechGroup, "Spikes ← retracted",
+            "Retracted: solid but harmless — a plate you walk on. A switch, plate or key on the same channel pushes them back out.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <g transform="rotate(90 4 4)">
+              <rect x="0" y="6" width="8" height="2" fill="var(--edge)"/>
+              <rect x="2" y="5" width="1" height="1" fill="var(--edge)"/>
+              <rect x="5" y="5" width="1" height="1" fill="var(--edge)"/>
+            </g>
+            """),
+
+        new TileType('l', "spike_r_off", MechGroup, "Spikes → retracted",
+            "Retracted: solid but harmless — a plate you walk on. A switch, plate or key on the same channel pushes them back out.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <g transform="rotate(270 4 4)">
+              <rect x="0" y="6" width="8" height="2" fill="var(--edge)"/>
+              <rect x="2" y="5" width="1" height="1" fill="var(--edge)"/>
+              <rect x="5" y="5" width="1" height="1" fill="var(--edge)"/>
+            </g>
+            """),
+
         new TileType('B', "crate", ItemGroup, "Crate",
             "Not solid: you walk through it, pick it up and drop it where you stand. Falls with gravity.",
             Palette.Material, Palette.EdgeColor,

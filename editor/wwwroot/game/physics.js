@@ -25,6 +25,17 @@
     return [r[0] + gg[0], r[1] + gg[1]];
   }
 
+  // Ζεύγη «κλειστό -> ανοιχτό» για κάθε στόχο καλωδίωσης. «Ανοιχτό» σημαίνει
+  // το ίδιο και για τα τρία είδη: δεν σε εμποδίζει πια.
+  const OPEN_OF = {
+    [T.GATE]: T.GATE_OPEN,
+    [T.LOCK]: T.LOCK_OPEN,
+    [T.SPIKE_U]: T.SPIKE_U_OFF, [T.SPIKE_L]: T.SPIKE_L_OFF,
+    [T.SPIKE_D]: T.SPIKE_D_OFF, [T.SPIKE_R]: T.SPIKE_R_OFF,
+  };
+  const SHUT_OF = {};
+  for (const k in OPEN_OF) SHUT_OF[OPEN_OF[k]] = +k;
+
   class Room {
     constructor(cells, teleports, attrs) {
       this.cells = cells.map(r => r.slice());
@@ -48,13 +59,16 @@
       }
       return false;
     }
-    gateCells(channel) {
+    // ΕΝΑΣ κόσμος αριθμών: κάθε ενεργοποιητής (διακόπτης, πλάκα, κλειδί)
+    // δρα σε κάθε στόχο (πύλη, κλειδαριά, αγκάθια) με τον ίδιο αριθμό.
+    targetCells(channel) {
       const out = [];
+      if (!channel) return out;         // 0 = ακαλωδίωτο
       for (const k in this.attrs) {
         if ((this.attrs[k] & 7) !== channel) continue;
         const [c, r] = k.split(",").map(Number);
-        const v = this.cell(c, r);
-        if (v === T.GATE || v === T.GATE_OPEN) out.push([c, r]);
+        if (OPEN_OF[this.cell(c, r)] !== undefined ||
+            SHUT_OF[this.cell(c, r)] !== undefined) out.push([c, r]);
       }
       return out;
     }
@@ -298,7 +312,7 @@
         // μένει εκεί. Ακμή και όχι κράτημα, αλλιώς οι πόρτες ανοιγοκλείνουν
         // 50 φορές το δευτερόλεπτο.
         this.sfx.push("switch");
-        this.toggleGates(this.room.attr(col, row));
+        this.toggleTargets(this.room.attr(col, row));
       }
       this.prevBody = col + "," + row;
 
@@ -339,11 +353,9 @@
       this.sfx.push("unlock");
       this.room.cells[cell[1]][cell[0]] = T.LOCK_OPEN;
       if (!ident) return;
-      for (const k in this.room.attrs) {
-        if ((this.room.attrs[k] & 7) !== ident) continue;
-        const [c, r] = k.split(",").map(Number);
-        if (this.room.cell(c, r) === T.LOCK) this.room.cells[r][c] = T.LOCK_OPEN;
-      }
+      // ΚΑΙ ΠΥΛΕΣ, ΜΟΝΙΜΑ: ο διακόπτης γυρίζει, η πλάκα κρατά όσο πατιέται,
+      // το κλειδί ανοίγει και ξοδεύεται.
+      this.setTargets(ident, true);
     }
 
     /// Οι πλάκες πίεσης κρατούν ανοιχτές τις πύλες του καναλιού τους. Το
@@ -364,27 +376,32 @@
         if (this.plateOn[ch] === want) continue;
         this.plateOn[ch] = want;
         if (want) this.sfx.push("plate");
-        this.setGates(ch, want);
+        this.setTargets(ch, want);
       }
     }
 
-    setGates(channel, opened) {
+    setTargets(channel, opened) {
       let changed = false;
-      for (const [c, r] of this.room.gateCells(channel)) {
-        const want = opened ? T.GATE_OPEN : T.GATE;
-        if (this.room.cells[r][c] === want) continue;
+      for (const [c, r] of this.room.targetCells(channel)) {
+        const cur = this.room.cells[r][c];
+        const want = opened ? (OPEN_OF[cur] !== undefined ? OPEN_OF[cur] : cur)
+                            : (SHUT_OF[cur] !== undefined ? SHUT_OF[cur] : cur);
+        if (want === cur) continue;
         this.room.cells[r][c] = want;
         changed = true;
       }
-      // ΕΝΑΣ ήχος ανά ενέργεια, όχι ένας ανά πύλη: τέσσερις πύλες στο ίδιο
+      // ΕΝΑΣ ήχος ανά ενέργεια, όχι ένας ανά στόχο: τέσσερις πύλες στο ίδιο
       // κανάλι θα έδιναν ριπή από τέσσερα «άνοιξε».
       if (changed) this.sfx.push("gate");
     }
 
-    toggleGates(channel) {
+    toggleTargets(channel) {
       let changed = false;
-      for (const [c, r] of this.room.gateCells(channel)) {
-        this.room.cells[r][c] = this.room.cells[r][c] === T.GATE ? T.GATE_OPEN : T.GATE;
+      for (const [c, r] of this.room.targetCells(channel)) {
+        const cur = this.room.cells[r][c];
+        const want = OPEN_OF[cur] !== undefined ? OPEN_OF[cur] : SHUT_OF[cur];
+        if (want === undefined) continue;
+        this.room.cells[r][c] = want;
         changed = true;
       }
       if (changed) this.sfx.push("gate");

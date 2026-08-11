@@ -58,6 +58,14 @@ START = 26              # δείκτης εκκίνησης· δεν υπάρχ�
 LOCK_OPEN = 27          # ξεκλειδωμένο: φαίνεται ακόμα, αλλά περνάς από μέσα
 GATE_OPEN = 28          # ανοιγμένη πόρτα· ίδια λογική με το LOCK_OPEN
 PLATE_DOWN = 29         # πλάκα με ΚΙΒΩΤΙΟ πάνω της: μένει πατημένη μόνη της
+# Αγκάθια ΤΡΑΒΗΓΜΕΝΑ: στερεά αλλά ΑΚΙΝΔΥΝΑ — μια επίπεδη πλάκα που την πατάς.
+# Χρειάζονται τέσσερις τύποι και όχι ένας, γιατί όταν ξαναβγούν πρέπει να
+# ξέρουμε προς τα πού έδειχναν, και ο πίνακας κελιών δεν έχει πού αλλού να το
+# κρατήσει.
+SPIKE_U_OFF = 30
+SPIKE_L_OFF = 31
+SPIKE_D_OFF = 32
+SPIKE_R_OFF = 33
 
 CHARS = {
     ".": EMPTY, "#": SOLID,
@@ -68,6 +76,9 @@ CHARS = {
     "k": KEY, "K": LOCK, "G": GATE, "S": SWITCH, "p": PLATE,
     "T": TELEPORT, "B": CRATE, "@": START, "|": LOCK_OPEN, "g": GATE_OPEN,
     "d": PLATE_DOWN,
+    # Τραβηγμένα αγκάθια. Κανονικά τα βάζει το παιχνίδι, όχι ο σχεδιαστής —
+    # τα ζωγραφίζεις μόνο όταν θέλεις να ΞΕΚΙΝΟΥΝ τραβηγμένα.
+    "u": SPIKE_U_OFF, "h": SPIKE_L_OFF, "j": SPIKE_D_OFF, "l": SPIKE_R_OFF,
 }
 NAMES = {v: k for k, v in CHARS.items()}
 TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
@@ -75,8 +86,14 @@ TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
               "ONEWAY_U", "ONEWAY_L", "ONEWAY_D", "ONEWAY_R",
               "GRAVLOCK", "CRUMBLE", "EXIT", "ENERGY", "PARACHUTE",
               "KEY", "LOCK", "GATE", "SWITCH", "PLATE", "TELEPORT", "CRATE",
-              "START", "LOCK_OPEN", "GATE_OPEN", "PLATE_DOWN"]
-NTYPES = 30
+              "START", "LOCK_OPEN", "GATE_OPEN", "PLATE_DOWN",
+              "SPIKE_U_OFF", "SPIKE_L_OFF", "SPIKE_D_OFF", "SPIKE_R_OFF"]
+NTYPES = 34
+
+# Ποιο αγκάθι αντιστοιχεί σε ποιο τραβηγμένο, και ανάποδα.
+SPIKE_OFF = {SPIKE_U: SPIKE_U_OFF, SPIKE_L: SPIKE_L_OFF,
+             SPIKE_D: SPIKE_D_OFF, SPIKE_R: SPIKE_R_OFF}
+SPIKE_ON = {v: k for k, v in SPIKE_OFF.items()}
 
 # --- Ιδιότητες ανά τύπο (bit flags) ----------------------------------
 # Ένας πίνακας αντί για σκόρπια if: ο ίδιος εξάγεται στο src/tables.asm και
@@ -98,6 +115,9 @@ for _t in (SOLID, RAMP_DR, RAMP_DL, RAMP_UR, RAMP_UL, LOCK, GATE):
 # κιβώτια εξακολουθούν να στοιβάζονται και να σταματούν στα στερεά.
 for _t in (SPIKE_U, SPIKE_L, SPIKE_D, SPIKE_R):
     PROPS[_t] |= F_DEADLY | F_SOLID     # στερεά: πατάς πάνω τους, δεν τα περνάς
+# Τραβηγμένα: στερεά αλλά όχι θανατηφόρα — γίνονται πάτωμα.
+for _t in (SPIKE_U_OFF, SPIKE_L_OFF, SPIKE_D_OFF, SPIKE_R_OFF):
+    PROPS[_t] |= F_SOLID
 for _t in (ENERGY, PARACHUTE, KEY):
     PROPS[_t] |= F_PICKUP
 for _t in (ONEWAY_U, ONEWAY_L, ONEWAY_D, ONEWAY_R):
@@ -225,7 +245,7 @@ class Room:
                 a, b, c, d = (int(x) for x in m.groups())
                 tpd[(a, b)] = (c, d)
             m = re.match(
-                r"\s*(sw|gate|lock|key|plate)\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
+                r"\s*(sw|gate|lock|key|plate|spikes)\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
                 ln, re.I)
             if m:
                 attrs[(int(m.group(2)), int(m.group(3)))] = int(m.group(4))
@@ -241,7 +261,9 @@ class Room:
         # μιας εξόδου: μια ψηλή πόρτα δύο κελιών είναι ΕΝΑ αντικείμενο.
         self.attrs = {}
         for kind in (SWITCH, GATE, GATE_OPEN, LOCK, LOCK_OPEN, KEY,
-                     PLATE, PLATE_DOWN):
+                     PLATE, PLATE_DOWN,
+                     SPIKE_U, SPIKE_L, SPIKE_D, SPIKE_R,
+                     SPIKE_U_OFF, SPIKE_L_OFF, SPIKE_D_OFF, SPIKE_R_OFF):
             for cell, v in self._link(kind, attrs, "ιδιότητας").items():
                 self.attrs[cell] = v or 0
 
@@ -311,10 +333,17 @@ class Room:
                 return True
         return False
 
-    def gate_cells(self, channel):
-        """Τα κελιά πόρτας του καναλιού — και ανοιχτά και κλειστά."""
+    #: Ό,τι μπορεί να ελεγχθεί από ενεργοποιητή, σε όποια μορφή κι αν είναι.
+    TARGETS = (GATE, GATE_OPEN, LOCK, LOCK_OPEN,
+               SPIKE_U, SPIKE_L, SPIKE_D, SPIKE_R,
+               SPIKE_U_OFF, SPIKE_L_OFF, SPIKE_D_OFF, SPIKE_R_OFF)
+
+    def target_cells(self, channel):
+        """Τα κελιά-στόχους του καναλιού: πύλες, κλειδαριές, αγκάθια."""
+        if not channel:
+            return []           # κανάλι 0 = ακαλωδίωτο, δεν το ελέγχει κανείς
         return [(c, r) for (c, r), v in self.attrs.items()
-                if (v & 7) == channel and self.cells[r][c] in (GATE, GATE_OPEN)]
+                if (v & 7) == channel and self.cells[r][c] in self.TARGETS]
 
     def exit_groups(self):
         """[(πάνω-αριστερό κελί, αίθουσα, διπλής;, [κελιά])] ανά ομάδα εξόδου."""
@@ -641,12 +670,16 @@ class Hero:
         return False
 
     def open_locks(self, cell, ident):
-        """Ανοίγει την κλειδαριά — και ΟΛΕΣ όσες μοιράζονται την ταυτότητά της.
+        """Το κλειδί ανοίγει την κλειδαριά — και ΚΑΘΕ στόχο του καναλιού της.
 
         Η κλειδαριά ΔΕΝ εξαφανίζεται: γίνεται ανοιγμένη και περνάς από μέσα.
         Ο παίκτης πρέπει να βλέπει τι ξεκλείδωσε.
 
-        Η ταυτότητα 0 σημαίνει ΑΚΑΛΩΔΙΩΤΗ κλειδαριά και ανοίγει μόνη της. Αν
+        ΤΟ ΚΛΕΙΔΙ ΑΝΟΙΓΕΙ ΚΑΙ ΠΥΛΕΣ, ΜΟΝΙΜΑ. Ο διακόπτης γυρίζει, η πλάκα
+        κρατά όσο πατιέται, το κλειδί ανοίγει και ξοδεύεται — αυτό είναι το
+        νόημά του, και γι' αυτό δεν υπάρχει «κλείσιμο με κλειδί».
+
+        Το κανάλι 0 σημαίνει ΑΚΑΛΩΔΙΩΤΗ κλειδαριά και ανοίγει μόνη της. Αν
         άνοιγε κι αυτή ομαδικά, κάθε πίστα με πολλές απλές κλειδαριές θα
         ξεκλείδωνε ολόκληρη με ένα κλειδί — δηλαδή η προεπιλογή θα άλλαζε
         νόημα σε όποιον δεν καλωδίωσε τίποτα.
@@ -655,10 +688,7 @@ class Hero:
         self.moved_cells.append(cell)
         if not ident:
             return
-        for (c, r), v in self.room.attrs.items():
-            if (v & 7) == ident and self.room.cells[r][c] == LOCK:
-                self.room.cells[r][c] = LOCK_OPEN
-                self.moved_cells.append((c, r))
+        self.set_targets(ident, True)
 
     def plates_step(self):
         """Οι πλάκες πίεσης κρατούν ανοιχτές τις πύλες του καναλιού τους.
@@ -685,24 +715,46 @@ class Hero:
             if self.plate_on.get(ch) == want:
                 continue
             self.plate_on[ch] = want
-            self.set_gates(ch, want)
+            self.set_targets(ch, want)
 
-    def set_gates(self, channel, opened):
-        """Βάζει ΟΛΕΣ τις πύλες ενός καναλιού σε συγκεκριμένη κατάσταση."""
-        for c, r in self.room.gate_cells(channel):
-            self.room.cells[r][c] = GATE_OPEN if opened else GATE
+    # ΕΝΑΣ ΚΟΣΜΟΣ ΑΡΙΘΜΩΝ. Ενεργοποιητές (διακόπτης, πλάκα, κλειδί) και στόχοι
+    # (πύλη, κλειδαριά, αγκάθια) μοιράζονται τους ίδιους αριθμούς 1-7. Ήταν
+    # δύο χωριστοί κόσμοι, οπότε ένας διακόπτης δεν μπορούσε να ανοίξει
+    # κλειδαριά ούτε ένα κλειδί πύλη — και κάθε νέος συνδυασμός θα ήθελε νέο
+    # είδος καλωδίωσης. Ένας κόσμος: κάθε ενεργοποιητής δρα σε κάθε στόχο.
+    OPEN_OF = {GATE: GATE_OPEN, LOCK: LOCK_OPEN,
+               SPIKE_U: SPIKE_U_OFF, SPIKE_L: SPIKE_L_OFF,
+               SPIKE_D: SPIKE_D_OFF, SPIKE_R: SPIKE_R_OFF}
+    SHUT_OF = {v: k for k, v in OPEN_OF.items()}
+
+    def set_targets(self, channel, opened):
+        """Βάζει ΚΑΘΕ στόχο ενός καναλιού σε συγκεκριμένη κατάσταση.
+
+        «Ανοιχτό» σημαίνει: πύλη ανοιχτή, κλειδαριά ξεκλείδωτη, αγκάθια
+        τραβηγμένα μέσα. Είναι η ίδια έννοια — «δεν σε εμποδίζει πια».
+        """
+        for c, r in self.room.target_cells(channel):
+            t = self.room.cells[r][c]
+            want = (self.OPEN_OF.get(t, t) if opened
+                    else self.SHUT_OF.get(t, t))
+            if want == t:
+                continue
+            self.room.cells[r][c] = want
             self.moved_cells.append((c, r))
 
-    def toggle_gates(self, channel):
-        """Γυρίζει ΟΛΕΣ τις πόρτες ενός καναλιού: κλειστή <-> ανοιχτή.
+    def toggle_targets(self, channel):
+        """Γυρίζει ΚΑΘΕ στόχο ενός καναλιού: κλειστό <-> ανοιχτό.
 
-        Η ανοιχτή πόρτα δεν εξαφανίζεται — γίνεται GATE_OPEN και φαίνεται,
-        όπως και η ξεκλείδωτη κλειδαριά. Ο παίκτης πρέπει να βλέπει τι άλλαξε
-        ο διακόπτης, αλλιώς πατάει κάτι και δεν ξέρει τι έγινε.
+        Ο ανοιχτός στόχος δεν εξαφανίζεται — φαίνεται στην ανοιχτή του μορφή.
+        Ο παίκτης πρέπει να βλέπει τι άλλαξε ο διακόπτης, αλλιώς πατάει κάτι
+        και δεν ξέρει τι έγινε.
         """
-        for c, r in self.room.gate_cells(channel):
-            self.room.cells[r][c] = (
-                GATE_OPEN if self.room.cells[r][c] == GATE else GATE)
+        for c, r in self.room.target_cells(channel):
+            t = self.room.cells[r][c]
+            want = self.OPEN_OF.get(t) or self.SHUT_OF.get(t)
+            if want is None:
+                continue
+            self.room.cells[r][c] = want
             self.moved_cells.append((c, r))
 
     def drop(self):
@@ -778,7 +830,7 @@ class Hero:
             # ΤΟ ΠΑΤΑΣ, ΔΕΝ ΤΟ ΞΟΔΕΥΕΙΣ: ο διακόπτης γυρίζει κάθε πόρτα του
             # καναλιού του και μένει εκεί. Ένας διακόπτης μπορεί να οδηγεί
             # ΠΟΛΛΕΣ πόρτες — αυτό είναι το νόημα του καναλιού.
-            self.toggle_gates(self.room.attr(col, row))
+            self.toggle_targets(self.room.attr(col, row))
         self.prev_body = (col, row)
 
         # Τα αγκάθια πονάνε μόνο αν πέφτεις ΠΑΝΩ στις μύτες: η βαρύτητα πρέπει

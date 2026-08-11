@@ -108,6 +108,23 @@ PLACEHOLDER = {
     P.ONEWAY_D: ("ONEWAY", 2), P.ONEWAY_R: ("ONEWAY", 3),
 }
 
+# Τραβηγμένα αγκάθια: η ίδια βάση με τις τρύπες όπου βγαίνουν οι ακίδες. Δεν
+# είναι κενό κελί — πρέπει να ΦΑΙΝΕΤΑΙ ότι εκεί υπάρχουν αγκάθια που τώρα
+# είναι μέσα, αλλιώς ο παίκτης δεν μαθαίνει ποτέ πού είναι η παγίδα.
+SPIKES_OFF = [
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+    "..X..X..",
+    "XXXXXXXX",
+    "XXXXXXXX",
+]
+
+SPIKE_OFF_TURNS = {P.SPIKE_U_OFF: 0, P.SPIKE_L_OFF: 1,
+                   P.SPIKE_D_OFF: 2, P.SPIKE_R_OFF: 3}
+
 
 # --- Βελάκια βαρύτητας για το HUD -------------------------------------
 # Ένα 8x8 ανά φορά. Σχεδιάζονται ΜΙΑ φορά (κάτω) και οι υπόλοιπες επτά
@@ -301,6 +318,9 @@ def tile_pixels(t):
         return g
     if t == P.PLATE_DOWN:
         return plate_down_pixels()
+    if t in SPIKE_OFF_TURNS:
+        base = [[PEN_EDGE if ch == "X" else 0 for ch in row] for row in SPIKES_OFF]
+        return rot90(base, SPIKE_OFF_TURNS[t])
     if t in PLACEHOLDER:
         import placeholders
         entry = PLACEHOLDER[t]

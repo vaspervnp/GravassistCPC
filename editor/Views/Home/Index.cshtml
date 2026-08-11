@@ -29,6 +29,7 @@
             new { kind = "gate", symbols = "Gg", label = "Gate",    peer = "sw" },
             new { kind = "lock", symbols = "K|", label = "Lock",    peer = "key" },
             new { kind = "key",  symbols = "k",  label = "Key",     peer = "lock" },
+            new { kind = "spikes",symbols = "^v<>ujhl", label = "Spikes", peer = "plate" },
         },
         start = Model.StartSymbol.ToString(),
         tiles = Model.Tiles.Select(t => new
@@ -389,7 +390,7 @@
         </div>
 
         <div class="panel">
-            <h2>Switches &amp; gates</h2>
+            <h2>Wiring &mdash; actuators</h2>
             <div id="sw-list"></div>
             <div class="hintline">
                 The link is a <b>channel</b>, not a position: a switch flips
@@ -402,7 +403,7 @@
         </div>
 
         <div class="panel">
-            <h2>Keys &amp; locks</h2>
+            <h2>Wiring &mdash; targets</h2>
             <div id="key-list"></div>
             <div class="hintline">
                 Same idea, but the number is an <b>identity</b>: key 3 opens only
@@ -889,8 +890,8 @@
         }
 
         function renderAttrPanels() {
-            renderAttrPanel(swListEl, ["sw", "plate", "gate"]);
-            renderAttrPanel(keyListEl, ["key", "lock"]);
+            renderAttrPanel(swListEl, ["sw", "plate", "key"]);
+            renderAttrPanel(keyListEl, ["gate", "lock", "spikes"]);
         }
 
         function renderAttrPanel(el, kinds) {
@@ -916,9 +917,7 @@
                     // τα χαμηλά 3 bits η ταυτότητα. Το πεδίο δείχνει ΜΟΝΟ την
                     // ταυτότητα, αλλιώς θα έβλεπες «10» και θα αναρωτιόσουν.
                     const ident = g.value & 7, auto = !!(g.value & 8);
-                    const input = coordInput(
-                        kind === "sw" || kind === "gate" || kind === "plate"
-                            ? "channel (0 = unwired)" : "identity (0 = unwired)",
+                    const input = coordInput("channel (0 = unwired)",
                         ident ? String(ident) : "", 7);
                     input.addEventListener("change", function () {
                         const n = parseCoord(input.value);
@@ -963,8 +962,8 @@
                 p.className = "hintline";
                 p.style.marginTop = "0";
                 p.textContent = kinds[0] === "sw"
-                    ? "No switches or gates. Paint S and G cells on the grid."
-                    : "No keys or locks. Paint k and K cells on the grid.";
+                    ? "No actuators. Paint S (switch), p (plate) or k (key) cells."
+                    : "No targets. Paint G (gate), K (lock) or spike cells.";
                 el.appendChild(p);
             }
         }

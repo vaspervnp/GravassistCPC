@@ -216,7 +216,9 @@ ca_none:        xor  a
 ; IN:  A = κανάλι
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-gate_toggle:    ld   (gt_chan),a
+gate_toggle:    or   a
+                ret  z                  ; κανάλι 0: κανείς δεν το ελέγχει
+                ld   (gt_chan),a
                 ld   hl,(room_attrs)
 gt_lp:          ld   a,(hl)
                 cp   #FF
@@ -233,17 +235,17 @@ gt_lp:          ld   a,(hl)
                 cp   (hl)
                 jr   nz,gt_next
 
-                push bc                 ; ίδιο κανάλι: είναι πόρτα;
+                push bc                 ; ίδιο κανάλι: είναι στόχος;
                 call cell_addr
                 pop  bc
+                push hl                 ; HL = κελί· το tgt_want το χαλάει
                 ld   a,(hl)
-                cp   T_GATE
-                jr   nz,gt_notshut
-                ld   a,T_GATE_OPEN
-                jr   gt_put
-gt_notshut:     cp   T_GATE_OPEN
-                jr   nz,gt_next
-                ld   a,T_GATE
+                ld   e,2                ; αντιστροφή
+                push bc
+                call tgt_want
+                pop  bc
+                pop  hl
+                jr   nc,gt_next
 gt_put:         push af                 ; το γύρισμα πάντα αλλάζει κάτι
                 ld   a,1
                 ld   (sfx_gatechg),a
@@ -256,6 +258,71 @@ gt_next:        pop  hl
                 jr   gt_lp
 
 gt_chan         db 0
+
+;---------------------------------------------------------------------
+; ΣΤΟΧΟΙ ΚΑΛΩΔΙΩΣΗΣ — ζεύγη «κλειστό, ανοιχτό»
+;
+; Ενεργοποιητής (διακόπτης, πλάκα, κλειδί) και στόχος (πύλη, κλειδαριά,
+; αγκάθια) μοιράζονται ΕΝΑΝ κόσμο αριθμών. «Ανοιχτό» σημαίνει το ίδιο και για
+; τα τρία: δεν σε εμποδίζει πια — η πύλη ανοίγει, η κλειδαριά ξεκλειδώνει, τα
+; αγκάθια τραβιούνται μέσα.
+;---------------------------------------------------------------------
+TGT_PAIRS       equ 6
+
+tgt_tab:        db   T_GATE,    T_GATE_OPEN
+                db   T_LOCK,    T_LOCK_OPEN
+                db   T_SPIKE_U, T_SPIKE_U_OFF
+                db   T_SPIKE_L, T_SPIKE_L_OFF
+                db   T_SPIKE_D, T_SPIKE_D_OFF
+                db   T_SPIKE_R, T_SPIKE_R_OFF
+
+;---------------------------------------------------------------------
+; tgt_find — βρίσκει τον τύπο στον πίνακα
+; IN:  A = τύπος κελιού
+; OUT: CF=1 αν είναι στόχος, HL -> το ζεύγος του, C = 0 κλειστό / 1 ανοιχτό
+;      CF=0 αν δεν είναι στόχος
+; ΑΛΛΟΙΩΝΕΙ: AF,BC,HL
+;---------------------------------------------------------------------
+tgt_find:       ld   hl,tgt_tab
+                ld   b,TGT_PAIRS
+tf_lp:          cp   (hl)
+                jr   z,tf_shut
+                inc  hl
+                cp   (hl)
+                jr   z,tf_open
+                inc  hl
+                djnz tf_lp
+                or   a                  ; CF=0: δεν είναι στόχος
+                ret
+tf_shut:        ld   c,0
+                scf
+                ret
+tf_open:        dec  hl                 ; HL πίσω στο κλειστό του ζεύγους
+                ld   c,1
+                scf
+                ret
+
+;---------------------------------------------------------------------
+; tgt_want — η μορφή που πρέπει να πάρει ένας στόχος
+; IN:  A = τύπος κελιού, E = 0 κλειστό / 1 ανοιχτό / 2 αντιστροφή
+; OUT: CF=1 και A = ο νέος τύπος (ίσως ίδιος), CF=0 αν δεν είναι στόχος
+; ΑΛΛΟΙΩΝΕΙ: AF,BC,HL
+;---------------------------------------------------------------------
+tgt_want:       call tgt_find
+                ret  nc
+                ld   a,e
+                cp   2
+                jr   nz,tw_set
+                ld   a,c                ; αντιστροφή: 0 -> 1, 1 -> 0
+                xor  1
+                jr   tw_pick
+tw_set:         ld   a,e
+tw_pick:        or   a
+                jr   z,tw_shut
+                inc  hl                 ; ανοιχτή μορφή
+tw_shut:        ld   a,(hl)
+                scf
+                ret
 
 ;---------------------------------------------------------------------
 ; lock_open_all — ανοίγει ΚΑΘΕ κλειδαριά με την ταυτότητα A
@@ -273,39 +340,10 @@ gt_chan         db 0
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
 lock_open_all:  or   a
-                ret  z
-                ld   (lo_id),a
-                ld   hl,(room_attrs)
-lo_lp:          ld   a,(hl)
-                cp   #FF
-                ret  z
-                ld   c,a                ; C = στήλη (έτσι τα θέλουν τα
-                inc  hl                 ; cell_addr και draw_tile)
-                ld   b,(hl)             ; B = γραμμή
-                inc  hl
-                ld   a,(hl)
-                inc  hl
-                and  7
-                push hl
-                ld   hl,lo_id
-                cp   (hl)
-                jr   nz,lo_next
+                ret  z                  ; κανάλι 0 = ακαλωδίωτο
+                ld   c,1                ; «ανοιχτό»
+                jp   gate_set           ; πύλες, κλειδαριές ΚΑΙ αγκάθια
 
-                push bc                 ; ίδια ταυτότητα: είναι κλειδαριά;
-                call cell_addr
-                pop  bc
-                ld   a,(hl)
-                cp   T_LOCK
-                jr   nz,lo_next
-                ld   a,T_LOCK_OPEN
-                call cell_set
-                push bc
-                call draw_tile          ; φαίνεται αμέσως
-                pop  bc
-lo_next:        pop  hl
-                jr   lo_lp
-
-lo_id           db 0
 
 ;---------------------------------------------------------------------
 ; plate_step — οι πλάκες πίεσης κρατούν ανοιχτές τις πύλες τους
@@ -433,7 +471,9 @@ plate_prev      db 0
 ;   επιβολή αντί για εναλλαγή: η πλάκα δεν «γυρίζει», ΚΡΑΤΑΕΙ.
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-gate_set:       ld   (gs_chan),a
+gate_set:       or   a
+                ret  z                  ; κανάλι 0: κανείς δεν το ελέγχει
+                ld   (gs_chan),a
                 ld   a,c
                 ld   (gs_open),a
                 ld   hl,(room_attrs)
@@ -455,18 +495,18 @@ gs_lp:          ld   a,(hl)
                 push bc
                 call cell_addr
                 pop  bc
+                push hl
                 ld   a,(hl)
-                cp   T_GATE
-                jr   z,gs_isgate
-                cp   T_GATE_OPEN
-                jr   nz,gs_next
-gs_isgate:      ld   (gs_cur),a         ; τι είναι ΤΩΡΑ η πύλη
+                ld   (gs_cur),a         ; τι είναι ΤΩΡΑ ο στόχος
                 ld   a,(gs_open)
-                or   a
-                ld   a,T_GATE
-                jr   z,gs_put
-                ld   a,T_GATE_OPEN
-gs_put:         push hl                 ; ίδια κατάσταση; τότε δεν «άνοιξε»
+                ld   e,a
+                ld   a,(gs_cur)         ; ΞΑΝΑ ο τύπος: το tgt_want τον θέλει
+                push bc                 ; στον A, και μόλις τον σκεπάσαμε
+                call tgt_want
+                pop  bc
+                pop  hl
+                jr   nc,gs_next
+gs_put:         push hl                 ; ίδια κατάσταση; τότε δεν «άλλαξε»
                 ld   hl,gs_cur
                 cp   (hl)
                 pop  hl

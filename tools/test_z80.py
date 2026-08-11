@@ -869,6 +869,55 @@ def main():
     t.call("SFX_GATE")
     check("…και η σημαία καθαρίζει, δεν ξαναχτυπά", not sfx())
 
+    # 20. ΕΝΑΣ κόσμος αριθμών, στον ΠΡΑΓΜΑΤΙΚΟ Z80. Οι πίνακες παράγονται
+    #     αυτόματα, αλλά η ροή του gate_toggle/gate_set γράφτηκε στο χέρι —
+    #     ακριβώς το είδος αλλαγής που αποκλίνει σιωπηλά από το μοντέλο.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    rows[22][10] = "S"          # διακόπτης 3
+    rows[22][20] = "K"          # κλειδαριά 3  -> ο διακόπτης την ανοίγει
+    rows[22][14] = "^"          # αγκάθια 4
+    rows[22][16] = "G"          # πύλη 5       -> το κλειδί την ανοίγει
+    rows[21][30] = "k"          # κλειδί 5
+    text = ";\n" + "\n".join("".join(r) for r in rows) + "\n" + "\n".join(
+        ["gravity 0", "sw 10 22 3", "lock 20 22 3", "spikes 14 22 4",
+         "gate 16 22 5", "key 30 21 5"])
+    room = P.Room(text)
+    room.number, room.path = 1, ""
+    t.poke(set_buf, RF.build_set([room]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.poke(t.sym("SEALED"), bytes(32))
+    t.poke(t.sym("TRAIL_N"), b"\x00")
+    t.poke(t.sym("PLATE_PREV"), b"\x00")
+    t.poke(t.sym("HERO_KEYS"), bytes(8))
+    t.call("ROOM_LOAD", a=1)
+
+    def cell(c, r):
+        return t.peek(cell_buf + r * P.COLS + c)[0]
+
+    t.call("GATE_TOGGLE", a=3)
+    check("Z80: ο διακόπτης ανοίγει ΚΛΕΙΔΑΡΙΑ",
+          cell(20, 22) == P.LOCK_OPEN, P.TYPE_NAMES[cell(20, 22)])
+    t.call("GATE_TOGGLE", a=3)
+    check("Z80: …και την ξανακλειδώνει", cell(20, 22) == P.LOCK,
+          P.TYPE_NAMES[cell(20, 22)])
+
+    t.call("GATE_SET", a=4, bc=1)       # C=1 -> ανοιχτό
+    check("Z80: η πλάκα τραβάει τα ΑΓΚΑΘΙΑ μέσα",
+          cell(14, 22) == P.SPIKE_U_OFF, P.TYPE_NAMES[cell(14, 22)])
+    t.call("GATE_SET", a=4, bc=0)
+    check("Z80: …και ξαναβγαίνουν με τη ΣΩΣΤΗ φορά",
+          cell(14, 22) == P.SPIKE_U, P.TYPE_NAMES[cell(14, 22)])
+
+    t.call("LOCK_OPEN_ALL", a=5)
+    check("Z80: το κλειδί ανοίγει ΠΥΛΗ", cell(16, 22) == P.GATE_OPEN,
+          P.TYPE_NAMES[cell(16, 22)])
+
+    before = cell(10, 22)
+    t.call("GATE_TOGGLE", a=0)
+    check("Z80: το κανάλι 0 δεν αγγίζει τίποτα", cell(10, 22) == before)
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 

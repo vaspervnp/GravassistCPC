@@ -16,7 +16,7 @@ of the project documentation is in Greek.
 5. [Rooms](#5-rooms)
 6. [Doors between rooms](#6-doors-between-rooms)
 7. [Teleporters](#7-teleporters)
-8. [Switches, pressure plates and gates](#8-switches-pressure-plates-and-gates)
+8. [Wiring: actuators and targets](#8-wiring-actuators-and-targets)
 9. [Keys and locks](#9-keys-and-locks)
 10. [Gravity](#10-gravity)
 11. [Saving](#11-saving)
@@ -288,16 +288,31 @@ nothing in the game. A destination outside the grid is an **error**.
 
 ---
 
-## 8. Switches, pressure plates and gates
+## 8. Wiring: actuators and targets
 
-The link is a **channel number**, not a position: a switch flips every gate on the same
-channel, wherever it is in the room. Give the switch and its gates the same number.
+Everything wired shares **one number, the channel**. An actuator acts on every target
+with the same channel, wherever it is in the room. Position does not matter; the number
+does.
 
-- **Switch (`S`)** — a toggle. Stepping on it flips its gates; stepping on it again flips
-  them back. It is not consumed.
-- **Pressure plate (`p`)** — active only while it is pressed, by the hero **or by a
-  crate**. Leaving a crate on a plate is how you hold a gate open while you walk away.
-- **Gate (`G`)** — solid while closed. Opened by any switch or plate on its channel.
+**Actuators** — the *Wiring — actuators* panel:
+
+| | Behaviour |
+|---|---|
+| **Switch (`S`)** | A toggle. Step on it and its targets flip; step on it again and they flip back. Not consumed. |
+| **Pressure plate (`p`)** | Active only while pressed, by the hero **or by a crate**. Leaving a crate on a plate holds it down while you walk away. |
+| **Key (`k`)** | Opens its targets **permanently** and is consumed. |
+
+**Targets** — the *Wiring — targets* panel:
+
+| | Open means |
+|---|---|
+| **Gate (`G`)** | Not solid — you pass through. |
+| **Lock (`K`)** | Unlocked — you pass through. |
+| **Spikes (`^ v < >`)** | Retracted into the floor: still solid, but harmless. |
+
+Any actuator drives any target: a switch can unlock a lock, a key can open a gate, a
+pressure plate can pull spikes in. "Open" means the same thing in all three cases — *it
+no longer stops you*.
 
 Channels run **1–7**. **Channel 0 means unwired** and writes nothing to the file.
 
@@ -317,6 +332,12 @@ at once.
 
 **Identity 0 means unwired**, and such a lock opens on its own. That is deliberate: a
 level full of plain locks does not fall open to a single key.
+
+**Retracted spikes** have their own four cell types (`u j h l`, one per direction). You
+normally paint the live spike and let a plate pull it in; paint the retracted form only
+when you want spikes that **start** retracted. There are four and not one because the
+direction has to survive being pulled in — a spike that pops back out facing a different
+way is a different trap.
 
 **The `auto` checkbox** (locks only) makes a lock open the moment you step on it while
 carrying the matching key, without pressing anything. The default is off — you press the

@@ -364,7 +364,7 @@ def main():
     check("οι πόρτες ξεκινούν κλειστές",
           all(room.cell(c, r) == P.GATE for c, r in
               ((10, 8), (20, 8), (30, 8), (5, 12))))
-    h.toggle_gates(1)
+    h.toggle_targets(1)
     check("ένας διακόπτης άνοιξε ΚΑΙ ΤΙΣ ΤΡΕΙΣ πόρτες του καναλιού",
           all(room.cell(c, r) == P.GATE_OPEN for c, r in
               ((10, 8), (20, 8), (30, 8))),
@@ -374,7 +374,7 @@ def main():
           room.cell(5, 12) == P.GATE)
     check("ανοιγμένη πόρτα δεν είναι στερεή",
           not (P.PROPS[P.GATE_OPEN] & P.F_SOLID))
-    h.toggle_gates(1)
+    h.toggle_targets(1)
     check("ο διακόπτης ξανακλείνει (δεν είναι μιας χρήσης)",
           all(room.cell(c, r) == P.GATE for c, r in ((10, 8), (20, 8), (30, 8))))
 
@@ -596,6 +596,58 @@ def main():
         check("γειτονικές έξοδοι με διαφορετικό προορισμό απορρίπτονται", False)
     except ValueError:
         check("γειτονικές έξοδοι με διαφορετικό προορισμό απορρίπτονται", True)
+
+    # --- ΕΝΑΣ κόσμος αριθμών: κάθε ενεργοποιητής σε κάθε στόχο.
+    #     Ήταν δύο χωριστοί κόσμοι (κανάλια / ταυτότητες), οπότε αυτοί οι
+    #     συνδυασμοί ΔΕΝ γίνονταν καν να εκφραστούν.
+    def wroom(cells, footer):
+        rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+            + [list("#" * 40)]
+        for (c, r, ch) in cells:
+            rows[r][c] = ch
+        return P.Room(";\n" + "\n".join("".join(r) for r in rows) + "\n"
+                      + "\n".join(["gravity 0"] + footer))
+
+    def whero(rm):
+        return P.Hero(rm, 5 * P.CELL + 4, P.GRID_Y0 + 21 * P.CELL + 4, 0)
+
+    rm = wroom([(10, 22, "S"), (20, 22, "K")], ["sw 10 22 3", "lock 20 22 3"])
+    whero(rm).toggle_targets(3)
+    check("ο διακόπτης ανοίγει ΚΛΕΙΔΑΡΙΑ", rm.cells[22][20] == P.LOCK_OPEN,
+          P.TYPE_NAMES[rm.cells[22][20]])
+
+    rm = wroom([(10, 22, "k"), (20, 22, "G")], ["key 10 22 4", "gate 20 22 4"])
+    h = whero(rm)
+    h.keys[4] = 1
+    h.open_locks((10, 22), 4)
+    check("το κλειδί ανοίγει ΠΥΛΗ, μόνιμα", rm.cells[22][20] == P.GATE_OPEN,
+          P.TYPE_NAMES[rm.cells[22][20]])
+
+    for ch, on, off in (("^", P.SPIKE_U, P.SPIKE_U_OFF),
+                        ("v", P.SPIKE_D, P.SPIKE_D_OFF),
+                        ("<", P.SPIKE_L, P.SPIKE_L_OFF),
+                        (">", P.SPIKE_R, P.SPIKE_R_OFF)):
+        rm = wroom([(20, 22, ch)], ["spikes 20 22 1"])
+        h = whero(rm)
+        h.set_targets(1, True)
+        a = rm.cells[22][20]
+        h.set_targets(1, False)
+        b = rm.cells[22][20]
+        # Η ΦΟΡΑ ΠΡΕΠΕΙ ΝΑ ΕΠΙΒΙΩΝΕΙ: γι' αυτό υπάρχουν τέσσερις τραβηγμένοι
+        # τύποι και όχι ένας — ο πίνακας κελιών δεν έχει πού αλλού να την
+        # κρατήσει, και ένα αγκάθι που ξαναβγαίνει αλλού είναι άλλη παγίδα.
+        check(f"αγκάθι '{ch}': τραβιέται και ξαναβγαίνει ΙΔΙΟ",
+              a == off and b == on,
+              f"{P.TYPE_NAMES[a]} -> {P.TYPE_NAMES[b]}")
+
+    check("τα τραβηγμένα αγκάθια είναι στερεά αλλά ΑΚΙΝΔΥΝΑ",
+          not (P.PROPS[P.SPIKE_U_OFF] & P.F_DEADLY)
+          and (P.PROPS[P.SPIKE_U_OFF] & P.F_SOLID))
+
+    rm = wroom([(20, 22, "G")], [])
+    whero(rm).set_targets(0, True)
+    check("το κανάλι 0 είναι ακαλωδίωτο και δεν το ελέγχει κανείς",
+          rm.cells[22][20] == P.GATE)
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0

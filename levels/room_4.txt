@@ -38,7 +38,7 @@ sw 36 13 1
 plate 16 21 2
 gate 16 8 1
 gate 17 16 2
-lock 15 11 10
-lock 28 16 3
-key 11 7 2
-key 18 21 3
+lock 15 11 14
+lock 28 16 7
+key 11 7 6
+key 18 21 7

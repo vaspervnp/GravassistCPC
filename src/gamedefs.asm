@@ -34,6 +34,10 @@ T_START          equ 26
 T_LOCK_OPEN      equ 27
 T_GATE_OPEN      equ 28
 T_PLATE_DOWN     equ 29
+T_SPIKE_U_OFF    equ 30
+T_SPIKE_L_OFF    equ 31
+T_SPIKE_D_OFF    equ 32
+T_SPIKE_R_OFF    equ 33
 
 ; Αίθουσα εκκίνησης. Ο editor τη γράφει με --start ώστε να δοκιμάζεις
 ; οποιαδήποτε αίθουσα χωρίς να πειράζεις τα αρχεία των πιστών.
@@ -58,7 +62,7 @@ TRAIL_MAX       equ 4    ; πόσα δωμάτια πίσω γυρνάς
 ; Ταβάνι μνήμης με ενεργό AMSDOS — δες την assert στο main.asm.
 MEM_CEIL        equ #A67B
 
-NTYPES          equ 30
+NTYPES          equ 34
 ATTR_MAX        equ 8   ; κανάλια διακοπτών / ταυτότητες κλειδιών
 T_LOCK_AUTO     equ 8    ; bit: η κλειδαριά ανοίγει μόλις την ακουμπήσεις
 SPIKE_TICKS     equ 10

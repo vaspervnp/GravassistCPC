@@ -70,10 +70,14 @@ public static class AttrGraph
         ("gate", ['G', 'g']),        // 'g' = ανοιγμένη· κρατά την καλωδίωσή της
         ("lock", ['K', '|']),
         ("key", ['k']),
+        // Τα αγκάθια τραβιούνται μέσα όπως ανοίγει μια πύλη. Και οι οκτώ
+        // μορφές (τέσσερις φορές x βγαλμένα/τραβηγμένα) είναι ΕΝΑ είδος:
+        // η φορά ζει στον τύπο του κελιού, όχι στην καλωδίωση.
+        ("spikes", ['^', 'v', '<', '>', 'u', 'j', 'h', 'l']),
     ];
 
     private static readonly Regex LinePattern = new(
-        @"^\s*(sw|gate|lock|key|plate)\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
+        @"^\s*(sw|gate|lock|key|plate|spikes)\s+(\d+)\s+(\d+)\s+(\d+)\s*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static bool IsAttrLine(string line) => LinePattern.IsMatch(line);

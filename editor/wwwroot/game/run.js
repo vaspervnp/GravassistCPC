@@ -489,7 +489,7 @@
       // κλειδιά — κάθε κελί έχει ακριβώς έναν τύπο, οπότε δεν υπάρχει ασάφεια.
       const attrs = {};
       for (const m of foot.matchAll(
-             /(sw|gate|lock|key|plate)\s+(\d+)\s+(\d+)\s+(\d+)/gi))
+             /(sw|gate|lock|key|plate|spikes)\s+(\d+)\s+(\d+)\s+(\d+)/gi))
         attrs[m[2] + "," + m[3]] = +m[4];
       // Γειτονικά κελιά είναι ΕΝΑ αντικείμενο: ο προορισμός σε ΟΛΑ τα κελιά.
       spread(cells, exits, D.TYPE_NAMES.indexOf("EXIT"));
@@ -506,6 +506,11 @@
       spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("KEY"));
       spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("PLATE"));
       spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("PLATE_DOWN"));
+      // Και τα αγκάθια: είναι στόχοι καλωδίωσης όπως οι πύλες, και στις οκτώ
+      // μορφές τους (τέσσερις φορές x βγαλμένα/τραβηγμένα).
+      for (const n of ["SPIKE_U", "SPIKE_L", "SPIKE_D", "SPIKE_R",
+                       "SPIKE_U_OFF", "SPIKE_L_OFF", "SPIKE_D_OFF", "SPIKE_R_OFF"])
+        spreadKind(cells, attrs, D.TYPE_NAMES.indexOf(n));
       rooms[name] = { cells, start, exits, teleports, twoWay, arrive, arriveG,
                       attrs, pristine: cells.map(r => r.slice()) };
       const o = document.createElement("option");
