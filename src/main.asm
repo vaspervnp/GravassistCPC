@@ -141,6 +141,7 @@ main:           ld   a,1
                 ld   a,1
                 call SCR_SET_MODE       ; καθάρισε ό,τι άφησε το μενού
                 call set_palette
+                call game_reset         ; καθαρή ενέργεια, τσέπες, ημερολόγιο
                 ld   a,START_ROOM       ; ποια αίθουσα· ορίζεται στο build
                 call room_load
                 call prep_hero

@@ -954,6 +954,33 @@ def main():
           {b[0] for b in blocks} == {1, 2, 4},
           str(sorted({b[0] for b in blocks})))
 
+    # 22. ΜΕΤΑ ΤΟ GAME OVER ΤΟ ΠΑΙΧΝΙΔΙ ΠΡΕΠΕΙ ΝΑ ΞΑΝΑΡΧΙΖΕΙ.
+    #     Η ενέργεια αρχικοποιείται μόνο κατά τη συναρμολόγηση, οπότε έμενε 0
+    #     και κάθε νέα παρτίδα πέθαινε στο πρώτο frame: ατέρμονη σειρά από
+    #     οθόνες GAME OVER, που στον πραγματικό Amstrad μοιάζει με κρέμασμα.
+    t.poke(t.sym("HERO_ENERGY"), b"\x00")
+    t.poke(t.sym("HERO_CARRY"), b"\x01")
+    t.poke(t.sym("GAME_DONE"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x07")
+    t.poke(t.sym("TRAIL_N"), b"\x03")
+    t.poke(t.sym("HERO_KEYS"), b"\x02" * 8)
+    t.poke(t.sym("SEALED"), b"\xFF" * 32)
+    t.call("GAME_RESET")
+
+    check("μετά το reset η ενέργεια είναι ΓΕΜΑΤΗ",
+          t.peek(t.sym("HERO_ENERGY"))[0] == 8,
+          str(t.peek(t.sym("HERO_ENERGY"))[0]))
+    check("…και το ημερολόγιο αλλαγών άδειο",
+          t.peek(t.sym("JR_COUNT"))[0] == 0)
+    check("…και οι τσέπες άδειες",
+          t.peek(t.sym("HERO_KEYS"), 8) == bytes(8)
+          and t.peek(t.sym("HERO_CARRY"))[0] == 0)
+    check("…και καμία σφραγισμένη πόρτα",
+          t.peek(t.sym("SEALED"), 32) == bytes(32))
+    check("…και η σημαία τέλους καθαρή",
+          t.peek(t.sym("GAME_DONE"))[0] == 0
+          and t.peek(t.sym("TRAIL_N"))[0] == 0)
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
 
