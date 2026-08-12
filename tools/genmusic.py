@@ -63,7 +63,17 @@ PULSE = [("D1", BEAT // 2), (R, BEAT // 2), ("D1", BEAT // 2),
 VOL_BASS, VOL_LEAD, VOL_PULSE = 11, 9, 13
 NOISE_PULSE = 12
 
-# --- ΤΑ ΤΥΜΠΑΝΑ ΤΟΥ ΠΑΙΧΝΙΔΙΟΥ ----------------------------------------
+# --- ΤΑ ΤΥΜΠΑΝΑ ΤΟΥ ΠΑΙΧΝΙΔΙΟΥ — ΔΕΝ ΠΑΡΑΓΟΝΤΑΙ ΠΙΑ -------------------
+#
+# Αφαιρέθηκαν από το παιχνίδι κατόπιν αιτήματος. Η ανάλυση των δειγμάτων και
+# τα μοτίβα μένουν εδώ επειδή δεν κοστίζουν ούτε ένα byte στον CPC — αλλά η
+# ροή ΔΕΝ εκπέμπεται και οι ρουτίνες drums_start/drums_step έχουν φύγει από
+# το src/musicplay.asm.
+#
+# Για να ξαναμπούν: γύρνα το DRUMS_IN_GAME σε True και ξαναφέρε τις ρουτίνες
+# και τη φωνή θορύβου του mus_one από το commit aee150b.
+DRUMS_IN_GAME = False
+
 #
 # Μεταγραμμένα από το musicsamples/8-bit-marching-drums_160bpm.wav: τέσσερα
 # μέτρα, με το 1ο και το 3ο ίδια. Η ανάλυση (ενέργεια + zero-crossing ανά
@@ -268,21 +278,10 @@ def main():
             out.append(f"                db {note},{v},{dur}")
         out.append("                db #FF          ; τέλος: πίσω στην αρχή")
 
-    # --- τα τύμπανα του παιχνιδιού -----------------------------------
-    data, total = drum_stream(table)
-    want = sum(len(bars) * 16 * step for bars, step in DRUM_SECTIONS)
-    assert total == want, f"{total} αντί για {want}"
-    out += ["",
-            f"; --- τύμπανα: κανάλι 4, {sum(len(b) for b,_ in DRUM_SECTIONS)} μέτρα, κύκλος "
-            f"{total} εκατοστά",
-            "; Μεταγραφή του musicsamples/8-bit-marching-drums_160bpm.wav.",
-            f"MUS_NOISE     equ {MUS_NOISE}   ; δείκτης >= αυτό = κρουστό",
-            "MUS_DRUMS_CH  equ 4",
-            "MUS_DRUMS_NZ  equ 0",
-            "mus_drums:"]
-    for note, v, dur in data:
-        out.append(f"                db {note},{v},{dur}")
-    out.append("                db #FF          ; τέλος: πίσω στην αρχή")
+    if DRUMS_IN_GAME:
+        raise SystemExit(
+            "DRUMS_IN_GAME=True: ξαναφέρε πρώτα τις ρουτίνες drums_* και τη "
+            "φωνή θορύβου του mus_one από το commit aee150b")
 
     text = "\n".join(out) + "\n"
     path = os.path.join(ROOT, "src", "music.asm")
@@ -291,7 +290,7 @@ def main():
     total = sum(len(stream(tr, table, v)[0]) * 3 + 1
                 for _, tr, v, _, _ in tracks) + len(table) * 2
     print(f"  src/music.asm: {len(table)} νότες, κύκλος μενού {LOOP // 100}s, "
-          f"τύμπανα {sum(len(b) for b,_ in DRUM_SECTIONS)} μέτρα")
+          "χωρίς τύμπανα παιχνιδιού")
 
 
 if __name__ == "__main__":
