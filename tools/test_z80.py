@@ -36,8 +36,6 @@ def main():
     t.stub("RENDER_ROOM")           # χωρίς οθόνη δεν έχει τι να επαληθεύσει
     cell_buf = t.sym("CELL_BUF")
     set_buf = t.sym("SET_BUF")
-    tab_buf = t.sym("TAB_BUF")
-    tab_bytes = RF.tab_bytes()
 
     # 1. hero_to_cell: col*8 πρέπει να γίνεται σε 16 bits. Με 'add a,a' σε 8
     #    bits, κάθε στήλη από 32 και πάνω τύλιγε και ο ήρωας προσγειωνόταν
@@ -99,13 +97,9 @@ def main():
                                   ("ROOM_ARR", expect_arr),
                                   ("ROOM_TPS", expect_tps)):
                 ptr = t.peek16(t.sym(label))
-                # ΟΧΙ μέσα στο σετ πια: ο set_buf ζει στη μνήμη οθόνης και το
-                # πρώτο render τον σβήνει, οπότε οι πίνακες αντιγράφονται στο
-                # tab_buf. Αν κάποιος δείκτης δείξει ξανά στην οθόνη, το
-                # plate_step θα διαβάζει pixel αντί για ιδιότητες κελιών.
-                check(f"room_load {room.number}: {label} μέσα στο tab_buf",
-                      tab_buf <= ptr < tab_buf + tab_bytes,
-                      f"#{ptr:04X} εκτός #{tab_buf:04X}..#{tab_buf+tab_bytes:04X}")
+                check(f"room_load {room.number}: {label} μέσα στο σετ",
+                      set_buf <= ptr < set_buf + len(data),
+                      f"#{ptr:04X} εκτός #{set_buf:04X}..#{set_buf+len(data):04X}")
                 got, p = [], ptr
                 while t.peek(p)[0] != 0xFF and len(got) < 64:
                     got.append(tuple(t.peek(p, 4)))

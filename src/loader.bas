@@ -11,10 +11,8 @@
 110 IF INKEY(47)<>-1 THEN 130
 120 IF TIME<t THEN 110
 130 ON ERROR GOTO 0
-140 MODE 1:BORDER 0
-150 INK 0,1:INK 1,26:INK 2,18:INK 3,16
-160 LOCATE 15,11:PRINT "GRAVASSIST"
-170 LOCATE 15,13:PRINT "Loading..."
+140 REM I splash MENEI: to paixnidi allazei se MODE 1 molis einai etoimo
+150 REM to menou. I mpara fortosis zografizetai epano tis, se MODE 0.
 180 LOAD"MAIN.BIN"
 190 CALL &4000
 200 REM Xoris to .SCR sto disko, sinexise sto paixnidi anti na skasei

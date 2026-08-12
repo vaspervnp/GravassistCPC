@@ -288,43 +288,6 @@ def slot_of(index):
             BANK_WIN + (i % SLOTS_PER_BANK) * SLOT_SIZE)
 
 
-def tables_size(room):
-    """Πόσα bytes πιάνουν οι τέσσερις πίνακες μιας αίθουσας.
-
-    Βγαίνει από το ΙΔΙΟ το room_record (όλα εκτός από τα 5 bytes εκκίνησης και
-    το RLE), ώστε να μην μπορεί να ξεσυγχρονιστεί με τη μορφή του αρχείου.
-    """
-    rec = room_record(room)
-    flat = [v for row in room.cells for v in row]
-    return len(rec) - 5 - len(rle_encode(flat))
-
-
-def tab_bytes():
-    """Το μέγεθος του tab_buf: η χειρότερη αίθουσα, με περιθώριο.
-
-    Στρογγυλεμένο ώστε μια μικρή αλλαγή σε πίστα να μην αλλάζει το binary, και
-    με 64 bytes αέρα ώστε η επόμενη αίθουσα να μη σπάει αμέσως το build.
-    """
-    worst = max((tables_size(r) for r in P.all_rooms()), default=0)
-    return max(96, ((worst + 31) // 32) * 32 + 64)
-
-
-def check_tables():
-    """Καμία αίθουσα δεν επιτρέπεται να ξεπερνά το tab_buf.
-
-    Οι τέσσερις πίνακες αντιγράφονται εκεί από τη μνήμη οθόνης (δες το
-    room_load του src/hero.asm). Υπέρβαση σημαίνει γράψιμο πάνω σε ό,τι
-    ακολουθεί — σιωπηλά, και μόνο σε συγκεκριμένη αίθουσα.
-    """
-    limit = tab_bytes()
-    for r in P.all_rooms():
-        n = tables_size(r)
-        if n > limit:
-            raise ValueError(
-                f"η αίθουσα {r.number} έχει {n} bytes πινάκων και το tab_buf "
-                f"είναι {limit}")
-
-
 def check_buffer():
     """Ο buffer του CPC δεν επιτρέπεται να ΞΕΠΕΡΝΑ τη θέση τράπεζας.
 
@@ -402,7 +365,6 @@ if __name__ == "__main__":
     # στην εκκίνηση από ΑΥΤΑ τα ίδια ROOMSnn.BIN. Εδώ ελέγχεται μόνο ότι
     # χωράνε — και το build σπάει αν δεν χωράνε.
     check_buffer()
-    check_tables()
     check_slots()
     for index, name, data in all_sets():
         bank, addr = slot_of(index)

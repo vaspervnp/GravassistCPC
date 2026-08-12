@@ -156,7 +156,7 @@ hi_got:         push hl
 ;---------------------------------------------------------------------
 hs_load:        ld   hl,hs_fname
                 ld   b,hs_fname_end-hs_fname
-                ld   de,CAS_BUFFER
+                ld   de,cas_buffer
                 call CAS_IN_OPEN
                 jr   nc,hl_bad
                 ld   hl,hs_hdr
@@ -202,7 +202,7 @@ hl_bad:         jp   hs_reset
 ;---------------------------------------------------------------------
 hs_save:        ld   hl,hs_fname
                 ld   b,hs_fname_end-hs_fname
-                ld   de,CAS_BUFFER
+                ld   de,cas_buffer
                 call CAS_OUT_OPEN
                 ret  nc
                 ld   hl,hs_hdr
