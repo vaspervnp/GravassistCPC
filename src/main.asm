@@ -141,6 +141,7 @@ SCR_WBYTES      equ  80         ; bytes ανά scanline σε MODE 1
 main:           call init_linetab       ; πίνακας γραμμών: καμία σχέση με οθόνη
                 call bank_boot          ; μία φορά ανά εκτέλεση — το ml_again
                                         ; ξαναμπαίνει εδώ και δεν ξαναδιαβάζει
+                call hs_load            ; ο πίνακας βαθμολογιών από τη δισκέτα
                 ld   a,1
                 call SCR_SET_MODE
                 call set_palette
@@ -293,7 +294,8 @@ ml_dead:        call game_over
 ml_end:         xor  a
                 ld   (game_done),a
                 call the_end
-ml_again:       jp   main               ; από την αρχή: μενού και πρώτη αίθουσα
+ml_again:       call hs_finish          ; μπαίνει το σκορ στον πίνακα;
+                jp   main               ; από την αρχή: μενού και πρώτη αίθουσα
 
 ml_dir          db   0
 ml_grav         db   0

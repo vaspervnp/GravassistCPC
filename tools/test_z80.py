@@ -1170,10 +1170,92 @@ def main():
     check("…και κλειδί άλλου καναλιού δεν μετράει",
           t26.m.a == 8, f"μήνυμα {t26.m.a}")
 
+    check_hiscore()
     check_banking()
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
+
+
+def check_hiscore():
+    """Ο πίνακας βαθμολογιών: κατάταξη, εισαγωγή, μορφοποίηση ψηφίων.
+
+    Ο ΔΙΣΚΟΣ ΔΕΝ ΔΟΚΙΜΑΖΕΤΑΙ ΕΔΩ και δεν μπορεί: όλο το jumpblock του firmware
+    είναι RET, οπότε τα CAS_OUT_* δεν κάνουν τίποτα. Ό,τι ελέγχεται είναι η
+    λογική που ζει στη μνήμη — γι' αυτό γράφτηκε χωριστά από τον δίσκο.
+    """
+    from z80run import Z80Test
+    t = Z80Test()
+    tab = t.sym("HS_TABLE")
+    entry = 2 + P.HISCORE_NAME
+
+    def put(scores):
+        for i, (sc, nm) in enumerate(scores):
+            t.poke(tab + i * entry, sc.to_bytes(2, "little", signed=True))
+            t.poke(tab + i * entry + 2, nm.encode())
+
+    def table():
+        out = []
+        for i in range(P.HISCORE_MAX):
+            b = t.peek(tab + i * entry, entry)
+            out.append((int.from_bytes(b[:2], "little", signed=True),
+                        b[2:].decode(errors="replace")))
+        return out
+
+    # --- hs_reset ----------------------------------------------------
+    put([(9, "ZZZ")] * P.HISCORE_MAX)
+    t.call("HS_RESET")
+    check("hs_reset: πέντε μηδενικά με όνομα NUL",
+          table() == [(0, "NUL")] * P.HISCORE_MAX, str(table()[:2]))
+
+    # --- hs_place ----------------------------------------------------
+    base = [(500, "AAA"), (400, "BBB"), (300, "CCC"), (200, "DDD"), (100, "EEE")]
+    for score, want in ((600, 0), (450, 1), (350, 2), (150, 4), (50, None),
+                        (100, None), (500, 1)):
+        put(base)
+        t.call("HS_PLACE", hl=score & 0xFFFF)
+        placed = bool(t.m.f & 1)
+        if want is None:
+            check(f"hs_place {score}: δεν μπαίνει", not placed,
+                  f"μπήκε στη θέση {t.m.a}" if placed else "")
+        else:
+            check(f"hs_place {score}: θέση {want}",
+                  placed and t.m.a == want,
+                  f"{'θέση ' + str(t.m.a) if placed else 'δεν μπήκε'}")
+
+    # ΙΣΟΠΑΛΙΑ ΚΑΤΩ: το 100 δεν εκτοπίζει το 100 που είναι ήδη εκεί, αλλιώς
+    # κάθε επανάληψη του ίδιου σκορ θα έσπρωχνε τον προηγούμενο παίκτη έξω.
+
+    # --- hs_insert ---------------------------------------------------
+    put(base)
+    t.poke16(t.sym("HS_SCORE"), 450)
+    t.poke(t.sym("HS_NAME"), b"NEW")
+    t.call("HS_INSERT", a=1)
+    check("hs_insert: μπαίνει στη θέση και σπρώχνει τα από κάτω",
+          table() == [(500, "AAA"), (450, "NEW"), (400, "BBB"),
+                      (300, "CCC"), (200, "DDD")], str(table()))
+
+    put(base)
+    t.poke16(t.sym("HS_SCORE"), 1)
+    t.poke(t.sym("HS_NAME"), b"LST")
+    t.call("HS_INSERT", a=P.HISCORE_MAX - 1)
+    check("hs_insert: τελευταία θέση δεν σπρώχνει τίποτα",
+          table() == base[:-1] + [(1, "LST")], str(table()[-2:]))
+
+    put(base)
+    t.poke16(t.sym("HS_SCORE"), 999)
+    t.poke(t.sym("HS_NAME"), b"TOP")
+    t.call("HS_INSERT", a=0)
+    check("hs_insert: πρώτη θέση σπρώχνει όλες",
+          table() == [(999, "TOP")] + base[:-1], str(table()[:2]))
+
+    # --- score_digits ------------------------------------------------
+    for value, want in ((1000, " 1000"), (0, " 0000"), (42, " 0042"),
+                        (9999, " 9999"), (-5, "-0005"), (-1234, "-1234")):
+        t.poke16(t.sym("SCORE"), value & 0xFFFF)
+        t.call("SCORE_DIGITS")
+        got = t.peek(t.sym("SCORE_TXT"), 5).decode(errors="replace")
+        check(f"score_digits {value} -> '{want}'", got == want, f"'{got}'")
 
 
 def check_banking():

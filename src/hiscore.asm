@@ -18,6 +18,9 @@ CAS_OUT_OPEN    equ  #BC8C      ; HL=όνομα, B=μήκος, DE=buffer 2K
 CAS_OUT_DIRECT  equ  #BC98      ; HL=δεδομένα, DE=μήκος, BC=exec, A=τύπος
 CAS_OUT_CLOSE   equ  #BC8F
 CAS_OUT_ABANDON equ  #BC92
+; KM READ CHAR: CF=1 και A = ο χαρακτήρας, αν υπάρχει πλήκτρο στην ουρά.
+; ΔΕΝ περιμένει — γι' αυτό ο βρόχος του hs_ask ξαναρωτά.
+KM_READ_CHAR    equ  #BB09
 
 HS_VERSION      equ  1
 HS_ENTRY        equ  2+HISCORE_NAME     ; dw σκορ + τρία γράμματα
@@ -227,6 +230,173 @@ hs_submit:      ld   hl,(score)
                 call hs_save
                 scf
                 ret
+
+;---------------------------------------------------------------------
+; hs_menu — ο πίνακας των πέντε, στο μενού
+;
+;   Μία γραμμή ανά θέση: «1. ABC  1234». Σταθερό πλάτος, ώστε να μη χρειάζεται
+;   σβήσιμο όταν αλλάξει — το μενού γράφει τα στατικά του μία φορά.
+;
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+HS_ROW          equ  16         ; γραμμή κειμένου της κεφαλίδας
+HS_COL          equ  14
+
+hs_menu:        ld   a,INK_HERO_PEN
+                call TXT_SET_PEN
+                ld   h,HS_COL
+                ld   l,HS_ROW
+                ld   de,hs_title
+                ld   b,hs_title_e-hs_title
+                call menu_puts
+
+                ld   ix,hs_table
+                xor  a
+                ld   (hm_i),a
+hm_lp:          ld   a,(hm_i)
+                add  a,'1'              ; κατάταξη: 1..5, όχι 0..4
+                ld   (hs_line),a
+                ld   a,'.'
+                ld   (hs_line+1),a
+                ld   a,' '
+                ld   (hs_line+2),a
+
+                push ix                 ; τα τρία γράμματα
+                pop  hl
+                inc  hl
+                inc  hl
+                ld   de,hs_line+3
+                ld   bc,HISCORE_NAME
+                ldir
+                ld   a,' '
+                ld   (hs_line+3+HISCORE_NAME),a
+
+                ld   l,(ix+0)           ; και το σκορ, πέντε χαρακτήρες
+                ld   h,(ix+1)
+                push ix
+                call score_digits_hl
+                pop  ix
+                ld   hl,score_txt
+                ld   de,hs_line+4+HISCORE_NAME
+                ld   bc,5
+                ldir
+
+                ld   a,(hm_i)           ; γραμμή = κεφαλίδα + 1 + θέση
+                add  a,HS_ROW+1
+                ld   l,a
+                ld   h,HS_COL
+                ld   de,hs_line
+                ld   b,HS_LINE_W
+                push ix
+                call menu_puts
+                pop  ix
+
+                ld   de,HS_ENTRY
+                add  ix,de
+                ld   hl,hm_i
+                inc  (hl)
+                ld   a,(hl)
+                cp   HISCORE_MAX
+                jr   c,hm_lp
+                ret
+
+hm_i            db   0
+HS_LINE_W       equ  4+HISCORE_NAME+5
+hs_line         ds   HS_LINE_W
+hs_title:       db   "HIGH SCORES"
+hs_title_e:
+
+;---------------------------------------------------------------------
+; hs_ask — τρία γράμματα από τον παίκτη
+;
+;   ENTER τελειώνει νωρίτερα. Αν δεν δοθεί ΚΑΝΕΝΑ γράμμα, το όνομα γίνεται
+;   NUL — η προδιαγραφή το λέει ρητά, και ένα κενό όνομα στον πίνακα δεν
+;   ξεχωρίζει από κατεστραμμένο αρχείο.
+;
+; OUT: hs_name γεμάτο
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+ASK_ROW         equ  12
+ASK_COL         equ  12
+
+hs_ask:         ld   hl,hs_name         ; ξεκινά με κενά, όχι σκουπίδια
+                ld   (hl),' '
+                ld   de,hs_name+1
+                ld   bc,HISCORE_NAME-1
+                ldir
+                xor  a
+                ld   (ha_n),a
+
+                ld   a,INK_HERO_PEN
+                call TXT_SET_PEN
+                ld   h,ASK_COL
+                ld   l,ASK_ROW
+                ld   de,hs_prompt
+                ld   b,hs_prompt_e-hs_prompt
+                call menu_puts
+
+ha_lp:          call hs_show
+                call KM_READ_CHAR
+                jr   nc,ha_lp           ; κανένα πλήκτρο ακόμα
+                cp   13                 ; ENTER: τέλος, ό,τι δόθηκε
+                jr   z,ha_done
+                cp   'a'                ; πεζά -> κεφαλαία
+                jr   c,ha_up
+                cp   'z'+1
+                jr   nc,ha_up
+                sub  32
+ha_up:          cp   'A'
+                jr   c,ha_lp            ; μόνο γράμματα· τα υπόλοιπα αγνοούνται
+                cp   'Z'+1
+                jr   nc,ha_lp
+                ld   e,a
+                ld   a,(ha_n)
+                cp   HISCORE_NAME
+                jr   nc,ha_lp           ; γέμισε
+                ld   c,a
+                ld   b,0
+                ld   hl,hs_name
+                add  hl,bc
+                ld   (hl),e
+                ld   hl,ha_n
+                inc  (hl)
+                ld   a,(hl)
+                cp   HISCORE_NAME
+                jr   c,ha_lp
+
+ha_done:        call hs_show
+                ld   a,(ha_n)
+                or   a
+                ret  nz
+                ld   hl,hs_nul          ; τίποτα δεν δόθηκε
+                ld   de,hs_name
+                ld   bc,HISCORE_NAME
+                ldir
+                ret
+
+; hs_show — τα γράμματα όπως πληκτρολογούνται
+hs_show:        ld   h,ASK_COL+hs_prompt_e-hs_prompt+1
+                ld   l,ASK_ROW
+                ld   de,hs_name
+                ld   b,HISCORE_NAME
+                jp   menu_puts
+
+ha_n            db   0
+hs_prompt:      db   "NAME:"
+hs_prompt_e:
+
+;---------------------------------------------------------------------
+; hs_finish — τέλος παρτίδας: μπαίνει το σκορ στον πίνακα;
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+hs_finish:      ld   hl,(score)
+                call hs_place
+                ret  nc                 ; δεν έφτασε: τίποτα να ρωτήσουμε
+                push af
+                call hs_ask
+                pop  af
+                call hs_insert
+                jp   hs_save
 
 hs_nul:         db   "NUL"              ; όνομα όταν ο παίκτης δεν δώσει
 hs_fname:       db   "SCORES.BIN"

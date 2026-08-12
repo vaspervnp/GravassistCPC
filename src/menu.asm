@@ -28,7 +28,9 @@ ARENA_R         equ 9
 ARENA_W         equ 10
 ARENA_H         equ 5
 
-MENU_TXT_ROW    equ 20          ; γραμμές κειμένου του firmware (από 1)
+; Οι γραμμές 16..21 πήγαν στον πίνακα βαθμολογιών, οπότε το «Press Space»
+; κατέβηκε από τη 20 στη 22.
+MENU_TXT_ROW    equ 22          ; γραμμές κειμένου του firmware (από 1)
 MENU_SIG_ROW    equ 23
 MENU_PAGE       equ 500         ; frames ανά σελίδα πλήκτρων = 10 δευτερόλεπτα
 
@@ -53,6 +55,7 @@ endif
                 call menu_arena
                 call menu_text
                 call menu_keys
+                call hs_menu            ; οι πέντε μεγαλύτερες, από τη δισκέτα
                 call music_start        ; ο βρόχος τη συντηρεί, νότα τη νότα
 
                 ; Ο ήρωας ξεκινά μέσα στην αρένα και περπατάει για πάντα.
