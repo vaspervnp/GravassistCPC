@@ -494,6 +494,8 @@ def defs_asm(rooms=()):
             "",
             "; --- σετ αιθουσών σε αρχείο (tools/roomfile.py) --------------",
             f"SET_ROOMS       equ {RF.SET_ROOMS}",
+            f"SET_VERSION     equ {RF.VERSION}          ; ο φορτωτής απορρίπτει "
+            "ό,τι άλλο",
             f"SET_NUMBERS     equ {3 + 1 + 1}          ; offset του numbers[] "
             "στην κεφαλή",
             f"SET_OFFS        equ {3 + 1 + 1 + RF.SET_ROOMS}         ; offset "

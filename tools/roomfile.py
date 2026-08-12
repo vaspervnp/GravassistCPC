@@ -23,7 +23,9 @@
     (origin,col,row,g)*   #FF      σημεία άφιξης
     (col,row,dcol,drow)*  #FF      τηλεμεταφορές
     (col,row,τιμή)*       #FF      ιδιότητες κελιών (κανάλι / ταυτότητα)
-    (count,type)*                  RLE κελιά, μέχρι να βγουν COLS*ROWS
+    RLE κελιά, μέχρι να βγουν COLS*ROWS:
+        0ttttttt                   ΕΝΑ κελί τύπου t
+        1ttttttt count             count κελιά τύπου t
 
 Οι τρεις πίνακες τερματίζονται με #FF ακριβώς όπως πριν, ώστε οι βρόχοι
 σάρωσης του src/hero.asm να δουλεύουν πάνω στο αρχείο χωρίς αντιγραφή.
@@ -38,7 +40,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import physics as P
 
 MAGIC = b"GRS"
-VERSION = 1
+# 2 = RLE με σημαία στο bit 7 του τύπου (πριν: σκέτα ζεύγη πλήθος/τύπος).
+# Ο φορτωτής του src/roomfile.asm ΤΗΝ ΕΛΕΓΧΕΙ: μια παλιά δισκέτα με σετ της
+# έκδοσης 1 περνούσε την υπογραφή 'GRS' και ξεδιπλωνόταν σε σκουπίδια.
+VERSION = 2
 # ΑΙΘΟΥΣΕΣ ΑΝΑ ΑΡΧΕΙΟ — και το μέγεθος των πινάκων της κεφαλίδας.
 #
 # Ήταν 40 και δεν χωρούσαν: ο buffer του CPC μίκρυνε καθώς μεγάλωνε ο κώδικας
@@ -88,19 +93,48 @@ def set_capacity():
 SET_MAX = set_capacity()
 
 
-def rle_encode(cells):
-    """Ζεύγη (πλήθος, τύπος). Το πλήθος χωράει σε ένα byte, άρα σπάει στα 255."""
-    out = bytearray()
-    run, prev = 0, None
+RLE_RUN = 0x80          # bit 7 του τύπου: «ακολουθεί byte πλήθους»
+
+
+def _runs(cells):
+    """(τιμή, μήκος) για κάθε σειρά ίδιων κελιών. Χωρίς όριο στο μήκος."""
+    prev, run = None, 0
     for v in cells:
-        if v == prev and run < 255:
+        if v == prev:
             run += 1
             continue
         if prev is not None:
-            out += bytes((run, prev))
+            yield prev, run
         prev, run = v, 1
     if prev is not None:
-        out += bytes((run, prev))
+        yield prev, run
+
+
+def rle_encode(cells):
+    """ΕΝΑ byte για μεμονωμένο κελί, δύο για σειρά. Το bit 7 του τύπου λέει
+    «ακολουθεί πλήθος».
+
+    Τα σκέτα ζεύγη (πλήθος, τύπος) πλήρωναν 2 bytes ακόμα και για ΕΝΑ κελί,
+    και οι πίστες είναι γεμάτες μεμονωμένα κελιά: στις έξι αίθουσες τα 320
+    από τα 635 run είχαν μήκος 1, δηλαδή 640 bytes για 320 κελιά — το RLE
+    δούλευε ανάποδα και τα φούσκωνε. Με τη σημαία το πλέγμα έπεσε από 1276
+    σε 956 bytes χωρίς καμία απώλεια.
+
+    Το bit είναι ελεύθερο επειδή οι τύποι φτάνουν ως 33 (P.NTYPES). Το assert
+    το κρατά αληθινό: ο 128ός τύπος θα έσπαγε σιωπηλά κάθε πίστα.
+    """
+    assert P.NTYPES <= RLE_RUN, (
+        f"{P.NTYPES} τύποι: το bit 7 δεν είναι πια ελεύθερο για τη σημαία RLE")
+    out = bytearray()
+    for value, run in _runs(cells):
+        while run:
+            # Το πλήθος είναι ένα byte, οπότε οι μεγάλες σειρές σπάνε στα 255.
+            take = min(run, 255)
+            if take == 1:
+                out.append(value)
+            else:
+                out += bytes((value | RLE_RUN, take))
+            run -= take
     return bytes(out)
 
 
@@ -109,10 +143,17 @@ def rle_decode(data, n=CELLS):
     out = bytearray()
     i = 0
     while len(out) < n:
-        if i + 1 >= len(data) + 1:
+        if i >= len(data):
             raise ValueError("τα δεδομένα RLE τελείωσαν πριν γεμίσει το πλέγμα")
-        count, value = data[i], data[i + 1]
-        i += 2
+        head = data[i]
+        i += 1
+        if head & RLE_RUN:
+            if i >= len(data):
+                raise ValueError("σειρά RLE χωρίς το byte του πλήθους της")
+            value, count = head & (RLE_RUN - 1), data[i]
+            i += 1
+        else:
+            value, count = head, 1
         out += bytes([value]) * count
     if len(out) != n:
         raise ValueError(f"RLE έβγαλε {len(out)} κελιά αντί για {n}")

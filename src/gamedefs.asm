@@ -50,6 +50,7 @@ GTAB_OFF        equ 15
 
 ; --- σετ αιθουσών σε αρχείο (tools/roomfile.py) --------------
 SET_ROOMS       equ 4
+SET_VERSION     equ 2          ; ο φορτωτής απορρίπτει ό,τι άλλο
 SET_NUMBERS     equ 5          ; offset του numbers[] στην κεφαλή
 SET_OFFS        equ 9         ; offset του offs[]
 LVL_CELLS       equ 960
