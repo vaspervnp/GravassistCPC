@@ -1234,6 +1234,78 @@ def check_banking():
           got == [0x10, 0x11, 0x12, 0x13],
           " ".join(f"#{v:02X}" for v in got))
 
+    check_bank_asm()
+
+
+def check_bank_asm():
+    """Το src/bank.asm πάνω στο μοντέλο τραπεζών."""
+    from z80run import Z80Test, BANK_LO
+
+    # --- bank_probe σε μηχάνημα 128K ---------------------------------
+    t = Z80Test(banking=True)
+    orig = t.peek(BANK_LO)                  # η πρώτη εντολή του προγράμματος
+    t.call("BANK_PROBE")
+    check("bank_probe βρίσκει τις τράπεζες σε 128K",
+          t.peek(t.sym("BANK_OK")) == b"\x01")
+    check("…και αφήνει τον κώδικα στο #4000 όπως τον βρήκε",
+          t.peek(BANK_LO) == orig,
+          f"#{orig[0]:02X} -> #{t.peek(BANK_LO)[0]:02X}")
+    check("…και την οργάνωση πίσω στη βασική", t.ram_org == 0)
+
+    # --- bank_probe σε μηχάνημα 64K ----------------------------------
+    t64 = Z80Test()                         # banking=False: το OUT αγνοείται
+    orig64 = t64.peek(BANK_LO)
+    t64.call("BANK_PROBE")
+    check("bank_probe ΔΕΝ βρίσκει τράπεζες σε 64K",
+          t64.peek(t64.sym("BANK_OK")) == b"\x00")
+    check("…και εκεί επίσης αφήνει τον κώδικα ανέπαφο",
+          t64.peek(BANK_LO) == orig64)
+
+    # --- η στοίβα μέσα στο παράθυρο απαγορεύει το banking ------------
+    # Χειροκίνητα, γιατί το Z80Test.call ορίζει το ίδιο το SP.
+    ts = Z80Test(banking=True)
+    ts.poke(ts.sym("BANK_OK"), b"\xEE")     # ώστε το 0 να είναι δική του δουλειά
+    ts.m.sp = 0x6000                        # ΜΕΣΑ στο #4000..#7FFF
+    ts.m.sp = (ts.m.sp - 2) & 0xFFFF
+    ts.poke16(ts.m.sp, 0x0038)
+    ts.m.pc = ts.sym("BANK_PROBE")
+    ts.m.halted = False
+    ts.m.ticks_to_stop = 100000
+    ts.m.run()
+    check("στοίβα μέσα στο παράθυρο -> κανένα banking",
+          ts.peek(ts.sym("BANK_OK")) == b"\x00",
+          f"bank_ok = #{ts.peek(ts.sym('BANK_OK'))[0]:02X}")
+
+    # --- bank_copy: τράπεζα -> βασική μνήμη --------------------------
+    PATTERN = bytes(range(0x40, 0x50))
+    SCRATCH = 0x0200                        # μπλοκ 0, έξω από το παράθυρο
+    for i, org in enumerate((0xC4, 0xC5, 0xC6, 0xC7)):
+        tc = Z80Test(banking=True)
+        src = BANK_LO + 0x0800
+        tc.bank_poke(4 + i, src, bytes(b ^ (i * 0x11) for b in PATTERN))
+        tc.poke(src, b"\xFF" * len(PATTERN))    # βασική μνήμη: σκουπίδια
+        tc.call("BANK_COPY", a=org, hl=src, de=SCRATCH, bc=len(PATTERN))
+        want = bytes(b ^ (i * 0x11) for b in PATTERN)
+        check(f"bank_copy φέρνει το μπλοκ {4 + i} έξω",
+              tc.peek(SCRATCH, len(PATTERN)) == want)
+        if i == 0:
+            check("…και δεν άφησε το παράθυρο ανοιχτό", tc.ram_org == 0)
+            check("…και η βασική μνήμη στην ίδια διεύθυνση δεν πειράχτηκε",
+                  tc.peek(src, len(PATTERN)) == b"\xFF" * len(PATTERN))
+
+    # --- bank_fill: βασική μνήμη -> τράπεζα --------------------------
+    tf = Z80Test(banking=True)
+    dst = BANK_LO + 0x1000
+    tf.poke(SCRATCH, PATTERN)
+    tf.call("BANK_FILL", a=0xC6, hl=SCRATCH, de=dst, bc=len(PATTERN))
+    check("bank_fill γράφει ΜΕΣΑ στην τράπεζα",
+          tf.bank_peek(6, dst, len(PATTERN)) == PATTERN)
+    check("…χωρίς να γράψει στη βασική μνήμη",
+          tf.peek(dst, len(PATTERN)) == b"\x00" * len(PATTERN),
+          " ".join(f"{b:02X}" for b in tf.peek(dst, len(PATTERN))[:4]))
+    check("…και οι άλλες τράπεζες δεν πειράχτηκαν",
+          tf.bank_peek(4, dst, len(PATTERN)) == b"\x00" * len(PATTERN))
+
 
 if __name__ == "__main__":
     sys.exit(main())
