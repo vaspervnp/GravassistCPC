@@ -39,11 +39,33 @@ FIRMWARE_LO, FIRMWARE_HI = 0xB800, 0xBFFF
 # Διεύθυνση-φρουρός: εκεί «επιστρέφει» η ρουτίνα που δοκιμάζουμε.
 SENTINEL = 0x0038
 
+# --- Τράπεζες RAM του 6128 -------------------------------------------------
+#
+# Ο gate array αποκωδικοποιείται σε A15=0 και A14=1, δηλαδή θύρα #7Fxx. Μια
+# τιμή με τα δύο πάνω bits 11 επιλέγει την ΟΡΓΑΝΩΣΗ μνήμης: #C0..#C7. Στο
+# 6128 οι οργανώσεις 4..7 αντικαθιστούν ΜΟΝΟ το #4000..#7FFF με τα μπλοκ
+# 4..7· τα υπόλοιπα τρία τέταρτα της μνήμης μένουν ως έχουν.
+#
+# ΓΙΑΤΙ ΕΔΩ: χωρίς μοντέλο τραπεζών, κάθε τεστ που θα γραφόταν για τον κώδικα
+# banking θα ήταν ψεύτικο πράσινο — ο προσομοιωτής θα αγνοούσε το OUT και θα
+# διάβαζε τη βασική μνήμη, δηλαδή ακριβώς ό,τι κάνει ένα μηχάνημα 64K.
+GA_PORT_MASK, GA_PORT_SEL = 0xC000, 0x4000
+BANK_LO, BANK_HI = 0x4000, 0x7FFF
+BANK_SIZE = BANK_HI - BANK_LO + 1
+FIRST_BANK = 4                  # οι οργανώσεις 4..7 -> μπλοκ 4..7
+
 
 class Z80Test:
     """Το χτισμένο main.bin φορτωμένο σε προσομοιωτή, με τα σύμβολα του rasm."""
 
-    def __init__(self):
+    def __init__(self, banking=False):
+        """banking=False είναι ΜΗΧΑΝΗΜΑ 64K: το OUT στον gate array αγνοείται.
+
+        Δεν είναι μόνο προεπιλογή για συμβατότητα — είναι και το σενάριο που
+        πρέπει να δοκιμάζεται (464/664, ή 6128 σε προφίλ 64K στον emulator).
+        Είναι επίσης ΓΡΗΓΟΡΟ: με banking=True κάθε ανάγνωση μνήμης περνά από
+        callback της Python, που κοστίζει σε δοκιμές των 200 καρέ.
+        """
         if z80 is None:
             raise RuntimeError(
                 "λείπει το πακέτο 'z80' (pip install z80) — τα τεστ Z80 "
@@ -58,7 +80,62 @@ class Z80Test:
             self.m.memory[a] = 0xC9
         self.m.memory[SENTINEL] = 0x76
         self.traps = {}                 # διεύθυνση -> (bytes, carry)
-        self.calls = []                 # τα μπλοκ που πέρασαν από τις παγίδες          # HALT: σταματά το run()
+        self.calls = []                 # τα μπλοκ που πέρασαν από τις παγίδες
+        self.ram_org = 0                # οργάνωση μνήμης· 0 = καμία τράπεζα
+        self.banks = [bytearray(BANK_SIZE) for _ in range(4)]   # μπλοκ 4..7
+        self.banking = banking
+        if banking:
+            self._install_banking()
+
+    # -------------------------------------------------------------- τράπεζες
+    def _block_at(self, addr):
+        """Ποιο μπλοκ βλέπει η διεύθυνση· None = η βασική μνήμη."""
+        if self.ram_org < FIRST_BANK or not (BANK_LO <= addr <= BANK_HI):
+            return None
+        return self.banks[self.ram_org - FIRST_BANK]
+
+    def _install_banking(self):
+        mem = self.m.memory
+
+        def rd(addr):
+            blk = self._block_at(addr)
+            return mem[addr] if blk is None else blk[addr - BANK_LO]
+
+        def wr(addr, value):
+            blk = self._block_at(addr)
+            if blk is None:
+                mem[addr] = value
+            else:
+                blk[addr - BANK_LO] = value
+
+        def out(port, value):
+            # ΣΤΑ BITS ΔΙΕΥΘΥΝΣΗΣ, όχι στο χαμηλό byte: το `out (c),c` με
+            # BC=#7FC4 δίνει θύρα #7FC4 και το `out (#7F),a` δίνει #xx7F.
+            # Σύγκριση με το #7F θα έχανε τη μία από τις δύο μορφές.
+            if (port & GA_PORT_MASK) != GA_PORT_SEL or (value & 0xC0) != 0xC0:
+                return
+            org = value & 7
+            # Οι οργανώσεις 1..3 είναι του CP/M Plus και μετακινούν και άλλα
+            # μπλοκ. Δεν τις μοντελοποιούμε — σιωπηλή αγνόηση θα έδειχνε το
+            # τεστ πράσινο ενώ το σίδερο θα έκανε κάτι εντελώς άλλο.
+            if 1 <= org <= 3:
+                raise RuntimeError(
+                    f"οργάνωση μνήμης {org} (#{value:02X}): δεν μοντελοποιείται")
+            self.ram_org = org
+
+        self.m.set_read_callback(rd)
+        self.m.set_write_callback(wr)
+        self.m.set_output_callback(out)
+
+    def bank_peek(self, block, addr, n=1):
+        """Bytes από μπλοκ 4..7, με ΑΠΟΛΥΤΗ διεύθυνση μέσα στο #4000..#7FFF."""
+        blk = self.banks[block - FIRST_BANK]
+        return bytes(blk[addr - BANK_LO + i] for i in range(n))
+
+    def bank_poke(self, block, addr, data):
+        blk = self.banks[block - FIRST_BANK]
+        for i, b in enumerate(bytes(data)):
+            blk[addr - BANK_LO + i] = b
 
     # ---------------------------------------------------------------- build
     def _build(self):

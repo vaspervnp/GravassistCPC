@@ -1159,8 +1159,80 @@ def main():
     check("…και κλειδί άλλου καναλιού δεν μετράει",
           t26.m.a == 8, f"μήνυμα {t26.m.a}")
 
+    check_banking()
+
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
+
+
+def check_banking():
+    """Το μοντέλο τραπεζών του z80run — ΠΡΙΝ γραφτεί κώδικας banking.
+
+    Χωρίς αυτό, ένα τεστ για τη μελλοντική bank.asm θα περνούσε ακόμα κι αν ο
+    προσομοιωτής αγνοούσε εντελώς το OUT: θα διάβαζε τη βασική μνήμη και θα
+    έβρισκε ό,τι μόλις έγραψε. Πράσινο εδώ, σκουπίδια-αίθουσες στο σίδερο.
+    """
+    from z80run import Z80Test, BANK_LO
+
+    # Δοκιμαστικό πρόγραμμα ΠΑΝΩ από το #8000, γιατί ακριβώς αυτός είναι ο
+    # κανόνας που θα τηρεί και η bank.asm: ο κώδικας δεν επιτρέπεται να ζει
+    # μέσα στο παράθυρο που εναλλάσσει.
+    PROG = 0x8000
+    CELL = BANK_LO + 0x0123         # κάπου μέσα στο παράθυρο
+
+    def program(org_in, org_out):
+        # ld bc,#7F00+org_in / out (c),c    -> σελίδα μέσα
+        # ld a,(CELL) / ld (PROG+0x40),a    -> διάβασε ΜΕΣΑ από την τράπεζα
+        # ld bc,#7F00+org_out / out (c),c   -> σελίδα έξω
+        # halt
+        return bytes((0x01, org_in, 0x7F, 0xED, 0x49,
+                      0x3A, CELL & 0xFF, CELL >> 8,
+                      0x32, (PROG + 0x40) & 0xFF, (PROG + 0x40) >> 8,
+                      0x01, org_out, 0x7F, 0xED, 0x49,
+                      0x76))
+
+    t = Z80Test(banking=True)
+    t.poke(CELL, b"\xAA")                       # βασική μνήμη (μπλοκ 1)
+    t.bank_poke(4, CELL, b"\x55")               # ίδια διεύθυνση, μπλοκ 4
+    t.poke(PROG, program(0xC4, 0xC0))
+    t.m.pc = PROG
+    t.m.halted = False
+    t.m.ticks_to_stop = 100000
+    t.m.run()
+    check("η οργάνωση 4 φέρνει το μπλοκ 4 στο #4000",
+          t.peek(PROG + 0x40) == b"\x55", f"διάβασε #{t.peek(PROG + 0x40)[0]:02X}")
+    check("…και η βασική μνήμη δεν πειράχτηκε",
+          t.peek(CELL) == b"\xAA")
+    check("…και η οργάνωση επέστρεψε στο 0", t.ram_org == 0)
+
+    # Το ΙΔΙΟ πρόγραμμα σε μηχάνημα 64K: το OUT αγνοείται, οπότε διαβάζει τη
+    # βασική μνήμη. Αυτό είναι που θα πρέπει να πιάνει το bank_probe.
+    t64 = Z80Test()                             # banking=False = 64K
+    t64.poke(CELL, b"\xAA")
+    t64.poke(PROG, program(0xC4, 0xC0))
+    t64.m.pc = PROG
+    t64.m.halted = False
+    t64.m.ticks_to_stop = 100000
+    t64.m.run()
+    check("σε μηχάνημα 64K η ίδια αλληλουχία διαβάζει τη ΒΑΣΙΚΗ μνήμη",
+          t64.peek(PROG + 0x40) == b"\xAA",
+          f"διάβασε #{t64.peek(PROG + 0x40)[0]:02X}")
+
+    # Τέσσερις τράπεζες, τέσσερις διαφορετικές τιμές στην ΙΔΙΑ διεύθυνση.
+    t4 = Z80Test(banking=True)
+    for i, org in enumerate((0xC4, 0xC5, 0xC6, 0xC7)):
+        t4.bank_poke(4 + i, CELL, bytes((0x10 + i,)))
+    got = []
+    for i, org in enumerate((0xC4, 0xC5, 0xC6, 0xC7)):
+        t4.poke(PROG, program(org, 0xC0))
+        t4.m.pc = PROG
+        t4.m.halted = False
+        t4.m.ticks_to_stop = 100000
+        t4.m.run()
+        got.append(t4.peek(PROG + 0x40)[0])
+    check("και τα τέσσερα μπλοκ διακρίνονται μεταξύ τους",
+          got == [0x10, 0x11, 0x12, 0x13],
+          " ".join(f"#{v:02X}" for v in got))
 
 
 if __name__ == "__main__":
