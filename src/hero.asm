@@ -501,9 +501,9 @@ room_load:      ld   (cur_room),a
 rl_set:         inc  b
                 sub  SET_ROOMS
                 jr   nc,rl_set
-                ld   a,(set_cur)
-                cp   b
-                jr   z,rl_have          ; ήδη φορτωμένο: ούτε άγγιγμα στον δίσκο
+                ; ΠΑΝΤΑ ΞΑΝΑΦΟΡΤΩΝΟΥΜΕ. Ο set_buf ζει στη μνήμη οθόνης, οπότε
+                ; το περιεχόμενό του δεν επιβιώνει από το πρώτο render — μια
+                ; κρυφή μνήμη με βάση το set_cur θα έδειχνε σκουπίδια.
                 ld   a,b
                 call set_load
                 jr   c,rl_have
@@ -539,7 +539,41 @@ rl_have:        pop  af
                 ld   (room_attrs),hl    ; ο τέταρτος πίνακας: ιδιότητες κελιών
                 call skip_attr
 
+                ; ΟΙ ΠΙΝΑΚΕΣ ΦΕΥΓΟΥΝ ΑΠΟ ΤΗΝ ΟΘΟΝΗ. Είναι συνεχόμενοι, από το
+                ; room_exits ως εδώ, οπότε φεύγουν με ένα LDIR και οι τέσσερις
+                ; δείκτες μετατοπίζονται με την ίδια διαφορά. Χωρίς αυτό, το
+                ; πρώτο render θα ζωγράφιζε πάνω στα δεδομένα που διαβάζει το
+                ; plate_step σε κάθε καρέ.
                 push hl                 ; HL -> τα RLE κελιά
+                ld   de,(room_exits)
+                or   a
+                sbc  hl,de              ; HL = μήκος και των τεσσάρων
+                ld   b,h
+                ld   c,l
+                ld   hl,tab_buf         ; η μετατόπιση, ΠΡΙΝ αλλάξει το DE
+                or   a
+                sbc  hl,de
+                ld   (rl_delta),hl
+                ld   hl,(room_exits)
+                ld   de,tab_buf
+                ldir
+
+                ld   de,(rl_delta)      ; το add hl,de δεν πειράζει το DE
+                ld   hl,(room_exits)
+                add  hl,de
+                ld   (room_exits),hl
+                ld   hl,(room_arr)
+                add  hl,de
+                ld   (room_arr),hl
+                ld   hl,(room_tps)
+                add  hl,de
+                ld   (room_tps),hl
+                ld   hl,(room_attrs)
+                add  hl,de
+                ld   (room_attrs),hl
+
+                pop  hl                 ; HL -> τα RLE κελιά, ΜΕΣΑ στην οθόνη·
+                push hl                 ; το rle_unpack τρέχει πριν σχεδιαστεί
                 pop  ix
                 ld   de,cell_buf
                 call rle_unpack
@@ -578,6 +612,7 @@ room_exits      dw 0
 room_tps        dw 0
 room_arr        dw 0
 cur_room        db 0
+rl_delta        dw 0     ; πόσο μετακινήθηκαν οι πίνακες από την οθόνη
 from_room       db 0
 pending_room    db 0
 

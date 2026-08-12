@@ -36,6 +36,8 @@ def main():
     t.stub("RENDER_ROOM")           # χωρίς οθόνη δεν έχει τι να επαληθεύσει
     cell_buf = t.sym("CELL_BUF")
     set_buf = t.sym("SET_BUF")
+    tab_buf = t.sym("TAB_BUF")
+    tab_bytes = RF.tab_bytes()
 
     # 1. hero_to_cell: col*8 πρέπει να γίνεται σε 16 bits. Με 'add a,a' σε 8
     #    bits, κάθε στήλη από 32 και πάνω τύλιγε και ο ήρωας προσγειωνόταν
@@ -62,9 +64,9 @@ def main():
               f"{len(packed)} bytes -> {RF.CELLS} κελιά")
 
     # 3. room_find + room_load πάνω στο ΠΡΑΓΜΑΤΙΚΟ αρχείο σετ.
+    set_load_orig = t.fake_set_load()
     for index, name, data in RF.all_sets():
         t.poke(set_buf, data)
-        t.poke(t.sym("SET_CUR"), bytes((index,)))    # «είναι ήδη φορτωμένο»
         t.poke(t.sym("JR_COUNT"), b"\x00")
 
         for room in P.all_rooms():
@@ -97,14 +99,23 @@ def main():
                                   ("ROOM_ARR", expect_arr),
                                   ("ROOM_TPS", expect_tps)):
                 ptr = t.peek16(t.sym(label))
-                check(f"room_load {room.number}: {label} μέσα στο σετ",
-                      set_buf <= ptr < set_buf + len(data))
+                # ΟΧΙ μέσα στο σετ πια: ο set_buf ζει στη μνήμη οθόνης και το
+                # πρώτο render τον σβήνει, οπότε οι πίνακες αντιγράφονται στο
+                # tab_buf. Αν κάποιος δείκτης δείξει ξανά στην οθόνη, το
+                # plate_step θα διαβάζει pixel αντί για ιδιότητες κελιών.
+                check(f"room_load {room.number}: {label} μέσα στο tab_buf",
+                      tab_buf <= ptr < tab_buf + tab_bytes,
+                      f"#{ptr:04X} εκτός #{tab_buf:04X}..#{tab_buf+tab_bytes:04X}")
                 got, p = [], ptr
                 while t.peek(p)[0] != 0xFF and len(got) < 64:
                     got.append(tuple(t.peek(p, 4)))
                     p += 4
                 check(f"room_load {room.number}: {label}",
                       got == expect, f"{got} vs {expect}")
+
+    # Ο δρόμος του δίσκου ξαναγίνεται αληθινός: τα επόμενα τεστ ελέγχουν
+    # ακριβώς αυτόν.
+    t.poke(t.sym("SET_LOAD"), set_load_orig)
 
     # 3β. Το όνομα αρχείου φτιάχνεται με δύο ψηφία επιτόπου. Λάθος εδώ και το
     #     παιχνίδι ζητά αρχείο που δεν υπάρχει — χωρίς κανένα μήνυμα.
@@ -128,6 +139,8 @@ def main():
         want = f"ROOMS{RF.set_of(room_no):02d}.BIN".encode()
         check(f"αίθουσα {room_no} -> {want.decode()}", got == want,
               f"{got.decode(errors='replace')} vs {want.decode()}")
+
+    t.fake_set_load()       # ξανά: κανένα από τα υπόλοιπα δεν δοκιμάζει δίσκο
 
     # 4. Το ημερολόγιο: ό,τι αλλάζει ο παίκτης πρέπει να επιβιώνει όταν
     #    ξαναμπαίνει στην αίθουσα. Χωρίς αυτό η ενέργεια θα ήταν άπειρη —
@@ -1001,6 +1014,7 @@ def main():
     #     της πτώσης θέλει καθαρή αφετηρία, αλλιώς δείχνει «δεν έπεσε» για
     #     λόγο άσχετο με αυτό που μετράμε.
     t23 = Z80Test()
+    t23.fake_set_load()
     t23.stub("RENDER_ROOM")
     t23.stub("DRAW_TILE")
     rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
@@ -1038,6 +1052,7 @@ def main():
     #     το χτύπημα εξαρτάται από μετρητές που οι προηγούμενες ενότητες
     #     έχουν ήδη κουνήσει.
     t24 = Z80Test()
+    t24.fake_set_load()
     t24.stub("RENDER_ROOM")
     t24.stub("DRAW_TILE")
     rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
@@ -1078,6 +1093,7 @@ def main():
     #     γράφει την ανοιχτή μορφή ΤΟΥ ΤΥΠΟΥ: καρφωμένο T_LOCK_OPEN θα
     #     μεταμόρφωνε την πύλη σε λουκέτο, που είναι άλλο αντικείμενο.
     t25 = Z80Test()
+    t25.fake_set_load()
     t25.stub("RENDER_ROOM")
     t25.stub("DRAW_TILE")
     rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
@@ -1122,6 +1138,7 @@ def main():
     # 26. Το μήνυμα στην κλειστή πύλη. Αν ΚΡΑΤΑΣ το κλειδί της, το «ψάξε τον
     #     διακόπτη» είναι λάθος συμβουλή: η πύλη ανοίγει τώρα, με ένα πάτημα.
     t26 = Z80Test()
+    t26.fake_set_load()
     t26.stub("RENDER_ROOM")
     t26.stub("DRAW_TILE")
     rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
@@ -1315,14 +1332,20 @@ def check_bank_asm():
     # Z80 διαβάζει σετ από λάθος θέση και η αίθουσα βγαίνει σκουπίδι.
     ta = Z80Test(banking=True)
     bad = []
-    for idx in (1, 2, 3, 15, 16, 17, 32, 33, 48, 49, 63, RF.MAX_SETS):
+    # Οι δείκτες βγαίνουν από το ΙΔΙΟ το MAX_SETS: το μέγεθος θέσης έχει
+    # αλλάξει τρεις φορές και μια καρφωμένη λίστα ξεπερνούσε το όριο.
+    per = RF.SLOTS_PER_BANK
+    idxs = sorted({1, 2, per, per + 1, 2 * per, 2 * per + 1,
+                   RF.MAX_SETS - 1, RF.MAX_SETS} & set(range(1, RF.MAX_SETS + 1)))
+    for idx in idxs:
         want_bank, want_addr = RF.slot_of(idx)
         ta.call("SLOT_ADDR", a=idx)
         got_addr, got_org = ta.m.hl, ta.m.bc & 0xFF
         if (got_addr, got_org) != (want_addr, 0xC0 + want_bank):
             bad.append(f"σετ {idx}: #{got_addr:04X}/#{got_org:02X} αντί για "
                        f"#{want_addr:04X}/#{0xC0 + want_bank:02X}")
-    check(f"slot_addr συμφωνεί με το roomfile.slot_of σε {RF.MAX_SETS} σετ",
+    check(f"slot_addr συμφωνεί με το roomfile.slot_of ({len(idxs)} σημεία, "
+          f"{RF.MAX_SETS} σετ)",
           not bad, "; ".join(bad))
 
     # --- slot_full: ο χάρτης γεμάτων θέσεων ---------------------------

@@ -239,6 +239,20 @@ class Z80Test:
         best = max((a, n) for n, a in self.syms.items() if a <= addr)
         return f"{best[1]}+{addr - best[0]}"
 
+    def fake_set_load(self):
+        """Κάνει το set_load «scf / ret»: ο buffer γεμίζεται με το χέρι.
+
+        ΓΙΑΤΙ ΧΡΕΙΑΖΕΤΑΙ: ο set_buf ζει στη μνήμη οθόνης, οπότε το room_load
+        ξαναφορτώνει σε κάθε κλήση αντί να εμπιστεύεται το set_cur. Εδώ δεν
+        υπάρχει δίσκος — όλο το jumpblock του firmware είναι RET — άρα κάθε
+        room_load θα γύριζε άπρακτο. Επιστρέφει τα δύο αρχικά bytes, ώστε ο
+        καλών να μπορεί να ξαναφέρει τον αληθινό δρόμο όταν τον δοκιμάζει.
+        """
+        addr = self.sym("SET_LOAD")
+        before = self.peek(addr, 2)
+        self.poke(addr, b"\x37\xC9")           # scf / ret
+        return before
+
     def stub(self, name):
         """Κάνει μια ρουτίνα σκέτο RET.
 
