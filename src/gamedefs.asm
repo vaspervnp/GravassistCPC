@@ -49,15 +49,15 @@ RTAB_OFF        equ 16
 GTAB_OFF        equ 15
 
 ; --- σετ αιθουσών σε αρχείο (tools/roomfile.py) --------------
-SET_ROOMS       equ 2
+SET_ROOMS       equ 1
 SET_VERSION     equ 2          ; ο φορτωτής απορρίπτει ό,τι άλλο
 ; Οι θέσεις των σετ μέσα στις τράπεζες του 6128 (src/bank.asm).
 ; Ο Z80 βρίσκει τη θέση με ολισθήσεις, οπότε τα δύο μεγέθη ΠΡΕΠΕΙ
 ; να είναι δυνάμεις του 2 — το assert από κάτω το επιβάλλει.
-SLOT_SHIFT      equ 10         ; 1 << 10 = 1024 bytes ανά θέση
-SLOTS_SHIFT     equ 4         ; 1 << 4 = 16 θέσεις ανά μπλοκ
-MAX_SETS        equ 64         ; = 128 αίθουσες στη μνήμη
-SET_COUNT       equ 4          ; πόσα σετ ψάχνει η εκκίνηση
+SLOT_SHIFT      equ 9         ; 1 << 9 = 512 bytes ανά θέση
+SLOTS_SHIFT     equ 5         ; 1 << 5 = 32 θέσεις ανά μπλοκ
+MAX_SETS        equ 99         ; = 99 αίθουσες στη μνήμη
+SET_COUNT       equ 7          ; πόσα σετ ψάχνει η εκκίνηση
 
 ; --- σκορ (tools/physics.py) ---------------------------------
 SCORE_START     equ 1000
@@ -79,7 +79,7 @@ HISCORE_NAME    equ 3
 ; στις τράπεζες.
 VISIT_BYTES     equ 16
 SET_NUMBERS     equ 5          ; offset του numbers[] στην κεφαλή
-SET_OFFS        equ 7         ; offset του offs[]
+SET_OFFS        equ 6         ; offset του offs[]
 LVL_CELLS       equ 960
 ; Πόσες αλλαγές κελιών θυμάται το παιχνίδι συνολικά. Κάθε εγγραφή
 ; είναι 4 bytes· γεμάτο ημερολόγιο σημαίνει ότι οι παλιότερες

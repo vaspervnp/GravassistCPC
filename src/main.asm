@@ -1785,8 +1785,9 @@ journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi,
 set_buf
 set_capacity    equ  MEM_CEIL-set_buf   ; το διαβάζει το tools/roomfile.py
                 assert set_capacity > 0
-                ; ΚΑΙ ΟΧΙ ΜΕΓΑΛΥΤΕΡΟΣ ΑΠΟ ΜΙΑ ΘΕΣΗ ΤΡΑΠΕΖΑΣ: το slot_copy
-                ; αντιγράφει set_capacity bytes από την αρχή της θέσης, οπότε
-                ; ένας buffer μεγαλύτερος από τη θέση θα διάβαζε μέσα στην
-                ; επόμενη — και στην τελευταία θέση, έξω από την τράπεζα.
-                assert set_capacity <= 1<<SLOT_SHIFT
+                ; ΚΑΙ ΤΟΥΛΑΧΙΣΤΟΝ ΜΙΑ ΘΕΣΗ ΤΡΑΠΕΖΑΣ: το slot_copy φέρνει εδώ
+                ; ολόκληρη τη θέση. Αν ο κώδικας μεγαλώσει τόσο ώστε ο buffer
+                ; να πέσει κάτω από μία θέση, η αντιγραφή θα γράφει πάνω στον
+                ; χώρο εργασίας του AMSDOS — και θα φαίνεται σαν χαλασμένη
+                ; δισκέτα, όχι σαν έλλειψη μνήμης.
+                assert set_capacity >= 1<<SLOT_SHIFT

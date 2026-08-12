@@ -530,7 +530,10 @@ def defs_asm(rooms=()):
             f"HISCORE_NAME    equ {P.HISCORE_NAME}",
             "; Χάρτης επισκεμμένων αιθουσών: ένα bit ανά αίθουσα, όσες χωράνε",
             "; στις τράπεζες.",
-            f"VISIT_BYTES     equ {RF.MAX_SETS * RF.SET_ROOMS // 8}",
+            # ΔΥΝΑΜΗ ΤΟΥ 2: το visit_bit κόβει τον δείκτη με `and VISIT_BYTES-1`,
+            # που είναι μάσκα μόνο αν το μέγεθος είναι δύναμη του 2. Με 13 bytes
+            # η μάσκα θα ήταν 12 και οι μισές αίθουσες θα μοιράζονταν bit.
+            f"VISIT_BYTES     equ {1 << (max(1, -(-RF.MAX_SETS * RF.SET_ROOMS // 8)) - 1).bit_length()}",
             f"SET_NUMBERS     equ {3 + 1 + 1}          ; offset του numbers[] "
             "στην κεφαλή",
             f"SET_OFFS        equ {3 + 1 + 1 + RF.SET_ROOMS}         ; offset "
