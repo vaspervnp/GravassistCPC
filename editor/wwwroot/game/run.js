@@ -276,37 +276,45 @@
     }
   }
 
-  // --- Ρολόι 50 Hz ------------------------------------------------------
-  // ΚΛΕΙΔΩΜΕΝΟ ΣΤΟΝ ΡΥΘΜΟ ΤΟΥ AMSTRAD. Το requestAnimationFrame χτυπά στη
-  // συχνότητα της ΟΘΟΝΗΣ, όχι του παιχνιδιού: με μία ενημέρωση ανά repaint η
-  // ίδια WALK_V (2 px ανά ενημέρωση) έδινε 120 px/s σε οθόνη 60 Hz, 200 px/s
-  // σε 100 Hz και 288 px/s σε 144 Hz. Ο σχεδιαστής βαθμονομούσε το άλμα του
-  // σε ταχύτητα που ο CPC δεν έχει, και η δοκιμή έλεγε ψέματα ανάλογα με το
-  // μηχάνημα.
+  // --- Ρολόι με τον ρυθμό του Amstrad ------------------------------------
+  // ΔΥΟ ΛΑΘΗ ΜΑΖΙ, και το δεύτερο είναι το μεγάλο.
   //
-  // Ο πραγματικός χρόνος κόβεται εδώ σε βήματα των 20 ms. Η συνάρτηση του
-  // βρόχου επιστρέφει false όταν θέλει να σταματήσει.
-  const STEP_MS = 1000 / 50;
+  // (1) Το requestAnimationFrame χτυπά στη συχνότητα της ΟΘΟΝΗΣ, όχι του
+  //     παιχνιδιού. Με μία ενημέρωση ανά repaint η ίδια WALK_V έδινε άλλη
+  //     ταχύτητα σε κάθε μηχάνημα: 120 px/s στα 60 Hz, 288 στα 144.
+  //
+  // (2) Ούτε τα 50 Hz είναι η σωστή απάντηση. Ο βρόχος του Amstrad ΔΕΝ
+  //     χωράει σε ένα καρέ — θέλει 4 vsyncs όταν περπατάς — οπότε το σίδερο
+  //     τρέχει 12,5 ενημερώσεις/s και δίνει 50 px/s. Κλειδώνοντας εδώ στα
+  //     ονομαστικά 50 Hz ο editor έβγαζε 200 px/s: τετραπλάσια, και η δοκιμή
+  //     έλεγε πάλι ψέματα, απλώς σταθερά αντί για ανά μηχάνημα.
+  //
+  // Γι' αυτό ΤΟ ΒΗΜΑ ΔΗΛΩΝΕΙ ΤΟ ΚΟΣΤΟΣ ΤΟΥ: η fn επιστρέφει πόσα vsyncs
+  // έφαγε στον CPC (0 = σταμάτα). Οι τιμές είναι μετρημένες — δες το
+  // CPC_VSYNC_* στο tools/physics.py.
+  const VSYNC_MS = 1000 / 50;
   const STEP_MAX = 5;        // πόσα βήματα το πολύ σε ένα repaint
 
-  function at50hz(fn) {
+  function cpcClock(fn) {
     let due = null;                     // πότε οφείλεται το επόμενο βήμα
     (function pump(now) {
       if (due === null) due = now;
       // ΦΡΑΓΜΑ: σε κρυμμένη καρτέλα το rAF παγώνει και το ρολόι μένει πίσω
       // δεκάδες δευτερόλεπτα. Χωρίς αυτό, γυρίζοντας θα έτρεχαν χιλιάδες
       // βήματα με ακίνητη εικόνα — ο ήρωας θα «τηλεμεταφερόταν».
-      if (now - due > STEP_MS * STEP_MAX) due = now - STEP_MS * STEP_MAX;
-      let alive = true;
-      while (alive && now >= due) { due += STEP_MS; alive = fn(); }
-      if (alive) requestAnimationFrame(pump);
+      const back = VSYNC_MS * D.K.CPC_VSYNC_RUN * STEP_MAX;
+      if (now - due > back) due = now - back;
+      let cost = 1;
+      while (cost && now >= due) { cost = fn(); due += VSYNC_MS * cost; }
+      if (cost) requestAnimationFrame(pump);
     })(performance.now());
   }
 
   let ended = null;          // "GAME OVER" ή "THE END" — παγώνει τον βρόχο
 
-  // ΕΝΑ βήμα των 20 ms: ενημέρωση + σχεδίαση. Δεν προγραμματίζει το επόμενο —
-  // το κάνει ο at50hz. Επιστρέφει false όταν ο κόσμος πρέπει να παγώσει.
+  // ΕΝΑ βήμα: ενημέρωση + σχεδίαση. Δεν προγραμματίζει το επόμενο — το κάνει
+  // ο cpcClock. Επιστρέφει πόσα vsyncs κόστισε στον Amstrad.
+  //
   // ΠΑΓΩΜΕΝΟΣ ΚΟΣΜΟΣ, ΖΩΝΤΑΝΟΣ ΒΡΟΧΟΣ. Ο βρόχος σταματούσε εντελώς στο τέλος
   // της παρτίδας, οπότε το Restart δεν είχε ποιον να ξυπνήσει: καθάριζε το
   // ended, ξανάστηνε την αίθουσα, και η εικόνα έμενε παγωμένη για πάντα. Το
@@ -317,7 +325,7 @@
   }
 
   function frame() {
-    if (ended) { freezeNote(); return true; }
+    if (ended) { freezeNote(); return D.K.CPC_VSYNC_IDLE; }
     const { walk, run } = input();
     hero.update(walk, run);      // το τρέξιμο είναι ΣΗΜΑΙΑ, όχι δεύτερη ενημέρωση
     tick += run ? 2 : 1;
@@ -347,7 +355,7 @@
     }
     if (ended) {
       freezeNote();               // η εικόνα μένει ως έχει· ο βρόχος συνεχίζει
-      return true;
+      return D.K.CPC_VSYNC_IDLE;
     }
 
     if (hero.won) {
@@ -358,7 +366,7 @@
       if (dest === 255) {
         ended = "THE END";
         play("enter");
-        return true;            // άλλο ένα βήμα, που θα τυπώσει το μήνυμα
+        return D.K.CPC_VSYNC_IDLE;   // άλλο ένα βήμα, που τυπώνει το μήνυμα
       }
       play("exit");
       if (dest && rooms["room_" + dest + ".txt"]) {
@@ -420,7 +428,10 @@
       screen.text(hint, dr < 12 ? 16 : 7,
                   Math.floor((40 - hint.length) / 2) + 1);
     }
-    return true;
+    // Το κόστος του καρέ που μόλις έτρεξε. Η πτώση χρεώνεται σαν ακινησία:
+    // δεν έχει τον βρόχο του h_walk, που είναι ό,τι ακριβό έχει το βάδισμα.
+    return walk ? (run ? D.K.CPC_VSYNC_RUN : D.K.CPC_VSYNC_WALK)
+                : D.K.CPC_VSYNC_IDLE;
   }
 
   // --- Οθόνη μενού ------------------------------------------------------
@@ -464,14 +475,14 @@
       done = true;
       removeEventListener("keydown", go);
       start(firstRoom, rooms[firstRoom].cells, rooms[firstRoom].start);
-      at50hz(frame);
+      cpcClock(frame);
     };
     addEventListener("keydown", go);
     note.textContent = "Press Space to start game";
 
-    at50hz(function menuFrame() {
-      if (done) return false;
-      mhero.update(1);
+    cpcClock(function menuFrame() {
+      if (done) return 0;
+      mhero.update(1);                  // ο ήρωας του μενού πάντα περπατά
       mtick++;
       screen.clear();
       screen.tiles(mroom);
@@ -482,7 +493,7 @@
       screen.flush();
       screen.menuText(MENU_LINES);      // …και το firmware κείμενο από πάνω
       screen.menuText(MENU_KEYS[Math.floor(mtick / MENU_PAGE) % 2]);
-      return true;
+      return D.K.CPC_VSYNC_WALK;
     });
   }
 
@@ -598,7 +609,7 @@
     sel.value = want;
     if (!asked) { menu(want); return; }
     start(want, rooms[want].cells, rooms[want].start);
-    at50hz(frame);
+    cpcClock(frame);
   }
 
   // Ίδια πλημμύρα με το spread(), αλλά για τύπο που ΔΕΝ είναι έξοδος: μια

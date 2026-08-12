@@ -68,7 +68,12 @@ def build():
               "ENERGY_MAX": P.ENERGY_MAX, "ENERGY_PICK": P.ENERGY_PICK,
               "SPIKE_DMG": P.SPIKE_DMG, "CRATE_TICKS": P.CRATE_TICKS,
               "SPIKE_TICKS": P.SPIKE_TICKS, "HURT_FRAMES": P.HURT_FRAMES, "ATTR_MAX": P.ATTR_MAX,
-              "TRAIL_MAX": P.TRAIL_MAX, "LOCK_AUTO": P.LOCK_AUTO},
+              "TRAIL_MAX": P.TRAIL_MAX, "LOCK_AUTO": P.LOCK_AUTO,
+              # Το κόστος καρέ του Amstrad — το test run το χρειάζεται για να
+              # τρέχει με τον ρυθμό του σιδήρου και όχι με τα ονομαστικά 50 Hz.
+              "CPC_VSYNC_IDLE": P.CPC_VSYNC_IDLE,
+              "CPC_VSYNC_WALK": P.CPC_VSYNC_WALK,
+              "CPC_VSYNC_RUN": P.CPC_VSYNC_RUN},
 
         # Γραφικά: τιμές pen ανά pixel, ίδια πηγή με τα tiles του Amstrad.
         "PALETTE": ["#000080", "#FFFFFF", "#00FF00", "#FF8000"],
