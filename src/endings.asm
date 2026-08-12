@@ -75,7 +75,42 @@ gr_seal:        ld   (hl),0
 ; Ο ήχος παίζει ΠΡΙΝ την αναμονή: αλλιώς θα ακουγόταν αφού ο παίκτης έχει ήδη
 ; πατήσει πλήκτρο, δηλαδή ποτέ.
 ; ---------------------------------------------------------------------------
-game_over:      call eg_clear
+;---------------------------------------------------------------------
+; death_anim — ο ήρωας καταρρέει, πριν σβήσει η αίθουσα
+;
+;   ΠΡΙΝ το eg_clear επίτηδες: η κατάρρευση έχει νόημα μόνο πάνω στην αίθουσα
+;   που σε σκότωσε. Σε καθαρή οθόνη θα ήταν ένα σχήμα που σπαρταράει στο κενό.
+;
+;   Δεν περνά από το anim_frame: εκείνο διαλέγει καρέ από την ΚΑΤΑΣΤΑΣΗ του
+;   ήρωα, και εδώ η κατάσταση δεν αλλάζει — απλώς ξετυλίγουμε πέντε καρέ.
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+DEATH_TICKS     equ  7          ; καρέ ανά πόζα· 5 πόζες = ~1,4 δευτερόλεπτα
+
+death_anim:     ld   a,hero_gfx_DEATH0
+                ld   (da_frame),a
+da_pose:        ld   a,DEATH_TICKS
+                ld   (da_hold),a
+da_hold_lp:     ld   a,(da_frame)
+                ld   (anim_cur),a
+                call prep_hero
+                call MC_WAIT_FLYBACK
+                call draw_hero
+                ld   hl,da_hold
+                dec  (hl)
+                jr   nz,da_hold_lp
+                ld   hl,da_frame
+                inc  (hl)
+                ld   a,(hl)
+                cp   hero_gfx_DEATH4+1
+                jr   c,da_pose
+                ret
+
+da_frame        db   0
+da_hold         db   0
+
+game_over:      call death_anim
+                call eg_clear
                 ld   hl,go_idx
                 ld   b,GO_IDX_LEN
                 ld   a,GO_X

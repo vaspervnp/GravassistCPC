@@ -420,6 +420,21 @@ anim_frame:     ld   hl,anim_tick
                 jr   z,af_state
                 inc  (hl)
 af_state:
+                ; ΠΡΟΣΓΕΙΩΣΗ ΠΡΩΤΑ: παίζει μία φορά μετά από πτώση που πονάει
+                ; και υπερισχύει του IDLE, αλλιώς ο ήρωας θα στεκόταν όρθιος
+                ; τη στιγμή που τρώει τη ζημιά. Ο μετρητής τρέχει προς τα κάτω
+                ; και το καρέ βγαίνει από αυτόν, όχι από τον anim_tick.
+                ld   a,(hero_land)
+                or   a
+                jr   z,af_noland
+                dec  a
+                ld   (hero_land),a
+                ; 3 καρέ x LAND_TICKS το καθένα, από το βαθύ κάθισμα προς τα πάνω
+                srl  a
+                srl  a
+                add  a,hero_gfx_LAND0
+                jr   af_set
+af_noland:
                 ld   a,(hero_state)
                 cp   HST_WALK
                 jr   z,af_walk
@@ -1763,7 +1778,11 @@ linetab         ds   400, 0
                 include "gfx_hero45.asm"
                 include "gfx_para.asm"
                 include "gfx_para45.asm"
-                include "gfx_objects.asm"
+                ; ΤΟ gfx_objects.asm ΕΦΥΓΕ. Παρήγαγε το obj_gfx, που ΔΕΝ το
+                ; διάβαζε καμία γραμμή κώδικα: τα πλακίδια που ζωγραφίζονται
+                ; έρχονται από το tile_gfx του rooms.asm, φτιαγμένο απευθείας
+                ; από το tools/placeholders.py. 3382 bytes νεκρού βάρους, που
+                ; έγιναν τα animation προσγείωσης και θανάτου.
                 include "rooms.asm"
                 include "music.asm"
 
@@ -1796,7 +1815,12 @@ journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi,
 ; bytes από μια θέση τράπεζας, οπότε ο buffer δεν επιτρέπεται να ξεπερνά τη
 ; θέση. Ό,τι περισσεύει από κάτω μένει ελεύθερο και ΦΑΙΝΕΤΑΙ ότι είναι
 ; ελεύθερο, αντί να εξαφανίζεται σιωπηλά μέσα στον buffer.
-set_capacity    equ  2048
+;
+; 1536 και όχι 2048: η χειρότερη δυνατή περίπτωση είναι τέσσερις αίθουσες
+; τόσο πυκνές όσο η μεγαλύτερη σημερινή, δηλαδή 17 + 4x343 = 1389 bytes. Τα
+; 512 που περίσσευαν έγιναν τα animation προσγείωσης και θανάτου. Το
+; tools/roomfile.py σπάει το build αν κάποιο σετ δεν χωρέσει.
+set_capacity    equ  1536
 set_buf         ds   set_capacity
 
 ; Ο buffer του AMSDOS. ΔΙΚΟΣ ΜΑΣ και όχι δανεικός από την οθόνη: εκεί που ήταν,

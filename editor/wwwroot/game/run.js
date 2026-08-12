@@ -129,7 +129,13 @@
     sealedCells = [];
   }
 
+  // Δείκτες καρέ: IDLE 0-1, WALK 2-9, FALL 10-13, LAND 14-16, DEATH 17-21.
+  // Ίδια αρίθμηση με το tools/stickman.py και το src/main.asm.
+  const F_LAND = 14;
+
   function animFrame() {
+    // Η προσγείωση υπερισχύει, όπως στο af_state του src/main.asm.
+    if (landLeft > 0) return F_LAND + ((landLeft - 1) >> 2);
     // >> 1 και όχι >> 2: με 4 px ανά ενημέρωση, η διαίρεση με 4 έδινε 16 px
     // ανά καρέ animation αντί για τα 8 που σχεδιάστηκαν, και ο ήρωας
     // γλιστρούσε. Ίδια αλλαγή με το af_walk του src/main.asm — τα δύο πρέπει
@@ -373,6 +379,7 @@
   }
 
   let scoreFirst = false;   // πρώτη επίσκεψη στην ΤΡΕΧΟΥΣΑ αίθουσα;
+  let landLeft = 0;         // καρέ που μένουν στο animation προσγείωσης
 
   // Πρόσημο και τέσσερα ψηφία, ΜΕ μηδενικά μπροστά — ίδια μορφή με το
   // score_digits του src/score.asm. Σταθερό πλάτος ώστε να μην αφήνει
@@ -410,6 +417,9 @@
     const { walk, run } = input();
     hero.update(walk, run);      // το τρέξιμο είναι ΣΗΜΑΙΑ, όχι δεύτερη ενημέρωση
     scoreEvents(hero);
+    // Η κακή προσγείωση πυροδοτεί το κάθισμα, όπως το hl_dmg του hero.asm.
+    if (hero.events.includes("landhard")) landLeft = D.K.LAND_TICKS * 3;
+    else if (landLeft > 0) landLeft--;
     tick += run ? 2 : 1;
     for (const e of hero.sfx) play(e);
     humSet(hero.noflip());

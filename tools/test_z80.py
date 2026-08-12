@@ -1170,12 +1170,53 @@ def main():
     check("…και κλειδί άλλου καναλιού δεν μετράει",
           t26.m.a == 8, f"μήνυμα {t26.m.a}")
 
+    check_drums()
     check_hud_energy()
     check_hiscore()
     check_banking()
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
+
+
+def check_drums():
+    """Τα τύμπανα πρέπει να ΓΕΜΙΖΟΥΝ την ουρά, όχι να σπρώχνουν μία νότα.
+
+    Ο βρόχος του παιχνιδιού τρέχει στα 10..20 Hz, ενώ η ουρά του firmware
+    αδειάζει με τον πραγματικό χρόνο. Μία νότα ανά κλήση σημαίνει ρυθμό που
+    ακολουθεί τα καρέ μας αντί το ρολόι — δηλαδή τύμπανα που κομπιάζουν.
+    """
+    from z80run import Z80Test
+    t = Z80Test()
+    QUEUE = 0xBCAA                      # SOUND QUEUE του firmware
+    # ΤΟ STUB ΕΙΝΑΙ ΣΚΕΤΟ RET και δεν ορίζει carry, οπότε το «μπήκε / γέμισε»
+    # θα ήταν τυχαίο. Εδώ το ορίζουμε ρητά, και δοκιμάζουμε ΚΑΙ ΤΙΣ ΔΥΟ
+    # απαντήσεις — η δεύτερη είναι που κρατά το κόστος υπό έλεγχο.
+    t.poke(QUEUE, b"\x37\xC9")          # scf / ret = «μπήκε»
+    t.call("DRUMS_START")
+    p0 = t.peek16(t.sym("MUS_P_DRUMS"))
+    t.call("DRUMS_STEP")
+    notes = (t.peek16(t.sym("MUS_P_DRUMS")) - p0) // 3
+    check("το drums_step γεμίζει την ουρά, δεν σπρώχνει μία νότα",
+          notes > 1, f"{notes} νότες")
+
+    t.poke(QUEUE, b"\xB7\xC9")          # or a / ret = «γεμάτη»
+    p0 = t.peek16(t.sym("MUS_P_DRUMS"))
+    t.call("DRUMS_STEP")
+    check("…και σε γεμάτη ουρά σταματά αμέσως",
+          t.peek16(t.sym("MUS_P_DRUMS")) == p0,
+          f"προχώρησε {(t.peek16(t.sym('MUS_P_DRUMS')) - p0) // 3} νότες")
+    t.poke(QUEUE, b"\x37\xC9")
+
+    # Και ο κύκλος γυρίζει: στο #FF ξαναρχίζει αντί να διαβάσει σκουπίδια.
+    end = t.sym("MUS_DRUMS")
+    while t.peek(end)[0] != 0xFF:
+        end += 3
+    t.poke16(t.sym("MUS_P_DRUMS"), end)
+    t.call("DRUMS_STEP")
+    check("…και στο τέλος ξαναρχίζει από την αρχή",
+          t.peek16(t.sym("MUS_P_DRUMS")) > t.sym("MUS_DRUMS"),
+          f"#{t.peek16(t.sym('MUS_P_DRUMS')):04X}")
 
 
 def check_hud_energy():

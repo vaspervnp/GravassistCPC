@@ -270,8 +270,10 @@
         this.parachute--; this.paraOpen = 0;
         this.events.push("paraland");
       }
-      else if (this.fallDist > K.FALL_SAFE)
+      else if (this.fallDist > K.FALL_SAFE) {
+        this.events.push("landhard");
         this.hurt(1 + Math.floor((this.fallDist - K.FALL_SAFE) / 12));
+      }
       this.fallDist = 0; this.fallV = K.FALL_V0; this.fallAcc = 0;
     }
     // Άτρωτος για HURT_FRAMES καρέ μετά από κάθε χτύπημα: αλλιώς η ζημιά

@@ -1182,6 +1182,8 @@ hl_dmg:         ld   a,(hero_hurt)      ; άτρωτος: η πτώση δεν �
                 ret  nz
                 ld   a,HURT_FRAMES
                 ld   (hero_hurt),a
+                ld   a,LAND_TICKS*3     ; το κάθισμα της προσγείωσης, 3 καρέ
+                ld   (hero_land),a
                 ld   a,(hero_energy)
                 sub  b
                 jr   nc,hl_set
@@ -1824,6 +1826,7 @@ hero_carry      db 0            ; κουβαλάει κιβώτιο
 world_g         db 0            ; η φορά που ΟΡΙΣΕ ο παίκτης (τα κιβώτια)
 crates_on       db 0            ; 0 μέχρι την πρώτη αλλαγή φοράς
 hero_warp       db 0            ; έγινε τηλεμεταφορά αυτό το frame
+hero_land       db 0            ; καρέ που μένουν στο animation προσγείωσης
 hero_para       db 0            ; κουβαλάει αλεξίπτωτο
 hero_paraopen   db 0            ; ανοιγμένο αυτή τη στιγμή
 hero_won        db 0

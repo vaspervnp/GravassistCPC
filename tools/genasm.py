@@ -560,6 +560,7 @@ def defs_asm(rooms=()):
             "μόλις την ακουμπήσεις",
             f"SPIKE_TICKS     equ {P.SPIKE_TICKS}",
             f"HURT_FRAMES     equ {P.HURT_FRAMES}",
+            f"LAND_TICKS      equ {P.LAND_TICKS}",
             f"DEMO_MODE       equ {1 if DEMO else 0}"           "   ; 1 = δισκέτα επίδειξης",
             f"ENERGY_MAX      equ {P.ENERGY_MAX}",
             f"ENERGY_PICK     equ {P.ENERGY_PICK}",

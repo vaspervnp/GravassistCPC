@@ -100,6 +100,7 @@ ATTR_MAX        equ 8   ; κανάλια διακοπτών / ταυτότητε
 T_LOCK_AUTO     equ 8    ; bit: η κλειδαριά ανοίγει μόλις την ακουμπήσεις
 SPIKE_TICKS     equ 10
 HURT_FRAMES     equ 40
+LAND_TICKS      equ 4
 DEMO_MODE       equ 0   ; 1 = δισκέτα επίδειξης
 ENERGY_MAX      equ 8
 ENERGY_PICK     equ 2
