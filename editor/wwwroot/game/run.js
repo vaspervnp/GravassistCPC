@@ -276,8 +276,36 @@
     }
   }
 
+  // --- Ρολόι 50 Hz ------------------------------------------------------
+  // ΚΛΕΙΔΩΜΕΝΟ ΣΤΟΝ ΡΥΘΜΟ ΤΟΥ AMSTRAD. Το requestAnimationFrame χτυπά στη
+  // συχνότητα της ΟΘΟΝΗΣ, όχι του παιχνιδιού: με μία ενημέρωση ανά repaint η
+  // ίδια WALK_V έδινε 50 px/s σε οθόνη 60 Hz, 83 px/s σε 100 Hz και 120 px/s
+  // σε 144 Hz. Ο σχεδιαστής βαθμονομούσε το άλμα του σε ταχύτητα που ο CPC
+  // δεν έχει, και η δοκιμή έλεγε ψέματα ανάλογα με το μηχάνημα.
+  //
+  // Ο πραγματικός χρόνος κόβεται εδώ σε βήματα των 20 ms. Η συνάρτηση του
+  // βρόχου επιστρέφει false όταν θέλει να σταματήσει.
+  const STEP_MS = 1000 / 50;
+  const STEP_MAX = 5;        // πόσα βήματα το πολύ σε ένα repaint
+
+  function at50hz(fn) {
+    let due = null;                     // πότε οφείλεται το επόμενο βήμα
+    (function pump(now) {
+      if (due === null) due = now;
+      // ΦΡΑΓΜΑ: σε κρυμμένη καρτέλα το rAF παγώνει και το ρολόι μένει πίσω
+      // δεκάδες δευτερόλεπτα. Χωρίς αυτό, γυρίζοντας θα έτρεχαν χιλιάδες
+      // βήματα με ακίνητη εικόνα — ο ήρωας θα «τηλεμεταφερόταν».
+      if (now - due > STEP_MS * STEP_MAX) due = now - STEP_MS * STEP_MAX;
+      let alive = true;
+      while (alive && now >= due) { due += STEP_MS; alive = fn(); }
+      if (alive) requestAnimationFrame(pump);
+    })(performance.now());
+  }
+
   let ended = null;          // "GAME OVER" ή "THE END" — παγώνει τον βρόχο
 
+  // ΕΝΑ βήμα των 20 ms: ενημέρωση + σχεδίαση. Δεν προγραμματίζει το επόμενο —
+  // το κάνει ο at50hz. Επιστρέφει false όταν ο κόσμος πρέπει να παγώσει.
   function frame() {
     const { walk, run } = input();
     hero.update(walk, run);      // το τρέξιμο είναι ΣΗΜΑΙΑ, όχι δεύτερη ενημέρωση
@@ -309,7 +337,7 @@
     if (ended) {
       note.textContent = ended === "GAME OVER"
         ? "GAME OVER — press Restart" : "THE END";
-      return;                     // ο κόσμος παγώνει· η εικόνα μένει ως έχει
+      return false;               // ο κόσμος παγώνει· η εικόνα μένει ως έχει
     }
 
     if (hero.won) {
@@ -320,8 +348,7 @@
       if (dest === 255) {
         ended = "THE END";
         play("enter");
-        requestAnimationFrame(frame);
-        return;
+        return true;            // άλλο ένα βήμα, που θα τυπώσει το μήνυμα
       }
       play("exit");
       if (dest && rooms["room_" + dest + ".txt"]) {
@@ -383,7 +410,7 @@
       screen.text(hint, dr < 12 ? 16 : 7,
                   Math.floor((40 - hint.length) / 2) + 1);
     }
-    requestAnimationFrame(frame);
+    return true;
   }
 
   // --- Οθόνη μενού ------------------------------------------------------
@@ -427,13 +454,13 @@
       done = true;
       removeEventListener("keydown", go);
       start(firstRoom, rooms[firstRoom].cells, rooms[firstRoom].start);
-      requestAnimationFrame(frame);
+      at50hz(frame);
     };
     addEventListener("keydown", go);
     note.textContent = "Press Space to start game";
 
-    (function menuFrame() {
-      if (done) return;
+    at50hz(function menuFrame() {
+      if (done) return false;
       mhero.update(1);
       mtick++;
       screen.clear();
@@ -445,8 +472,8 @@
       screen.flush();
       screen.menuText(MENU_LINES);      // …και το firmware κείμενο από πάνω
       screen.menuText(MENU_KEYS[Math.floor(mtick / MENU_PAGE) % 2]);
-      requestAnimationFrame(menuFrame);
-    })();
+      return true;
+    });
   }
 
   function roomNumberOf(name) {
@@ -561,7 +588,7 @@
     sel.value = want;
     if (!asked) { menu(want); return; }
     start(want, rooms[want].cells, rooms[want].start);
-    requestAnimationFrame(frame);
+    at50hz(frame);
   }
 
   // Ίδια πλημμύρα με το spread(), αλλά για τύπο που ΔΕΝ είναι έξοδος: μια
