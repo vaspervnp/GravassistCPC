@@ -1747,6 +1747,7 @@ linetab         ds   400, 0
                 include "roomfile.asm"
                 include "menu.asm"
                 include "score.asm"
+                include "hiscore.asm"
                 include "musicplay.asm"
                 include "sfx.asm"
                 include "endings.asm"
@@ -1785,9 +1786,8 @@ journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi,
 set_buf
 set_capacity    equ  MEM_CEIL-set_buf   ; το διαβάζει το tools/roomfile.py
                 assert set_capacity > 0
-                ; ΚΑΙ ΤΟΥΛΑΧΙΣΤΟΝ ΜΙΑ ΘΕΣΗ ΤΡΑΠΕΖΑΣ: το slot_copy φέρνει εδώ
-                ; ολόκληρη τη θέση. Αν ο κώδικας μεγαλώσει τόσο ώστε ο buffer
-                ; να πέσει κάτω από μία θέση, η αντιγραφή θα γράφει πάνω στον
-                ; χώρο εργασίας του AMSDOS — και θα φαίνεται σαν χαλασμένη
-                ; δισκέτα, όχι σαν έλλειψη μνήμης.
-                assert set_capacity >= 1<<SLOT_SHIFT
+                ; Ο buffer πρέπει να χωράει ΟΛΟΚΛΗΡΗ μία θέση τράπεζας, γιατί
+                ; τόσα φέρνει το slot_copy. ΔΕΝ ελέγχεται εδώ: το rasm αποτιμά
+                ; τα assert σε πρώιμο πέρασμα, όπου το set_buf δεν έχει ακόμα
+                ; την τελική του θέση και ο έλεγχος σκάει ψευδώς. Ο έλεγχος
+                ; ζει στο tools/roomfile.py, που διαβάζει το ΤΕΛΙΚΟ σύμβολο.

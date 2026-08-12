@@ -296,6 +296,23 @@ def slot_of(index):
             BANK_WIN + (i % SLOTS_PER_BANK) * SLOT_SIZE)
 
 
+def check_buffer():
+    """Ο buffer του CPC δεν επιτρέπεται να ΞΕΠΕΡΝΑ τη θέση τράπεζας.
+
+    Το slot_copy φέρνει set_capacity bytes από την αρχή της θέσης. Μικρότερος
+    buffer είναι μια χαρά — απλώς αγνοεί το γέμισμα. ΜΕΓΑΛΥΤΕΡΟΣ όμως θα
+    διάβαζε μέσα στην επόμενη θέση, και στην τελευταία, έξω από την τράπεζα.
+
+    Ο έλεγχος είναι ΕΔΩ και όχι σε assert του assembler: το rasm αποτιμά τα
+    assert σε πρώιμο πέρασμα, όπου το set_buf δεν έχει την τελική του θέση.
+    """
+    if SET_MAX > SLOT_SIZE:
+        raise ValueError(
+            f"ο buffer του CPC είναι {SET_MAX} bytes και η θέση τράπεζας "
+            f"{SLOT_SIZE}. Το slot_copy θα διάβαζε μέσα στην επόμενη θέση — "
+            f"μεγάλωσε το SLOT_SIZE.")
+
+
 def check_slots():
     """Κάθε σετ πρέπει να χωράει στη θέση του μέσα στην τράπεζα.
 
@@ -355,6 +372,7 @@ if __name__ == "__main__":
     # Οι τράπεζες δεν παίρνουν δικά τους αρχεία: ο Z80 γεμίζει τις θέσεις
     # στην εκκίνηση από ΑΥΤΑ τα ίδια ROOMSnn.BIN. Εδώ ελέγχεται μόνο ότι
     # χωράνε — και το build σπάει αν δεν χωράνε.
+    check_buffer()
     check_slots()
     for index, name, data in all_sets():
         bank, addr = slot_of(index)

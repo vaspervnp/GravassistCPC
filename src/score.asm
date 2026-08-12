@@ -11,6 +11,14 @@
 ;    score_cost   αρνητικά — μετράνε ΠΑΝΤΑ, αλλιώς το ξαναπερπάτημα μιας
 ;                 λυμένης αίθουσας είναι δωρεάν
 ;
+;  ΟΛΕΣ ΟΙ ΔΗΜΟΣΙΕΣ ΕΙΣΟΔΟΙ ΔΙΑΤΗΡΟΥΝ BC, DE, HL, IX. Δεν είναι πολυτέλεια:
+;  οι αγκίστρες μπαίνουν μέσα σε ρουτίνες που κρατούν τη διεύθυνση κελιού στο
+;  HL και τη στήλη/γραμμή στο BC, και τις καλούν αμέσως μετά. Χωρίς αυτό ο
+;  διακόπτης δεν άνοιγε τις πύλες και το κιβώτιο δεν πάταγε την πλάκα — δύο
+;  σφάλματα που έφτασαν στον παίκτη.
+;
+;  Οι εσωτερικές sc_* χαλάνε ό,τι θέλουν· μόνο αυτές κάνουν δουλειά.
+;
 ;  Οι τιμές ζουν στο tools/physics.py και βγαίνουν στο gamedefs.asm.
 ;=====================================================================
 
@@ -41,7 +49,7 @@ score_reset:    ld   hl,SCORE_START
 ; IN:  A = πόντοι, συμπλήρωμα 2
 ; ΑΛΛΟΙΩΝΕΙ: AF, DE, HL
 ;---------------------------------------------------------------------
-score_add:      ld   e,a
+sc_add:         ld   e,a
                 rlca                    ; bit 7 -> CF
                 sbc  a,a                ; #FF αρνητικό, #00 θετικό
                 ld   d,a
@@ -64,31 +72,62 @@ score_add:      ld   e,a
 ; IN:  A = πόντοι (συμπλήρωμα 2)
 ; ΑΛΛΟΙΩΝΕΙ: AF, DE, HL
 ;---------------------------------------------------------------------
-score_cost:     jp   score_add
+score_cost:     push bc
+                push de
+                push hl
+                push ix
+                call sc_add
+                pop  ix
+                pop  hl
+                pop  de
+                pop  bc
+                ret
 
 ;---------------------------------------------------------------------
 ; score_award — θετικοί πόντοι· ΜΟΝΟ στην πρώτη επίσκεψη της αίθουσας
 ; IN:  A = πόντοι
 ; ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL
 ;---------------------------------------------------------------------
-score_award:    ld   e,a
+score_award:    push bc
+                push de
+                push hl
+                push ix
+                call sc_award
+                pop  ix
+                pop  hl
+                pop  de
+                pop  bc
+                ret
+
+sc_award:       ld   e,a
                 ld   a,(room_scored)
                 or   a
                 ret  z                  ; ξαναμπήκες: τζάμπα δουλειά
                 ld   a,e
-                jp   score_add
+                jp   sc_add
 
 ;---------------------------------------------------------------------
 ; score_awardn — το ίδιο, A φορές (για «ανά αλεξίπτωτο», «ανά κλειδί»)
 ; IN:  A = πλήθος, C = πόντοι ανά τεμάχιο
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-score_awardn:   or   a
+score_awardn:   push bc
+                push de
+                push hl
+                push ix
+                call sc_awardn
+                pop  ix
+                pop  hl
+                pop  de
+                pop  bc
+                ret
+
+sc_awardn:      or   a
                 ret  z
                 ld   b,a
 san_lp:         push bc
                 ld   a,c
-                call score_award
+                call sc_award
                 pop  bc
                 djnz san_lp
                 ret
@@ -103,7 +142,10 @@ san_lp:         push bc
 ; IN:  A = αριθμός αίθουσας
 ; ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL
 ;---------------------------------------------------------------------
-visit_enter:    push af
+visit_enter:    push bc
+                push de
+                push hl
+                push af
                 call visit_bit          ; HL -> byte, A = μάσκα
                 ld   b,a
                 and  (hl)
@@ -117,6 +159,9 @@ ve_old:         ld   (room_scored),a
                 xor  a                  ; νέα αίθουσα, κανένα είδος πληρωμένο
                 ld   (room_awarded),a
                 pop  af
+                pop  hl
+                pop  de
+                pop  bc
                 ret
 
 ;---------------------------------------------------------------------
@@ -236,7 +281,18 @@ SC_PARA         equ  32
 ; IN:  A = πόντοι, B = μάσκα είδους (SC_*)
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-score_once:     ld   e,a
+score_once:     push bc
+                push de
+                push hl
+                push ix
+                call sc_once
+                pop  ix
+                pop  hl
+                pop  de
+                pop  bc
+                ret
+
+sc_once:        ld   e,a
                 ld   a,(room_awarded)
                 and  b
                 ret  nz                 ; πληρώθηκε ήδη σε αυτή την αίθουσα
@@ -244,7 +300,7 @@ score_once:     ld   e,a
                 or   b
                 ld   (room_awarded),a
                 ld   a,e
-                jp   score_award
+                jp   sc_award
 
 ;---------------------------------------------------------------------
 ; score_target — πόντοι όταν ένας στόχος καλωδίωσης ΑΝΟΙΓΕΙ
@@ -257,18 +313,34 @@ score_once:     ld   e,a
 ; IN:  A = ο ΝΕΟΣ τύπος του κελιού
 ; ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL
 ;---------------------------------------------------------------------
-score_target:   cp   T_GATE_OPEN
+score_target:   push bc
+                push de
+                push hl
+                push ix
+                call sc_target
+                pop  ix
+                pop  hl
+                pop  de
+                pop  bc
+                ret
+
+sc_target:      cp   T_GATE_OPEN
                 jr   nz,st_lock
                 ld   a,SCORE_GATE
                 ld   b,SC_GATE
-                jp   score_once
+                jp   sc_once
 st_lock:        cp   T_LOCK_OPEN
                 ret  nz
                 ld   a,SCORE_LOCK
                 ld   b,SC_LOCK
-                jp   score_once
+                jp   sc_once
 
-SCORE_COL       equ  35         ; 40 στήλες - 5 χαρακτήρες, δεξιά άκρη
+; ΟΧΙ στη δεξιά άκρη: εκεί κάθονται τα δύο βελάκια βαρύτητας, στα bytes
+; 68-69 και 72-73 — δηλαδή στήλες κειμένου 35 και 37 (2 bytes ανά χαρακτήρα
+; σε MODE 1). Το σκορ ζωγραφιζόταν από πάνω τους. Οι στήλες 30..34 είναι το
+; τελευταίο ελεύθερο πεντάρι: το inventory τελειώνει στη 21 και τα βέλη
+; αρχίζουν στην 35.
+SCORE_COL       equ  30
 
 score           dw   SCORE_START
 score_shown     dw   0          ; τι δείχνει η οθόνη τώρα
