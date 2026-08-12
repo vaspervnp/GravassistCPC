@@ -29,7 +29,11 @@ Puzzle game όπου ο παίκτης αλλάζει την **κατεύθυν�
 
 ## Build
 ```
-make            # assemble + φτιάχνει build/gravassist.dsk
+make              # assemble + φτιάχνει build/gravassist.dsk
+make test         # μοντέλο, ΠΡΑΓΜΑΤΙΚΟΣ Z80 σε προσομοιωτή, editor
+make trace        # οπτικό ίχνος της διαδρομής του ήρωα
+make toolchain    # ποια rasm/iDSK θα τρέξουν τελικά
+make editor-data  # δεδομένα για το test run του browser
 make clean
 ```
 Το `rasm` βγάζει το `build/main.bin` μέσω `save` directive μέσα στο `src/main.asm`.
@@ -37,13 +41,50 @@ make clean
 Δοκιμή στον emulator: `RUN"GRAV"`.
 
 ## Δομή project
+
+Ο κώδικας του παιχνιδιού — όλα γίνονται include από το `src/main.asm`:
 ```
-src/main.asm        κύριος κώδικας (org #4000)
-src/*.asm           modules (include από το main.asm)
+src/main.asm        κύριος βρόχος, σχεδίαση, HUD, μηνύματα (org #4000)
+src/hero.asm        φυσική: βάδισμα, γωνίες, ράμπες, πτώση, αντικείμενα
+src/level.asm       solid_at με ράμπες, σχεδίαση δωματίου
+src/rotate.asm      περιστροφή + packing sprites σε MODE 1
+src/roomfile.asm    σετ αιθουσών: RLE, φόρτωση, ημερολόγιο, καλωδίωση
+src/bank.asm        οι δεύτερες 64 KB του 6128 ως δίσκος αιθουσών
+src/menu.asm        μενού: τίτλος, αρένα επίδειξης, draw_banner, demo_mark
+src/endings.asm     GAME OVER / THE END, και το game_reset
+src/score.asm       σκορ — 1000 πόντοι, ξοδεύονται στην κίνηση
+src/hiscore.asm     οι πέντε μεγαλύτερες βαθμολογίες, στη δισκέτα
+src/sfx.asm         ηχητικά εφέ + τα παράσιτα της ζώνης κλειδώματος
+src/musicplay.asm   αναπαραγωγή μέσω του firmware SOUND QUEUE
 src/loader.bas      BASIC loader -> ASCII με CR+LF + &1A στο build
-levels/*.txt        ASCII πίστες (1 χαρακτήρας ανά 8x8 tile)
-tools/gensprites.py γεννά sprites: 4 orientations x pre-shifts x frames
-tools/genlevels.py  ASCII πίστες -> RLE .asm include
+```
+
+**ΠΑΡΑΓΟΜΕΝΑ — μην τα επεξεργάζεσαι, ξαναγράφονται από το `make`:**
+```
+src/gamedefs.asm    | tools/genasm.py   (κωδικοί τύπων, μεγέθη, START_ROOM,
+src/tables.asm      |                    DEMO_MODE, HURT_FRAMES, SET_ROOMS)
+src/rooms.asm       |
+src/music.asm       | tools/genmusic.py
+src/gfx_*.asm       | tools/sprites.py  (αυθεντία: τα assets/*.png)
+```
+Ό,τι σταθερά γράψεις με το χέρι στο `gamedefs.asm` χάνεται στο επόμενο build
+— βάλ' την σε χειρόγραφο αρχείο (π.χ. `ROOM_END` στο `endings.asm`).
+
+Δεδομένα και εργαλεία:
+```
+levels/room_<N>.txt ASCII πίστες (1 χαρακτήρας ανά 8x8 tile)· ο αριθμός
+                    ζει ΜΟΝΟ στο όνομα του αρχείου
+levels/<email>/     ο προσωπικός φάκελος κάθε λογαριασμού του editor
+levels/regress.txt  σταθερό δωμάτιο για τα τεστ — μην το επεξεργάζεσαι
+assets/*.png        τα sprites· ΕΔΩ ζωγραφίζεις
+tools/physics.py    το μοντέλο φυσικής — ΑΝΑΦΟΡΑ για το src/hero.asm
+tools/genasm.py     μοντέλο -> πίνακες Z80·  genjs.py -> ίδιοι για browser
+tools/roomfile.py   αίθουσες -> ROOMSnn.BIN (RLE, σετ των SET_ROOMS)
+tools/z80run.py     τρέχει το ΠΡΑΓΜΑΤΙΚΟ main.bin σε προσομοιωτή Z80
+tools/test_*.py     μοντέλο και Z80 χωριστά· parity.py: Python vs JavaScript
+tools/checkdsk.py   επιβεβαιώνει ότι η δισκέτα έχει όντως τις αίθουσες
+tools/toolchain.py  πού είναι τα rasm/iDSK (toolchain.json)
+editor/             level editor σε ASP.NET Core MVC· δες docs/editor-manual.md
 build/              παράγωγα (μην τα commit-άρεις)
 ```
 
