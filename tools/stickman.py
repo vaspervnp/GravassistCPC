@@ -193,15 +193,20 @@ def fall_pose(i):
     return p
 
 
+# ΜΟΝΟ ΟΣΑ ΖΩΓΡΑΦΙΖΟΝΤΑΙ. Ο ΜΟΝΟΣ παραγωγός δείκτη καρέ είναι το anim_frame
+# του src/main.asm, και βγάζει αποκλειστικά IDLE (0-1), WALK (2-9) και FALL
+# (10-13). Τα TURNOUT, TURNIN, LAND, HURT και DEATH σχεδιάστηκαν αλλά ποτέ
+# δεν συνδέθηκαν με κατάσταση του ήρωα: 18 από τα 32 καρέ δεν έφτασαν ποτέ
+# στην οθόνη και κόστιζαν 4554 bytes — 1512 στα ορθά και 3042 στα διαγώνια,
+# όπου κάθε καρέ είναι 13x13 αντί για 7x12.
+#
+# ΟΙ ΠΟΖΕΣ ΤΟΥΣ ΜΕΝΟΥΝ ΠΑΡΑΚΑΤΩ, σχολιασμένες στο build_poses: αν κάποτε
+# συνδεθεί κατάσταση (προσγείωση, χτύπημα, θάνατος), ξαναμπαίνουν εδώ και
+# στο anim_frame μαζί. Η μνήμη είναι ο λόγος που λείπουν, όχι το σχέδιο.
 FRAME_NAMES = (
     ["IDLE0", "IDLE1"]
     + [f"WALK{i}" for i in range(8)]
-    + [f"TURNOUT{i}" for i in range(4)]
-    + [f"TURNIN{i}" for i in range(4)]
     + [f"FALL{i}" for i in range(4)]
-    + [f"LAND{i}" for i in range(3)]
-    + [f"HURT{i}" for i in range(2)]
-    + [f"DEATH{i}" for i in range(5)]
 )
 
 
@@ -215,14 +220,19 @@ def build_poses():
     # 2-9  WALK
     poses += [walk_pose(i) for i in range(8)]
 
-    # 10-13 TURNOUT — τύλιγμα σε κυρτή γωνία, κλίση προς τα έξω
+    # 10-13 FALL
+    poses += [fall_pose(i) for i in range(4)]
+
+    # ΑΠΟ ΕΔΩ ΚΑΙ ΚΑΤΩ ΔΕΝ ΠΑΡΑΓΟΝΤΑΙ. Καμία κατάσταση του ήρωα δεν τα ζητά,
+    # και στα διαγώνια κάθε καρέ κοστίζει 169 bytes. Ο κώδικας μένει ώστε να
+    # ξαναμπούν με μία γραμμή αν κάποτε συνδεθούν — δες το FRAME_NAMES.
+    return poses
+
+    # TURNOUT — τύλιγμα σε κυρτή γωνία, κλίση προς τα έξω
     poses += [shear(BASE, a) for a in (0.8, 1.6, 2.4, 3.0)]
 
-    # 14-17 TURNIN — ανέβασμα σε κοίλη γωνία, κλίση προς τα μέσα
+    # TURNIN — ανέβασμα σε κοίλη γωνία, κλίση προς τα μέσα
     poses += [shear(BASE, -a) for a in (0.8, 1.6, 2.4, 3.0)]
-
-    # 18-21 FALL
-    poses += [fall_pose(i) for i in range(4)]
 
     # 22-24 LAND — από βαθύ κάθισμα προς όρθιος
     poses += [lerp(CROUCH, BASE, t) for t in (0.0, 0.5, 0.85)]

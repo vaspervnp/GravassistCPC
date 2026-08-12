@@ -444,12 +444,12 @@ af_walk:        ld   a,(anim_tick)
                 and  7
                 add  a,2
                 jr   af_set
-af_fall:        ld   a,(anim_tick)      ; FALL: 4 frames
-                rrca
-                rrca
+af_fall:        ld   a,(anim_tick)      ; FALL: 4 frames· βάση 10 και όχι 18,
+                rrca                    ; αφότου κόπηκαν τα TURNOUT/TURNIN που
+                rrca                    ; δεν ζωγραφίζονταν ποτέ
                 rrca
                 and  3
-                add  a,18
+                add  a,10
 af_set:         ld   hl,anim_cur
                 cp   (hl)
                 ld   (hl),a             ; το ld δεν πειράζει τα flags

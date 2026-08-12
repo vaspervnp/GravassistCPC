@@ -39,11 +39,11 @@ class Sheet:
 
 SHEETS = [
     Sheet("hero", "assets/hero.png", "src/gfx_hero.asm", "hero_gfx",
-          stickman.W, stickman.H, 32, 8,
+          stickman.W, stickman.H, len(stickman.FRAME_NAMES), 8,
           stickman.build_frames, stickman.FRAME_NAMES,
           "GRAVASSIST - sprites ήρωα"),
     Sheet("hero45", "assets/hero45.png", "src/gfx_hero45.asm", "hero45_gfx",
-          stickman.W45, stickman.H45, 32, 8,
+          stickman.W45, stickman.H45, len(stickman.FRAME_NAMES), 8,
           stickman.build_frames45, stickman.FRAME_NAMES,
           "GRAVASSIST - sprites ήρωα στις 45 μοίρες"),
     Sheet("para", "assets/parachute.png", "src/gfx_para.asm", "para_gfx",

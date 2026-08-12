@@ -135,7 +135,9 @@
     // γλιστρούσε. Ίδια αλλαγή με το af_walk του src/main.asm — τα δύο πρέπει
     // να δείχνουν το ίδιο πόδι την ίδια στιγμή.
     if (hero.state === "WALK") return 2 + ((tick >> 1) & 7);
-    if (hero.state === "FALL") return 18 + ((tick >> 3) & 3);
+    // Βάση 10 και όχι 18: κόπηκαν τα TURNOUT/TURNIN (καρέ 10-17) που δεν
+    // ζωγραφίζονταν ποτέ. Ίδια αρίθμηση με το af_fall του src/main.asm.
+    if (hero.state === "FALL") return 10 + ((tick >> 3) & 3);
     return (tick >> 5) & 1;
   }
 
