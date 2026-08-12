@@ -1306,6 +1306,34 @@ def check_bank_asm():
     check("…και οι άλλες τράπεζες δεν πειράχτηκαν",
           tf.bank_peek(4, dst, len(PATTERN)) == b"\x00" * len(PATTERN))
 
+    # --- slot_addr: ο Z80 πρέπει να συμφωνεί με το roomfile.slot_of ---
+    # Δύο υλοποιήσεις της ίδιας αριθμητικής, σε δύο γλώσσες. Αν αποκλίνουν, ο
+    # Z80 διαβάζει σετ από λάθος θέση και η αίθουσα βγαίνει σκουπίδι.
+    ta = Z80Test(banking=True)
+    bad = []
+    for idx in (1, 2, 3, 15, 16, 17, 32, 33, 48, 49, 63, RF.MAX_SETS):
+        want_bank, want_addr = RF.slot_of(idx)
+        ta.call("SLOT_ADDR", a=idx)
+        got_addr, got_org = ta.m.hl, ta.m.bc & 0xFF
+        if (got_addr, got_org) != (want_addr, 0xC0 + want_bank):
+            bad.append(f"σετ {idx}: #{got_addr:04X}/#{got_org:02X} αντί για "
+                       f"#{want_addr:04X}/#{0xC0 + want_bank:02X}")
+    check(f"slot_addr συμφωνεί με το roomfile.slot_of σε {RF.MAX_SETS} σετ",
+          not bad, "; ".join(bad))
+
+    # --- slot_full: ο χάρτης γεμάτων θέσεων ---------------------------
+    tm = Z80Test(banking=True)
+    tm.poke(tm.sym("BANK_MAP"), bytes(RF.MAX_SETS // 8))    # όλα άδεια
+    tm.call("SLOT_FULL", a=1)
+    check("άδεια θέση -> CF=0", not (tm.m.f & 1))
+    tm.poke(tm.sym("BANK_MAP"), b"\x01")                    # σετ 1 = bit 0
+    tm.call("SLOT_FULL", a=1)
+    check("γεμάτη θέση -> CF=1", bool(tm.m.f & 1))
+    tm.call("SLOT_FULL", a=2)
+    check("…και μόνο αυτή", not (tm.m.f & 1))
+    tm.call("SLOT_FULL", a=RF.MAX_SETS + 1)
+    check("δείκτης έξω από τον χάρτη -> CF=0", not (tm.m.f & 1))
+
 
 if __name__ == "__main__":
     sys.exit(main())

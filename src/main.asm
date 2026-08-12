@@ -138,6 +138,10 @@ main:           ld   a,1
                 call SCR_SET_MODE
                 call set_palette
                 call init_linetab
+                ; ΠΡΙΝ ΤΟ ΜΕΝΟΥ: οι αίθουσες μπαίνουν στη δεύτερη μνήμη όσο ο
+                ; παίκτης δεν περιμένει τίποτα ακόμα. Μία φορά ανά εκτέλεση —
+                ; το ml_again ξαναμπαίνει εδώ και δεν πρέπει να ξαναδιαβάσει.
+                call bank_boot
                 call menu_show          ; τίτλος και επίδειξη· γυρίζει με SPACE
                 ld   a,1
                 call SCR_SET_MODE       ; καθάρισε ό,τι άφησε το μενού
@@ -1765,3 +1769,10 @@ journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi,
 set_buf
 set_capacity    equ  MEM_CEIL-set_buf   ; το διαβάζει το tools/roomfile.py
                 assert set_capacity > 0
+                ; ΚΑΙ ΤΟΥΛΑΧΙΣΤΟΝ ΜΙΑ ΘΕΣΗ ΤΡΑΠΕΖΑΣ: το slot_copy φέρνει
+                ; ολόκληρα 1<<SLOT_SHIFT bytes εδώ μέσα, χωρίς να κοιτάξει
+                ; πόσα χωράνε. Αν ο κώδικας μεγαλώσει τόσο ώστε ο buffer να
+                ; πέσει κάτω από μία θέση, η αντιγραφή θα γράφει πάνω στον
+                ; χώρο εργασίας του AMSDOS — και θα φαίνεται σαν χαλασμένη
+                ; δισκέτα, όχι σαν έλλειψη μνήμης.
+                assert set_capacity >= 1<<SLOT_SHIFT

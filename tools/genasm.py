@@ -496,6 +496,19 @@ def defs_asm(rooms=()):
             f"SET_ROOMS       equ {RF.SET_ROOMS}",
             f"SET_VERSION     equ {RF.VERSION}          ; ο φορτωτής απορρίπτει "
             "ό,τι άλλο",
+            "; Οι θέσεις των σετ μέσα στις τράπεζες του 6128 (src/bank.asm).",
+            "; Ο Z80 βρίσκει τη θέση με ολισθήσεις, οπότε τα δύο μεγέθη ΠΡΕΠΕΙ",
+            "; να είναι δυνάμεις του 2 — το assert από κάτω το επιβάλλει.",
+            f"SLOT_SHIFT      equ {RF.SLOT_SIZE.bit_length() - 1}"
+            f"         ; 1 << {RF.SLOT_SIZE.bit_length() - 1} = {RF.SLOT_SIZE}"
+            " bytes ανά θέση",
+            f"SLOTS_SHIFT     equ {RF.SLOTS_PER_BANK.bit_length() - 1}"
+            f"         ; 1 << {RF.SLOTS_PER_BANK.bit_length() - 1}"
+            f" = {RF.SLOTS_PER_BANK} θέσεις ανά μπλοκ",
+            f"MAX_SETS        equ {RF.MAX_SETS}         ; = "
+            f"{RF.MAX_SETS * RF.SET_ROOMS} αίθουσες στη μνήμη",
+            f"SET_COUNT       equ {RF.set_count()}          ; πόσα σετ ψάχνει "
+            "η εκκίνηση",
             f"SET_NUMBERS     equ {3 + 1 + 1}          ; offset του numbers[] "
             "στην κεφαλή",
             f"SET_OFFS        equ {3 + 1 + 1 + RF.SET_ROOMS}         ; offset "

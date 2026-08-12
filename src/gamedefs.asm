@@ -51,6 +51,13 @@ GTAB_OFF        equ 15
 ; --- σετ αιθουσών σε αρχείο (tools/roomfile.py) --------------
 SET_ROOMS       equ 4
 SET_VERSION     equ 2          ; ο φορτωτής απορρίπτει ό,τι άλλο
+; Οι θέσεις των σετ μέσα στις τράπεζες του 6128 (src/bank.asm).
+; Ο Z80 βρίσκει τη θέση με ολισθήσεις, οπότε τα δύο μεγέθη ΠΡΕΠΕΙ
+; να είναι δυνάμεις του 2 — το assert από κάτω το επιβάλλει.
+SLOT_SHIFT      equ 10         ; 1 << 10 = 1024 bytes ανά θέση
+SLOTS_SHIFT     equ 4         ; 1 << 4 = 16 θέσεις ανά μπλοκ
+MAX_SETS        equ 64         ; = 256 αίθουσες στη μνήμη
+SET_COUNT       equ 2          ; πόσα σετ ψάχνει η εκκίνηση
 SET_NUMBERS     equ 5          ; offset του numbers[] στην κεφαλή
 SET_OFFS        equ 9         ; offset του offs[]
 LVL_CELLS       equ 960
