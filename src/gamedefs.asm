@@ -101,7 +101,7 @@ T_LOCK_AUTO     equ 8    ; bit: η κλειδαριά ανοίγει μόλις 
 SPIKE_TICKS     equ 10
 HURT_FRAMES     equ 40
 LAND_TICKS      equ 4
-DEMO_MODE       equ 0   ; 1 = δισκέτα επίδειξης
+DEMO_MODE       equ 1   ; 1 = δισκέτα επίδειξης
 ENERGY_MAX      equ 8
 ENERGY_PICK     equ 2
 SPIKE_DMG       equ 2
