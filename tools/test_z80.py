@@ -1296,12 +1296,16 @@ def check_bank_asm():
     # --- bank_fill: βασική μνήμη -> τράπεζα --------------------------
     tf = Z80Test(banking=True)
     dst = BANK_LO + 0x1000
+    # ΟΧΙ «είναι μηδενικά»: το #5000 είναι ΚΩΔΙΚΑΣ του παιχνιδιού και το
+    # περιεχόμενό του μετακινείται σε κάθε αλλαγή. Κρατάμε τι ήταν και
+    # ελέγχουμε ότι έμεινε ίδιο — αυτό ρωτάει το τεστ ούτως ή άλλως.
+    before = tf.peek(dst, len(PATTERN))
     tf.poke(SCRATCH, PATTERN)
     tf.call("BANK_FILL", a=0xC6, hl=SCRATCH, de=dst, bc=len(PATTERN))
     check("bank_fill γράφει ΜΕΣΑ στην τράπεζα",
           tf.bank_peek(6, dst, len(PATTERN)) == PATTERN)
-    check("…χωρίς να γράψει στη βασική μνήμη",
-          tf.peek(dst, len(PATTERN)) == b"\x00" * len(PATTERN),
+    check("…χωρίς να αγγίξει τη βασική μνήμη στην ίδια διεύθυνση",
+          tf.peek(dst, len(PATTERN)) == before,
           " ".join(f"{b:02X}" for b in tf.peek(dst, len(PATTERN))[:4]))
     check("…και οι άλλες τράπεζες δεν πειράχτηκαν",
           tf.bank_peek(4, dst, len(PATTERN)) == b"\x00" * len(PATTERN))

@@ -181,7 +181,16 @@ main_loop:      call read_gravity       ; ο παίκτης ρίχνει τη β
                 jr   nc,ml_walk
 
 ml_gok:         ld   a,b
-                ld   (ml_grav),a
+                ; ΜΟΝΟ ΟΤΑΝ ΑΛΛΑΖΕΙ ΟΝΤΩΣ: το πλήκτρο μένει πατημένο και θα
+                ; χρέωνε πενήντα φορές το δευτερόλεπτο για μία απόφαση.
+                ld   hl,world_g
+                cp   (hl)
+                jr   z,ml_gsame
+                push af
+                ld   a,SCORE_GRAV
+                call score_cost
+                pop  af
+ml_gsame:       ld   (ml_grav),a
                 call h_noflip
                 jr   c,ml_conly         ; ζώνη κλειδώματος: ΜΟΝΟ τα κιβώτια
 
@@ -235,6 +244,7 @@ ml_anim:        ld   a,(hero_zone)      ; παράσιτα όσο είναι σ�
                 call MC_WAIT_FLYBACK
                 call draw_hero          ; μόνο εγγραφές στην οθόνη
                 call draw_hud
+                call score_draw
                 call hint_msg
 if DEMO_MODE
                 call demo_mark
@@ -267,6 +277,9 @@ ml_esc:
                 ld   a,(hero_energy)
                 or   a
                 jr   z,ml_dead
+                ld   a,(score_dead)     ; αρνητικό σκορ: το ίδιο τέλος, άλλη
+                or   a                  ; αιτία — δες το score_add
+                jr   nz,ml_dead
 
                 ld   a,K_ESC
                 call KM_TEST_KEY
@@ -453,6 +466,8 @@ af_set:         ld   hl,anim_cur
 af_foot:        ld   a,(ml_dir)
                 or   a
                 ret  z
+                ld   a,SCORE_STEP       ; ΑΝΑ ΠΑΤΗΜΑ, όχι ανά pixel
+                call score_cost
                 ld   a,SFXID_STEP
                 jp   sfx_play
 
@@ -1731,6 +1746,7 @@ linetab         ds   400, 0
                 include "hero.asm"
                 include "roomfile.asm"
                 include "menu.asm"
+                include "score.asm"
                 include "musicplay.asm"
                 include "sfx.asm"
                 include "endings.asm"
@@ -1769,10 +1785,8 @@ journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi,
 set_buf
 set_capacity    equ  MEM_CEIL-set_buf   ; το διαβάζει το tools/roomfile.py
                 assert set_capacity > 0
-                ; ΚΑΙ ΤΟΥΛΑΧΙΣΤΟΝ ΜΙΑ ΘΕΣΗ ΤΡΑΠΕΖΑΣ: το slot_copy φέρνει
-                ; ολόκληρα 1<<SLOT_SHIFT bytes εδώ μέσα, χωρίς να κοιτάξει
-                ; πόσα χωράνε. Αν ο κώδικας μεγαλώσει τόσο ώστε ο buffer να
-                ; πέσει κάτω από μία θέση, η αντιγραφή θα γράφει πάνω στον
-                ; χώρο εργασίας του AMSDOS — και θα φαίνεται σαν χαλασμένη
-                ; δισκέτα, όχι σαν έλλειψη μνήμης.
-                assert set_capacity >= 1<<SLOT_SHIFT
+                ; ΚΑΙ ΟΧΙ ΜΕΓΑΛΥΤΕΡΟΣ ΑΠΟ ΜΙΑ ΘΕΣΗ ΤΡΑΠΕΖΑΣ: το slot_copy
+                ; αντιγράφει set_capacity bytes από την αρχή της θέσης, οπότε
+                ; ένας buffer μεγαλύτερος από τη θέση θα διάβαζε μέσα στην
+                ; επόμενη — και στην τελευταία θέση, έξω από την τράπεζα.
+                assert set_capacity <= 1<<SLOT_SHIFT

@@ -220,6 +220,8 @@ ht_np1:         cp   T_KEY
                 ld   hl,hero_keys
                 add  hl,de
                 inc  (hl)
+                ld   a,SCORE_PICKUP     ; ανά κλειδί· το κλειδί καταναλώνεται
+                call score_award        ; ξεκλειδώνοντας, άρα δεν farmάρεται
                 ; ΤΟ ΜΗΝΥΜΑ ΒΓΑΙΝΕΙ ΜΑΖΕΥΟΝΤΑΣ ΤΟ ΚΛΕΙΔΙ, γιατί εκεί μαθαίνεις
                 ; ότι δεν θα χρειαστεί να πατήσεις τίποτα. Πάνω στην κλειδαριά
                 ; θα ήταν ήδη αργά — θα είχε ανοίξει.
@@ -275,6 +277,9 @@ ht_swfire:      ld   a,b
                 call cell_attr          ; A = κανάλι του διακόπτη
                 call gate_toggle
                 pop  bc
+                ld   a,SCORE_SWITCH
+                ld   b,SC_SWITCH
+                call score_once
                 ld   a,SFXID_SWITCH
                 call sfx_play
                 call sfx_gate           ; …και η πύλη, αν όντως άλλαξε καμία
@@ -313,6 +318,9 @@ ht_swclr:       ld   a,#FF              ; έφυγες από τον διακό�
                 call cell_set
                 ld   a,(ht_kid)
                 call lock_open_all
+                ld   a,SCORE_LOCK
+                ld   b,SC_LOCK
+                call score_once
                 ld   a,SFXID_UNLOCK
                 call sfx_play
 
@@ -483,6 +491,9 @@ ed_none:        xor  a
 ;   δείκτες δείχνουν μέσα στο ίδιο το σετ, που μένει στη μνήμη.
 ;---------------------------------------------------------------------
 room_load:      ld   (cur_room),a
+                ; ΠΡΩΤΗ ΦΟΡΑ ΕΔΩ; Ανοίγει ή κλείνει την πύλη των θετικών
+                ; πόντων για όλη τη διάρκεια της αίθουσας.
+                call visit_enter
                 push af
 
                 dec  a                  ; ποιο σετ; (αίθουσα-1)/SET_ROOMS + 1
@@ -590,7 +601,15 @@ h_use:          ld   bc,(hero_x)        ; Η ΠΟΡΤΑ ΠΡΩΤΗ, και απ�
                 ld   a,1
                 ld   (game_done),a
                 ret
-hu_exsnd:       ld   (pending_room),a
+hu_exsnd:       push af
+                ld   a,SCORE_EXIT
+                ld   b,SC_EXIT
+                call score_once
+                ld   a,(hero_para)      ; ό,τι αλεξίπτωτο περνάει μαζί σου
+                ld   c,SCORE_PARA_KEEP
+                call score_awardn
+                pop  af
+                ld   (pending_room),a
                 ld   a,SFXID_EXIT
                 jp   sfx_play
 
@@ -633,6 +652,9 @@ hu_islock:
                 call cell_set
                 ld   a,(hu_kid)         ; …και μαζί ΟΛΕΣ όσες μοιράζονται την
                 call lock_open_all      ; ίδια ταυτότητα
+                ld   a,SCORE_LOCK
+                ld   b,SC_LOCK
+                call score_once
                 ld   a,SFXID_UNLOCK
                 call sfx_play
                 jp   hu_redraw          ; και περνά από μέσα.
@@ -662,6 +684,8 @@ hu_notlock:     ld   bc,(hero_x)        ; τηλεμεταφορά: κρίνετ
                 cp   T_PLATE_DOWN       ; από πλάκα: παίρνεις το κιβώτιο και
                 ret  nz                 ; η πλάκα ξαναγίνεται ελεύθερη
 hu_take_ok:
+                ld   a,SCORE_PICKUP     ; ανά κιβώτιο· καταναλώνεται, δεν
+                call score_award        ; farmάρεται
                 ld   a,1
                 ld   (hero_carry),a
                 ld   (hud_dirty),a
@@ -690,6 +714,11 @@ hu_drop:        ld   bc,(hero_x)
                 cp   T_PLATE            ; ΠΑΝΩ ΣΕ ΠΛΑΚΑ: η πλάκα δεν χάνεται,
                 ret  nz                 ; γίνεται πατημένη — αλλιώς δεν θα
                 ld   hl,(cell_ptr)      ; υπήρχε τρόπος να πάρεις πίσω το
+                push af
+                ld   a,SCORE_PLATE      ; πλάκα πατημένη με κιβώτιο
+                ld   b,SC_PLATE
+                call score_once
+                pop  af
                 ld   a,T_PLATE_DOWN     ; κιβώτιο ούτε να ξαναδείς την πλάκα
                 call cell_set
                 jr   hu_dropped
@@ -1112,6 +1141,9 @@ h_land:         ld   a,HST_IDLE
                 ld   a,(hero_paraopen)  ; προσγείωση με αλεξίπτωτο: μία χρήση,
                 or   a                  ; καμία ζημιά
                 jr   z,hl_nopara
+                ld   a,SCORE_PARA_LAND
+                ld   b,SC_PARA
+                call score_once
                 ld   hl,hero_para       ; καταναλώνεται ΕΝΑ, όχι όλα
                 dec  (hl)
                 xor  a

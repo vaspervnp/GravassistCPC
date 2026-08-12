@@ -226,10 +226,15 @@ sf_no:          or   a
 ; IN:  A = δείκτης σετ
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
+;   ΟΣΑ ΧΩΡΑΕΙ Ο BUFFER, όχι ολόκληρη τη θέση. Το υπόλοιπο της θέσης είναι
+;   γέμισμα και δεν το θέλει κανείς, ενώ ο buffer μικραίνει σε κάθε γραμμή
+;   κώδικα που προστίθεται. Το ότι το σετ χωράει στον buffer το εγγυάται ήδη
+;   το tools/roomfile.py (SET_MAX), και το assert του main.asm εγγυάται ότι
+;   δεν διαβάζουμε έξω από τη θέση.
 slot_copy:      call slot_addr          ; HL = πηγή, C = οργάνωση
                 ld   a,c
                 ld   de,set_buf
-                ld   bc,1<<SLOT_SHIFT
+                ld   bc,set_capacity
                 jp   bank_copy
 
 ;---------------------------------------------------------------------
@@ -272,7 +277,7 @@ bb_lp:          ld   (bb_idx),a
                 ex   de,hl              ; το bank_fill θέλει DE = προορισμός
                 ld   a,c
                 ld   hl,set_buf
-                ld   bc,1<<SLOT_SHIFT
+                ld   bc,set_capacity
                 call bank_fill
 
                 ld   a,(bb_idx)

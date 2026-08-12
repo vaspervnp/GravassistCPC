@@ -49,22 +49,46 @@ RTAB_OFF        equ 16
 GTAB_OFF        equ 15
 
 ; --- σετ αιθουσών σε αρχείο (tools/roomfile.py) --------------
-SET_ROOMS       equ 4
+SET_ROOMS       equ 2
 SET_VERSION     equ 2          ; ο φορτωτής απορρίπτει ό,τι άλλο
 ; Οι θέσεις των σετ μέσα στις τράπεζες του 6128 (src/bank.asm).
 ; Ο Z80 βρίσκει τη θέση με ολισθήσεις, οπότε τα δύο μεγέθη ΠΡΕΠΕΙ
 ; να είναι δυνάμεις του 2 — το assert από κάτω το επιβάλλει.
 SLOT_SHIFT      equ 10         ; 1 << 10 = 1024 bytes ανά θέση
 SLOTS_SHIFT     equ 4         ; 1 << 4 = 16 θέσεις ανά μπλοκ
-MAX_SETS        equ 64         ; = 256 αίθουσες στη μνήμη
-SET_COUNT       equ 2          ; πόσα σετ ψάχνει η εκκίνηση
+MAX_SETS        equ 64         ; = 128 αίθουσες στη μνήμη
+SET_COUNT       equ 4          ; πόσα σετ ψάχνει η εκκίνηση
+
+; --- σκορ (tools/physics.py) ---------------------------------
+SCORE_START     equ 1000
+SCORE_EXIT      equ 100
+SCORE_PLATE     equ 50
+SCORE_GATE      equ 30
+SCORE_SWITCH    equ 20
+SCORE_LOCK      equ 40
+SCORE_PARA_LAND equ 10
+SCORE_PARA_KEEP equ 80
+SCORE_PICKUP    equ 5
+; Τα αρνητικά μπαίνουν ως ΣΥΜΠΛΗΡΩΜΑ 2 σε ένα byte: το score_add
+; επεκτείνει το πρόσημο μόνο του.
+SCORE_STEP      equ 255         ; -1
+SCORE_GRAV      equ 254         ; -2
+HISCORE_MAX     equ 5
+HISCORE_NAME    equ 3
+; Χάρτης επισκεμμένων αιθουσών: ένα bit ανά αίθουσα, όσες χωράνε
+; στις τράπεζες.
+VISIT_BYTES     equ 16
 SET_NUMBERS     equ 5          ; offset του numbers[] στην κεφαλή
-SET_OFFS        equ 9         ; offset του offs[]
+SET_OFFS        equ 7         ; offset του offs[]
 LVL_CELLS       equ 960
 ; Πόσες αλλαγές κελιών θυμάται το παιχνίδι συνολικά. Κάθε εγγραφή
 ; είναι 4 bytes· γεμάτο ημερολόγιο σημαίνει ότι οι παλιότερες
 ; αλλαγές δεν επιβιώνουν όταν ξαναμπείς στην αίθουσα.
-JOURNAL_MAX     equ 64
+; 40 και όχι 64: το σκορ πήρε ~290 bytes RAM και ο set_buf έπεσε
+; κάτω από το μεγαλύτερο σετ. Το ημερολόγιο είναι ο μόνος
+; καταναλωτής που μικραίνει χωρίς να σπάσει κάτι — απλώς θυμάται
+; λιγότερες αλλαγές κελιών σε όλη την παρτίδα.
+JOURNAL_MAX     equ 40
 TRAIL_MAX       equ 4    ; πόσα δωμάτια πίσω γυρνάς
 
 ; Ταβάνι μνήμης με ενεργό AMSDOS — δες την assert στο main.asm.

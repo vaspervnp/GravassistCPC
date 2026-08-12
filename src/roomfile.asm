@@ -322,7 +322,12 @@ gt_lp:          ld   a,(hl)
                 pop  bc
                 pop  hl
                 jr   nc,gt_next
-gt_put:         push af                 ; το γύρισμα πάντα αλλάζει κάτι
+gt_put:         push af                 ; A = ο ΝΕΟΣ τύπος του στόχου
+                push bc
+                call score_target
+                pop  bc
+                pop  af
+                push af                 ; το γύρισμα πάντα αλλάζει κάτι
                 ld   a,1
                 ld   (sfx_gatechg),a
                 pop  af
@@ -587,6 +592,15 @@ gs_put:         push hl                 ; ίδια κατάσταση; τότε 
                 cp   (hl)
                 pop  hl
                 jr   z,gs_next
+                push af                 ; A = ο ΝΕΟΣ τύπος: πύλη ή λουκέτο
+                push bc
+                push de
+                push hl
+                call score_target
+                pop  hl
+                pop  de
+                pop  bc
+                pop  af
                 push af
                 ld   a,1
                 ld   (sfx_gatechg),a

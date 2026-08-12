@@ -62,6 +62,7 @@ gr_keys:        ld   (hl),0
 gr_seal:        ld   (hl),0
                 inc  hl
                 djnz gr_seal
+                call score_reset        ; 1000 πόντοι και άδειος χάρτης
                 jp   sfx_reset
 
 ; ---------------------------------------------------------------------------
