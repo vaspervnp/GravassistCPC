@@ -73,14 +73,20 @@ NOISE_PULSE = 12
 # δευτερολέπτου, οπότε στα 160 ένα δέκατο έκτο βγαίνει 9,375 — μη ακέραιο, και
 # ο κύκλος θα «γλιστρούσε». Στα 150 είναι ακριβώς 10 και το μέτρο 160. Η
 # διαφορά 6% δεν ακούγεται σε βάδισμα· ένας κύκλος που ξεσυγχρονίζεται, ναι.
-DRUM_STEP = 10                      # ένα δέκατο έκτο
+DRUM_STEP = 10                      # ένα δέκατο έκτο στα 150 BPM
 DRUM_BAR = 16 * DRUM_STEP
+# Το breakbeat τρέχει ΠΙΟ ΓΡΗΓΟΡΑ: 9 εκατοστά ανά δέκατο έκτο = 167 BPM,
+# κοντά στα 175 του δείγματος. Με ΕΝΑ κανάλι η διαφορά tempo δεν προκαλεί
+# καμία απόκλιση συγχρονισμού — και είναι ό,τι κάνει το δεύτερο κομμάτι να
+# ακούγεται ως δεύτερο κομμάτι αντί για παραλλαγή του πρώτου.
+BREAK_STEP = 9
 
 # Δείκτες >= MUS_NOISE είναι κρουστά χωρίς τόνο· η διαφορά είναι η περίοδος
 # θορύβου του AY. Μικρή περίοδος = φωτεινό «τσακ», μεγάλη = υπόκωφο.
 MUS_NOISE = 200
 SNARE = MUS_NOISE + 6               # ταμπούρο: κοφτό και φωτεινό
 SNARE_S = MUS_NOISE + 14            # πιο σβηστό, για τα αδύναμα χτυπήματα
+SNARE_B = MUS_NOISE + 3             # άλλο κιτ για το breakbeat: πιο τσιριχτό
 KICK = "C1"                         # μπάσο τύμπανο: πολύ χαμηλός τόνος
 
 # Κάθε μέτρο ως 16 θέσεις. K = μπάσο, k = αδύναμο μπάσο (flam), S = ταμπούρο,
@@ -107,16 +113,21 @@ MARCH_BARS = [
 # Και είναι ΑΡΑΙΩΜΕΝΟ: το δείγμα έχει 12 χτυπήματα ανά μέτρο, που στο AY με
 # ένα κανάλι γίνονται πολυβόλο και γεμίζουν την ουρά. Κράτησα τα οκτώ δυνατά.
 # Αν το θες πυκνότερο, είναι μία συμβολοσειρά.
+# ΤΡΕΙΣ διαφορές από το marching, γιατί με μία δεν ξεχώριζε: πιο γρήγορο
+# tempo, άλλο ταμπούρο (B), και κυρίως ΣΥΓΚΟΠΗ — το ταμπούρο ΔΕΝ κάθεται στο
+# απλό backbeat (4 και 12) αλλά στα 4, 8 και 14, και τα μπάσα πέφτουν σε
+# ανάποδους χρόνους (7, 15). Αυτό είναι που κάνει ένα break να είναι break.
 BREAK_BARS = [
-    "K.k.S..Kk.K.S..k",
-    "K.k.S..Kk.K.S..k",
-    "K.k.S..Kk.K.S..k",
-    "K.k.S..Kk.K.S.kk",
+    "K.k.B.kKB.K.b.BK",
+    "K.k.B.kKB.K.b.BK",
+    "K.k.B.kKB.K.b.BK",
+    "K.k.B.kKB.K.b.Bk",
 ]
 
 # Τα δύο κομμάτια παίζουν ΣΤΗ ΣΕΙΡΑ και ο κύκλος τα επαναλαμβάνει: ο player
-# ξαναρχίζει στο #FF, οπότε αρκεί να είναι στην ίδια ροή.
-DRUM_BARS = MARCH_BARS + BREAK_BARS
+# ξαναρχίζει στο #FF, οπότε αρκεί να είναι στην ίδια ροή. Κάθε ενότητα με το
+# δικό της tempo.
+DRUM_SECTIONS = [(MARCH_BARS, DRUM_STEP), (BREAK_BARS, BREAK_STEP)]
 
 
 def midi(name):
@@ -172,7 +183,8 @@ def stream(track, table, volume):
 # χτύπημα — αυτό είναι που κάνει το «μπαμ-πα» να ακούγεται ως ένα χτύπημα με
 # στολίδι και όχι ως δύο ξεχωριστά.
 DRUM_VOICE = {"K": (KICK, 13), "k": (KICK, 8),
-              "S": (SNARE, 12), "s": (SNARE_S, 8)}
+              "S": (SNARE, 12), "s": (SNARE_S, 8),
+              "B": (SNARE_B, 12), "b": (SNARE_B, 7)}
 DRUM_HIT = 3            # πόσο κρατά ο κρότος· το υπόλοιπο του βήματος σιωπή
 
 
@@ -198,17 +210,18 @@ def drum_stream(table):
         else:
             out.append((0, 0, n))
 
-    for bar in DRUM_BARS:
-        assert len(bar) == 16, f"μέτρο με {len(bar)} θέσεις αντί για 16"
-        for cell in bar:
-            total += DRUM_STEP
-            if cell == ".":
-                rest(DRUM_STEP)
-                continue
-            voice, vol = DRUM_VOICE[cell]
-            idx = voice if isinstance(voice, int) else table.index(voice) + 1
-            out.append((idx, vol, DRUM_HIT))
-            rest(DRUM_STEP - DRUM_HIT)
+    for bars, step in DRUM_SECTIONS:
+        for bar in bars:
+            assert len(bar) == 16, f"μέτρο με {len(bar)} θέσεις αντί για 16"
+            for cell in bar:
+                total += step
+                if cell == ".":
+                    rest(step)
+                    continue
+                voice, vol = DRUM_VOICE[cell]
+                idx = voice if isinstance(voice, int) else table.index(voice) + 1
+                out.append((idx, vol, DRUM_HIT))
+                rest(step - DRUM_HIT)
     return out, total
 
 
@@ -257,9 +270,10 @@ def main():
 
     # --- τα τύμπανα του παιχνιδιού -----------------------------------
     data, total = drum_stream(table)
-    assert total == len(DRUM_BARS) * DRUM_BAR, total
+    want = sum(len(bars) * 16 * step for bars, step in DRUM_SECTIONS)
+    assert total == want, f"{total} αντί για {want}"
     out += ["",
-            f"; --- τύμπανα: κανάλι 4, {len(DRUM_BARS)} μέτρα, κύκλος "
+            f"; --- τύμπανα: κανάλι 4, {sum(len(b) for b,_ in DRUM_SECTIONS)} μέτρα, κύκλος "
             f"{total} εκατοστά",
             "; Μεταγραφή του musicsamples/8-bit-marching-drums_160bpm.wav.",
             f"MUS_NOISE     equ {MUS_NOISE}   ; δείκτης >= αυτό = κρουστό",
@@ -277,7 +291,7 @@ def main():
     total = sum(len(stream(tr, table, v)[0]) * 3 + 1
                 for _, tr, v, _, _ in tracks) + len(table) * 2
     print(f"  src/music.asm: {len(table)} νότες, κύκλος μενού {LOOP // 100}s, "
-          f"τύμπανα {len(DRUM_BARS)} μέτρα")
+          f"τύμπανα {sum(len(b) for b,_ in DRUM_SECTIONS)} μέτρα")
 
 
 if __name__ == "__main__":
