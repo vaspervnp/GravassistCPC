@@ -123,6 +123,12 @@ it.
 - **Eraser** — paints empty. Selecting a cell type from the palette switches you back to
   Brush automatically.
 - **Fill** — 4-neighbour flood fill of the contiguous region you click on.
+- **Select** — drag a rectangle, then drag inside it to move what it contains.
+  The cells move for real: the place they came from is left empty. **It stops
+  at the first obstacle** — anything that is not an empty cell — rather than
+  sliding over it, and says so. The wiring travels with the cells: a gate keeps
+  its channel, a door its destination and arrival point. Right click or `Esc`
+  clears the selection; the whole drag is one undo step.
 
 **Buttons**
 

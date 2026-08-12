@@ -451,6 +451,10 @@
                 <button type="button" class="tool-btn" data-tool="brush">Brush</button>
                 <button type="button" class="tool-btn" data-tool="eraser">Eraser</button>
                 <button type="button" class="tool-btn" data-tool="fill">Fill</button>
+                <button type="button" class="tool-btn" data-tool="select"
+                        title="Drag a rectangle, then drag inside it to move what is in it">
+                    Select
+                </button>
             </div>
             <div class="toolbar" style="margin-top:6px">
                 <button type="button" id="btn-border">Border</button>
@@ -528,6 +532,9 @@
             <g id="attr-labels" font-size="5" font-family="monospace" font-weight="bold"
                text-anchor="middle" stroke="#000000" stroke-width="1.2"
                paint-order="stroke" stroke-linejoin="round"></g>
+            <rect id="selbox" fill="#ffffff" fill-opacity="0.10"
+                  stroke="#ffffff" stroke-width="0.3" stroke-dasharray="1 1"
+                  pointer-events="none" visibility="hidden"></rect>
             <rect id="cursor" width="8" height="8" fill="none"
                   stroke="#ffffff" stroke-width="0.4" pointer-events="none" visibility="hidden"></rect>
         </svg>
@@ -1638,6 +1645,105 @@
         ///
         /// Σταματά στην άκρη αντί να σπρώξει περιεχόμενο έξω: τίποτα δεν
         /// χάνεται χωρίς να το πεις.
+        // ---- Επιλογή ορθογωνίου και μετακίνησή του --------------------
+        //
+        // ΓΙΑΤΙ ΔΕΝ ΑΡΚΕΙ ΤΟ ΠΛΕΓΜΑ: μετακινώντας κελιά πρέπει να έρθει μαζί
+        // και η καλωδίωσή τους — το κανάλι μιας πύλης, ο προορισμός μιας
+        // πόρτας, το σημείο άφιξης. Αλλιώς σέρνεις το σχήμα και αφήνεις πίσω
+        // τη σημασία του, σιωπηλά. Είναι η ίδια δουλειά με το panLevel, σε
+        // υποσύνολο του πλέγματος.
+        let sel = null;             // {c0,r0,c1,r1} σε κελιά, ή null
+        let selDrag = null;         // ενεργό σύρσιμο: "new" ή "move"
+        const selBox = document.getElementById("selbox");
+
+        function selShow() {
+            if (!sel) { selBox.setAttribute("visibility", "hidden"); return; }
+            selBox.setAttribute("x", sel.c0 * CELL);
+            selBox.setAttribute("y", sel.r0 * CELL);
+            selBox.setAttribute("width", (sel.c1 - sel.c0 + 1) * CELL);
+            selBox.setAttribute("height", (sel.r1 - sel.r0 + 1) * CELL);
+            selBox.setAttribute("visibility", "visible");
+        }
+
+        function selInside(c, r) {
+            return sel && c >= sel.c0 && c <= sel.c1 && r >= sel.r0 && r <= sel.r1;
+        }
+
+        // Ένα βήμα ενός κελιού. Επιστρέφει αν έγινε.
+        //
+        // ΕΜΠΟΔΙΟ = ΟΤΙΔΗΠΟΤΕ ΜΗ ΚΕΝΟ. Τα κελιά που ΑΔΕΙΑΖΕΙ η ίδια η επιλογή
+        // δεν μετράνε — αλλιώς τίποτα δεν θα μπορούσε να κουνηθεί ούτε κατά
+        // ένα κελί μέσα στον ίδιο του τον χώρο.
+        function selStep(dx, dy) {
+            if (!sel) return false;
+            for (let r = sel.r0; r <= sel.r1; r++)
+                for (let c = sel.c0; c <= sel.c1; c++) {
+                    const nc = c + dx, nr = r + dy;
+                    if (!inGrid(nc, nr)) return false;
+                    if (selInside(nc, nr)) continue;      // μένει μέσα στην επιλογή
+                    if (grid[nr][nc] !== EMPTY) return false;
+                }
+
+            // Τα κελιά πρώτα, από το σωστό άκρο ώστε να μην πατήσει τον εαυτό του.
+            const cs = dx > 0 ? range(sel.c1, sel.c0 - 1, -1) : range(sel.c0, sel.c1 + 1, 1);
+            const rs = dy > 0 ? range(sel.r1, sel.r0 - 1, -1) : range(sel.r0, sel.r1 + 1, 1);
+            for (const r of rs)
+                for (const c of cs) {
+                    grid[r + dy][c + dx] = grid[r][c];
+                    grid[r][c] = EMPTY;
+                }
+
+            // …και μαζί η καλωδίωση. Κλειδιά «col,row» ή «kind:col,row»· και
+            // όποια ΤΙΜΗ είναι συντεταγμένη και δείχνει ΜΕΣΑ στην επιλογή.
+            const moveMap = (m, pairValue) => {
+                const out = new Map();
+                for (const [k, v] of m) {
+                    const i = k.indexOf(":");
+                    const head = i < 0 ? "" : k.slice(0, i + 1);
+                    const [c, r] = k.slice(i + 1).split(",").map(Number);
+                    const key = selInside(c, r)
+                        ? head + (c + dx) + "," + (r + dy) : k;
+                    let val = v;
+                    if (pairValue && v && selInside(v[0], v[1]))
+                        val = [v[0] + dx, v[1] + dy];
+                    out.set(key, val);
+                }
+                return out;
+            };
+            exitRooms = moveMap(exitRooms, false);
+            exitTwo = moveMap(exitTwo, false);
+            exitArrive = moveMap(exitArrive, true);
+            exitArriveG = moveMap(exitArriveG, false);
+            teleDests = moveMap(teleDests, true);
+            attrVals = moveMap(attrVals, false);
+
+            sel = { c0: sel.c0 + dx, r0: sel.r0 + dy,
+                    c1: sel.c1 + dx, r1: sel.r1 + dy };
+            return true;
+        }
+
+        function range(a, b, step) {
+            const out = [];
+            for (let i = a; i !== b; i += step) out.push(i);
+            return out;
+        }
+
+        // Μετακίνηση προς (dc,dr) κελιά, ΒΗΜΑ ΒΗΜΑ: σταματά στο πρώτο εμπόδιο
+        // αντί να πηδήξει από πάνω του.
+        function selMoveTo(dc, dr) {
+            let moved = 0, blocked = false;
+            while (dc !== 0 || dr !== 0) {
+                const sx = Math.sign(dc), sy = Math.sign(dr);
+                let did = false;
+                if (sx && selStep(sx, 0)) { dc -= sx; moved++; did = true; }
+                else if (sx) { dc = 0; blocked = true; }
+                if (sy && selStep(0, sy)) { dr -= sy; moved++; did = true; }
+                else if (sy) { dr = 0; blocked = true; }
+                if (!did) break;
+            }
+            return { moved: moved, blocked: blocked };
+        }
+
         function panLevel(dx, dy) {
             for (let r = 0; r < ROWS; r++)
                 for (let c = 0; c < COLS; c++) {
@@ -1803,6 +1909,26 @@
                 return;
             }
 
+            if (currentTool === "select") {
+                if (ev.button === 2) {          // δεξί κλικ: ακύρωση επιλογής
+                    sel = null; selShow();
+                    setStatus("Selection cleared.", "info");
+                    return;
+                }
+                svg.setPointerCapture(ev.pointerId);
+                if (selInside(p.c, p.r)) {
+                    // ΜΕΣΑ στην επιλογή: μετακίνηση. Ένα undo για ΟΛΟ το
+                    // σύρσιμο, όχι ένα ανά κελί.
+                    pushUndo();
+                    selDrag = { mode: "move", c: p.c, r: p.r, moved: 0 };
+                } else {
+                    selDrag = { mode: "new", c: p.c, r: p.r };
+                    sel = { c0: p.c, r0: p.r, c1: p.c, r1: p.r };
+                    selShow();
+                }
+                return;
+            }
+
             // Δεξί κλικ σβήνει, ανεξάρτητα από το επιλεγμένο εργαλείο.
             const erase = ev.button === 2 || currentTool === "eraser";
             paintSymbol = erase ? EMPTY : currentSymbol;
@@ -1840,10 +1966,54 @@
                     : pickKind === "exit"
                     ? "  ·  click = door arrival point #" + (pickIndex + 1)
                     : "");
+            if (selDrag && selDrag.mode === "new") {
+                sel = { c0: Math.min(selDrag.c, p.c), r0: Math.min(selDrag.r, p.r),
+                        c1: Math.max(selDrag.c, p.c), r1: Math.max(selDrag.r, p.r) };
+                selShow();
+            } else if (selDrag && selDrag.mode === "move") {
+                const res = selMoveTo(p.c - selDrag.c, p.r - selDrag.r);
+                // Το σημείο αναφοράς γίνεται ΠΑΝΤΑ ο δείκτης, κινήθηκε η
+                // επιλογή ή όχι: κάθε κίνηση μετράει από την τωρινή θέση, και
+                // μια επιλογή που κόλλησε σε τοίχο δεν τινάζεται μόλις
+                // ελευθερωθεί ο δρόμος.
+                selDrag.c = p.c;
+                selDrag.r = p.r;
+                if (res.blocked) selDrag.blocked = true;
+                if (res.moved) {
+                    selDrag.moved += res.moved;
+                    dirty = true;
+                    drawAll();
+                    selShow();
+                } else if (res.blocked) {
+                    setStatus("Blocked — something is in the way.", "warn");
+                }
+            }
             if (painting) setCell(p.r, p.c, paintSymbol);
         });
 
+        function endSelDrag() {
+            if (!selDrag) return;
+            const wasMove = selDrag.mode === "move", n = selDrag.moved || 0;
+            const hitWall = !!selDrag.blocked;
+            selDrag = null;
+            if (wasMove) {
+                // ΤΟ ΕΜΠΟΔΙΟ ΛΕΓΕΤΑΙ ΚΑΙ ΣΤΟ ΤΕΛΟΣ: το προσωρινό «Blocked»
+                // του συρσίματος το έσβηνε το «Moved», οπότε τραβούσες πέρα
+                // από τον τοίχο, το σχήμα σταματούσε, και το μήνυμα έλεγε ότι
+                // όλα πήγαν καλά.
+                if (n && hitWall) setStatus("Moved until it hit something.", "warn");
+                else if (n) setStatus("Moved the selection.", "ok");
+                else if (hitWall) setStatus("Blocked — nothing moved.", "warn");
+                if (n) refreshSource();
+            } else if (sel) {
+                const w = sel.c1 - sel.c0 + 1, h = sel.r1 - sel.r0 + 1;
+                setStatus("Selected " + w + "x" + h +
+                          " — drag inside it to move it, right click to clear.", "ok");
+            }
+        }
+
         function endPaint() {
+            endSelDrag();
             if (!painting) return;
             painting = false;
             refreshSource();
@@ -1906,6 +2076,14 @@
             // Το Esc ακυρώνει την επιλογή προορισμού ακόμα κι αν ο δρομέας είναι
             // μέσα σε πεδίο — γι' αυτό ελέγχεται ΠΡΙΝ από όλα τα άλλα.
             if (ev.key === "Escape" && pickKind !== null) { ev.preventDefault(); cancelPick(); return; }
+            // Το Esc καθαρίζει και την επιλογή — ΜΕΤΑ το pick, ώστε ένα
+            // Esc να ακυρώνει ένα πράγμα τη φορά, το πιο πρόσφατο.
+            if (ev.key === "Escape" && sel) {
+                ev.preventDefault();
+                sel = null; selDrag = null; selShow();
+                setStatus("Selection cleared.", "info");
+                return;
+            }
             if (ev.target.tagName === "INPUT" || ev.target.tagName === "SELECT") return;
             if (ev.ctrlKey && (ev.key === "z" || ev.key === "Z")) { ev.preventDefault(); undo(); return; }
             if (ev.ctrlKey && (ev.key === "y" || ev.key === "Y")) { ev.preventDefault(); redo(); return; }
