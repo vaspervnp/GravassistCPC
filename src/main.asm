@@ -149,6 +149,7 @@ main:           call init_linetab       ; πίνακας γραμμών: καμ�
                 ld   a,1
                 call SCR_SET_MODE       ; καθάρισε ό,τι άφησε το μενού
                 call set_palette
+                call drums_start        ; τα τύμπανα του παιχνιδιού
                 call game_reset         ; καθαρή ενέργεια, τσέπες, ημερολόγιο
                 ld   a,START_ROOM       ; ποια αίθουσα· ορίζεται στο build
                 call room_load
@@ -239,8 +240,9 @@ ml_nouse:       call read_walk
 ml_upd:         ld   a,(ml_dir)
                 call hero_update
 
-ml_anim:        ld   a,(hero_zone)      ; παράσιτα όσο είναι σε ζώνη κλειδώματος
-                call sfx_amb
+ml_anim:        call drums_step         ; ΠΡΙΝ τον βόμβο: μέσα σε ζώνη
+                ld   a,(hero_zone)      ; κλειδώματος ο βόμβος γράφει από πάνω
+                call sfx_amb            ; τους, που είναι το σωστό
                 call anim_frame
                 call prep_hero          ; μετασχηματισμός sprite (εκτός vblank)
 

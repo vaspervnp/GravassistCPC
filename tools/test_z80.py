@@ -460,7 +460,7 @@ def main():
     t.m.memory[0xBCA7] = 0xC9           # SOUND RESET -> RET
     t.call("MUSIC_START")
 
-    table = GM.collect(GM.BASS, GM.LEAD, GM.PULSE)
+    table = GM.note_table()
     bass, _ = GM.stream(GM.BASS, table, GM.VOL_BASS)
 
     t.call("MUSIC_STEP")
