@@ -73,7 +73,17 @@ def build():
               # τρέχει με τον ρυθμό του σιδήρου και όχι με τα ονομαστικά 50 Hz.
               "CPC_VSYNC_IDLE": P.CPC_VSYNC_IDLE,
               "CPC_VSYNC_WALK": P.CPC_VSYNC_WALK,
-              "CPC_VSYNC_RUN": P.CPC_VSYNC_RUN},
+              "CPC_VSYNC_RUN": P.CPC_VSYNC_RUN,
+              # Το σκορ. Οι ίδιες τιμές με τον Amstrad, από την ίδια πηγή —
+              # ένα test run που βαθμολογεί αλλιώς είναι χειρότερο από ένα
+              # που δεν βαθμολογεί καθόλου.
+              "SCORE_START": P.SCORE_START, "SCORE_EXIT": P.SCORE_EXIT,
+              "SCORE_PLATE": P.SCORE_PLATE, "SCORE_GATE": P.SCORE_GATE,
+              "SCORE_SWITCH": P.SCORE_SWITCH, "SCORE_LOCK": P.SCORE_LOCK,
+              "SCORE_PARA_LAND": P.SCORE_PARA_LAND,
+              "SCORE_PARA_KEEP": P.SCORE_PARA_KEEP,
+              "SCORE_PICKUP": P.SCORE_PICKUP,
+              "SCORE_STEP": P.SCORE_STEP, "SCORE_GRAV": P.SCORE_GRAV},
 
         # Γραφικά: τιμές pen ανά pixel, ίδια πηγή με τα tiles του Amstrad.
         "PALETTE": ["#000080", "#FFFFFF", "#00FF00", "#FF8000"],

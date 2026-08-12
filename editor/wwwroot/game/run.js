@@ -155,6 +155,7 @@
       hero.parachute = keep.parachute;
       hero.carry = keep.carry;
     }
+    scoreFirst = scoreEnterRoom(roomNumberOf(name));
     tick = 0; hist = []; paraFrame = 0; paraTick = 0;
     note.textContent = "";
   }
@@ -172,6 +173,9 @@
       // Η ίδια ιεραρχία με το main.asm: αλεξίπτωτο > αέρας > ζώνη κλειδώματος.
       const airborne = hero.state === "FALL";
       if (!(airborne && (hero.paraOpen || !stuck()))) {
+        // ΜΟΝΟ ΟΤΑΝ ΑΛΛΑΖΕΙ: το πλήκτρο μένει πατημένο και θα χρέωνε σε κάθε
+        // καρέ για μία απόφαση. Ίδιος έλεγχος με το ml_gok του main.asm.
+        if (g !== hero.worldG) scoreAdd(D.K.SCORE_GRAV);
         if (!hero.noflip()) { hero.g = g; hero.state = "FALL"; }
         hero.worldG = g; hero.cratesOn = true;
       }
@@ -316,6 +320,77 @@
     })(performance.now());
   }
 
+  // --- ΣΚΟΡ -------------------------------------------------------------
+  // Μεταγραφή του src/score.asm. ΔΥΟ ΠΥΛΕΣ, όχι μία:
+  //   - τα θετικά μόνο στην ΠΡΩΤΗ επίσκεψη κάθε αίθουσας
+  //   - και οι επαναλήψιμες ενέργειες (διακόπτης, πύλη, λουκέτο, πλάκα) μία
+  //     φορά ανά αίθουσα ΑΝΑ ΕΙΔΟΣ, αλλιώς γυρίζεις τον ίδιο διακόπτη σε βρόχο
+  //   - τα αρνητικά μετράνε πάντα
+  // Τα κλειδιά και τα κιβώτια είναι ανά τεμάχιο: καταναλώνονται.
+  const ONCE_PER_ROOM = { switch: "SCORE_SWITCH", gate: "SCORE_GATE",
+                          lock: "SCORE_LOCK", plate: "SCORE_PLATE",
+                          paraland: "SCORE_PARA_LAND" };
+  const PER_ITEM = { key: "SCORE_PICKUP", crate: "SCORE_PICKUP" };
+
+  let score = 0, visited = new Set(), roomAwarded = new Set();
+
+  // ΤΑ ΔΙΑΒΑΖΟΥΜΕ ΔΥΝΑΜΙΚΑ, οπότε το grep του tools/genjs.py δεν τα βλέπει:
+  // ένα ξεχασμένο export θα έδινε undefined, το undefined θα έκανε το σκορ
+  // NaN, και το NaN δεν είναι ούτε αρνητικό — το παιχνίδι θα συνέχιζε με
+  // κενή ένδειξη. Ο έλεγχος γίνεται μία φορά και φωνάζει δυνατά.
+  for (const k of [...Object.values(ONCE_PER_ROOM), ...Object.values(PER_ITEM),
+                   "SCORE_START", "SCORE_EXIT", "SCORE_PARA_KEEP",
+                   "SCORE_STEP", "SCORE_GRAV"])
+    if (typeof D.K[k] !== "number")
+      throw new Error("λείπει η σταθερά σκορ " + k + " από το data.js");
+
+  function scoreReset() {
+    score = D.K.SCORE_START;
+    visited = new Set();
+    roomAwarded = new Set();
+  }
+
+  function scoreEnterRoom(n) {
+    roomAwarded = new Set();
+    if (visited.has(n)) return false;   // ξαναμπήκες: τα θετικά κλείνουν
+    visited.add(n);
+    return true;
+  }
+
+  function scoreAdd(points) {
+    score += points;
+    // ΑΡΝΗΤΙΚΟ = ΤΕΛΟΣ, με δικό του λόγο — όχι μηδενίζοντας την ενέργεια.
+    if (score < 0 && !ended) { ended = "GAME OVER"; play("over"); }
+  }
+
+  function scoreAward(points, kind) {
+    if (!scoreFirst) return;            // ξαναμπήκες σε αίθουσα που έλυσες
+    if (kind) {
+      if (roomAwarded.has(kind)) return;
+      roomAwarded.add(kind);
+    }
+    scoreAdd(points);
+  }
+
+  let scoreFirst = false;   // πρώτη επίσκεψη στην ΤΡΕΧΟΥΣΑ αίθουσα;
+
+  // Πρόσημο και τέσσερα ψηφία, ΜΕ μηδενικά μπροστά — ίδια μορφή με το
+  // score_digits του src/score.asm. Σταθερό πλάτος ώστε να μην αφήνει
+  // σκουπίδι όταν το σκορ κονταίνει.
+  function scoreText() {
+    const n = Math.abs(score) % 10000;
+    return (score < 0 ? "-" : " ") + String(n).padStart(4, "0");
+  }
+
+  function scoreEvents(h) {
+    for (const e of h.events) {
+      if (ONCE_PER_ROOM[e]) scoreAward(D.K[ONCE_PER_ROOM[e]], e);
+      else if (PER_ITEM[e]) scoreAward(D.K[PER_ITEM[e]], null);
+    }
+    // ΑΝΑ ΠΑΤΗΜΑ ΠΟΔΙΟΥ, όχι ανά pixel — ο ίδιος παλμός που παίζει τον ήχο.
+    for (const e of h.sfx) if (e === "step") scoreAdd(D.K.SCORE_STEP);
+  }
+
   let ended = null;          // "GAME OVER" ή "THE END" — παγώνει τον βρόχο
 
   // ΕΝΑ βήμα: ενημέρωση + σχεδίαση. Δεν προγραμματίζει το επόμενο — το κάνει
@@ -334,6 +409,7 @@
     if (ended) { freezeNote(); return D.K.CPC_VSYNC_IDLE; }
     const { walk, run } = input();
     hero.update(walk, run);      // το τρέξιμο είναι ΣΗΜΑΙΑ, όχι δεύτερη ενημέρωση
+    scoreEvents(hero);
     tick += run ? 2 : 1;
     for (const e of hero.sfx) play(e);
     humSet(hero.noflip());
@@ -367,6 +443,10 @@
     if (hero.won) {
       const dest = roomDestFor(hero);
       hero.won = false;
+      scoreAward(D.K.SCORE_EXIT, "exit");
+      // ΑΝΑ ΑΛΕΞΙΠΤΩΤΟ που περνάει μαζί σου στην επόμενη πίστα.
+      for (let i = 0; i < hero.parachute; i++)
+        scoreAward(D.K.SCORE_PARA_KEEP, null);
       // ROOM_END: η πόρτα που ΚΛΕΙΝΕΙ το παιχνίδι. 255 και όχι 0, γιατί το 0
       // το γράφει κάθε πόρτα χωρίς δηλωμένο προορισμό.
       if (dest === 255) {
@@ -420,6 +500,9 @@
     }
     screen.hud(hero);
     screen.flush();
+    // ΣΤΗΛΗ 30, όπως το SCORE_COL του src/score.asm: στη δεξιά άκρη κάθονται
+    // τα δύο βελάκια βαρύτητας (στήλες 35 και 37) και το σκορ θα έπεφτε πάνω.
+    screen.text(scoreText(), 1, 30);
 
     // ΜΗΝΥΜΑ ΓΙΑ Ο,ΤΙ ΠΑΤΑΣ, στο ΑΛΛΟ μισό της οθόνης ώστε να μη σκεπάζει
     // αυτό που περιγράφει. Σκέτη σχεδίαση μετά το frame: δεν αγγίζει τη
@@ -613,6 +696,7 @@
               || Object.keys(rooms).find(n => /^room_/.test(n))
               || Object.keys(rooms)[0];
     sel.value = want;
+    scoreReset();
     if (!asked) { menu(want); return; }
     start(want, rooms[want].cells, rooms[want].start);
     cpcClock(frame);
@@ -646,12 +730,14 @@
   sel.addEventListener("change", () => {
     const m = rooms[sel.value];
     ended = null;
+    scoreReset();       // άλλη αίθουσα από τη λίστα = άλλη παρτίδα
     if (m) start(sel.value, m.cells, m.start);
   });
   document.getElementById("restart").addEventListener("click", () => {
     const m = rooms[curName];
     if (!m) return;
     ended = null;                               // αλλιώς μένει παγωμένο
+    scoreReset();
     m.cells = m.pristine.map(r => r.slice());   // καθαρή αίθουσα, όχι μισοπαιγμένη
     start(curName, m.cells, m.start);
   });

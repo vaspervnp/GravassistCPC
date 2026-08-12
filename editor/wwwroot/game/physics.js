@@ -104,6 +104,11 @@
       // Ήχοι που «γεννήθηκαν» σε αυτό το καρέ. Ο run.js τα παίζει και τα
       // αδειάζει· το μοντέλο δεν ξέρει τίποτα για ήχο.
       this.sfx = []; this.stepPx = 0; this.crateMoved = false;
+      // ΣΥΜΒΑΝΤΑ ΓΙΑ ΤΟ ΣΚΟΡ, χωριστά από τον ήχο. Ο ίδιος διαχωρισμός με τον
+      // Amstrad: το hero.asm ανιχνεύει, το score.asm βαθμολογεί. Ο ήχος δεν
+      // αρκεί ως σήμα — τα κλειδιά και τα κιβώτια δεν κάνουν θόρυβο, και το
+      // «plate» παίζει και όταν την πατάς εσύ, όχι μόνο με κιβώτιο.
+      this.events = [];
       this.hurtLeft = 0;
     }
 
@@ -261,7 +266,10 @@
     }
     land() {
       this.state = "IDLE";
-      if (this.paraOpen) { this.parachute--; this.paraOpen = 0; }
+      if (this.paraOpen) {
+        this.parachute--; this.paraOpen = 0;
+        this.events.push("paraland");
+      }
       else if (this.fallDist > K.FALL_SAFE)
         this.hurt(1 + Math.floor((this.fallDist - K.FALL_SAFE) / 12));
       this.fallDist = 0; this.fallV = K.FALL_V0; this.fallAcc = 0;
@@ -314,6 +322,7 @@
         else if (t === T.KEY) {
           const kid = this.room.attr(col, row);
           this.keys[kid]++;
+          this.events.push("key");
           // Το μήνυμα βγαίνει ΜΑΖΕΥΟΝΤΑΣ το κλειδί: εκεί μαθαίνεις ότι δεν θα
           // χρειαστεί να πατήσεις τίποτα.
           if (this.room.hasAutoLock(kid)) this.keyAutoMsg = true;
@@ -323,6 +332,7 @@
         // μένει εκεί. Ακμή και όχι κράτημα, αλλιώς οι πόρτες ανοιγοκλείνουν
         // 50 φορές το δευτερόλεπτο.
         this.sfx.push("switch");
+        this.events.push("switch");
         this.toggleTargets(this.room.attr(col, row));
       }
       this.prevBody = col + "," + row;
@@ -362,6 +372,7 @@
     /// πολλές απλές κλειδαριές θα ξεκλείδωνε ολόκληρη με ένα κλειδί.
     openLocks(cell, ident) {
       this.sfx.push("unlock");
+      this.events.push("lock");
       const here = this.room.cells[cell[1]][cell[0]];
       this.room.cells[cell[1]][cell[0]] =
         OPEN_OF[here] !== undefined ? OPEN_OF[here] : T.LOCK_OPEN;
@@ -400,6 +411,9 @@
         const want = opened ? (OPEN_OF[cur] !== undefined ? OPEN_OF[cur] : cur)
                             : (SHUT_OF[cur] !== undefined ? SHUT_OF[cur] : cur);
         if (want === cur) continue;
+        // ΜΟΝΟ ΤΟ ΑΝΟΙΓΜΑ ΠΛΗΡΩΝΕΙ: το κλείσιμο της πύλης όταν φεύγεις από
+        // την πλάκα δεν είναι πρόοδος.
+        if (opened && cur === T.GATE) this.events.push("gate");
         this.room.cells[r][c] = want;
         changed = true;
       }
@@ -414,6 +428,7 @@
         const cur = this.room.cells[r][c];
         const want = OPEN_OF[cur] !== undefined ? OPEN_OF[cur] : SHUT_OF[cur];
         if (want === undefined) continue;
+        if (cur === T.GATE) this.events.push("gate");
         this.room.cells[r][c] = want;
         changed = true;
       }
@@ -449,9 +464,13 @@
       // Από το κελί ΤΟΥ ΣΩΜΑΤΟΣ: το κιβώτιο δεν είναι στερεό, οπότε δεν
       // στέκεσαι ποτέ πάνω του — στέκεσαι ΜΕΣΑ του.
       const bt = this.room.cell(col, row);
-      if (bt === T.CRATE) { this.room.cells[row][col] = T.EMPTY; this.carry = 1; return true; }
+      if (bt === T.CRATE) {
+        this.room.cells[row][col] = T.EMPTY; this.carry = 1;
+        this.events.push("crate"); return true;
+      }
       if (bt === T.PLATE_DOWN) {
-        this.room.cells[row][col] = T.PLATE; this.carry = 1; return true;
+        this.room.cells[row][col] = T.PLATE; this.carry = 1;
+        this.events.push("crate"); return true;
       }
       return false;
     }
@@ -463,7 +482,10 @@
       // ΠΑΝΩ ΣΕ ΠΛΑΚΑ η πλάκα δεν χάνεται: γίνεται πατημένη. Αν το κιβώτιο
       // έγραφε πάνω της, δεν θα υπήρχε τρόπος να το πάρεις πίσω.
       const v = this.room.cells[r][c];
-      if (v === T.PLATE) this.room.cells[r][c] = T.PLATE_DOWN;
+      if (v === T.PLATE) {
+        this.room.cells[r][c] = T.PLATE_DOWN;
+        this.events.push("plate");
+      }
       else if (v === T.EMPTY) this.room.cells[r][c] = T.CRATE;
       else return false;
       this.carry = 0; this.sfx.push("drop"); return true;
@@ -489,6 +511,7 @@
       // ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται ΚΑΤΩ και μένει εκεί — νησίδα
       // «κανονικού» παιχνιδιού μέσα στο δωμάτιο.
       if (this.noflip() && this.g !== 0) { this.g = 0; this.state = "FALL"; }
+      this.events.length = 0;
       this.platesStep();
       this.sfx.length = 0;
       if (this.hurtLeft) this.hurtLeft--;
