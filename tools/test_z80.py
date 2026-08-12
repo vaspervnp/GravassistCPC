@@ -1170,11 +1170,57 @@ def main():
     check("…και κλειδί άλλου καναλιού δεν μετράει",
           t26.m.a == 8, f"μήνυμα {t26.m.a}")
 
+    check_hud_energy()
     check_hiscore()
     check_banking()
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
+
+
+def check_hud_energy():
+    """ΚΑΘΕ δρόμος απώλειας ενέργειας πρέπει να λερώνει το HUD.
+
+    Το draw_hud ξαναζωγραφίζει μόνο όταν hud_dirty != 0. Τα αγκάθια και τα
+    pickups το σήκωναν, η ΖΗΜΙΑ ΑΠΟ ΠΤΩΣΗ όχι — η μπάρα έμενε παγωμένη ως το
+    επόμενο άσχετο συμβάν και ο παίκτης δεν έβλεπε γιατί πέθανε. Το τεστ
+    κρατά και τους τρεις δρόμους μαζί: όποιος προστεθεί τέταρτος και ξεχάσει
+    το hud_dirty θα το μάθει εδώ.
+    """
+    from z80run import Z80Test
+    t = Z80Test()
+    t.fake_set_load()
+    dirty, energy = t.sym("HUD_DIRTY"), t.sym("HERO_ENERGY")
+
+    # --- πτώση πάνω από το ασφαλές όριο ------------------------------
+    t.poke(dirty, b"\x00")
+    t.poke(energy, bytes((P.ENERGY_MAX,)))
+    t.poke(t.sym("HERO_HURT"), b"\x00")
+    t.poke(t.sym("HERO_PARAOPEN"), b"\x00")
+    t.poke16(t.sym("HERO_FALL"), P.FALL_SAFE + 24)      # ζημιά 1 + 24/12 = 3
+    t.call("H_LAND")
+    lost = P.ENERGY_MAX - t.peek(energy)[0]
+    check("κακή προσγείωση: χάνεται ενέργεια", lost > 0, f"-{lost}")
+    check("…και το HUD ενημερώνεται ΤΟ ΙΔΙΟ ΚΑΡΕ",
+          t.peek(dirty) == b"\x01", f"hud_dirty = {t.peek(dirty)[0]}")
+
+    # --- ασφαλής πτώση: ούτε ζημιά ούτε άσκοπο ξαναζωγράφισμα --------
+    t.poke(dirty, b"\x00")
+    t.poke(energy, bytes((P.ENERGY_MAX,)))
+    t.poke(t.sym("HERO_HURT"), b"\x00")
+    t.poke16(t.sym("HERO_FALL"), P.FALL_SAFE - 1)
+    t.call("H_LAND")
+    check("ασφαλής πτώση: καμία ζημιά",
+          t.peek(energy)[0] == P.ENERGY_MAX)
+    check("…και κανένα άσκοπο ξαναζωγράφισμα", t.peek(dirty) == b"\x00")
+
+    # --- νέα παρτίδα: γεμάτη μπάρα από το πρώτο καρέ -----------------
+    t.poke(dirty, b"\x00")
+    t.poke(energy, b"\x01")
+    t.call("GAME_RESET")
+    check("game_reset: γεμάτη ενέργεια", t.peek(energy)[0] == P.ENERGY_MAX)
+    check("…και το HUD το δείχνει χωρίς να περιμένει συμβάν",
+          t.peek(dirty) == b"\x01")
 
 
 def check_hiscore():

@@ -1187,6 +1187,12 @@ hl_dmg:         ld   a,(hero_hurt)      ; άτρωτος: η πτώση δεν �
                 jr   nc,hl_set
                 xor  a                  ; 0 = θάνατος
 hl_set:         ld   (hero_energy),a
+                ; ΤΟ HUD ΔΕΝ ΕΝΗΜΕΡΩΝΟΤΑΝ. Τα αγκάθια και τα pickups σήκωναν το
+                ; hud_dirty, η κακή προσγείωση όχι — η μπάρα έμενε παγωμένη ως
+                ; το επόμενο άσχετο συμβάν, οπότε ο παίκτης δεν έβλεπε ΓΙΑΤΙ
+                ; πέθανε. Το draw_hud τρέχει στο ίδιο καρέ, μετά το hero_update.
+                ld   a,1
+                ld   (hud_dirty),a
                 ld   a,SFXID_HURT
                 jp   sfx_play
 

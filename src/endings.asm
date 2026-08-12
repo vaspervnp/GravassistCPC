@@ -62,6 +62,9 @@ gr_keys:        ld   (hl),0
 gr_seal:        ld   (hl),0
                 inc  hl
                 djnz gr_seal
+                ld   a,1                ; γεμάτη μπάρα από το πρώτο καρέ: το
+                ld   (hud_dirty),a      ; hud_dirty αρχικοποιείται μόνο στο
+                                        ; assembly, όχι σε κάθε νέα παρτίδα
                 call score_reset        ; 1000 πόντοι και άδειος χάρτης
                 jp   sfx_reset
 
