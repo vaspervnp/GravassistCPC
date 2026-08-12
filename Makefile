@@ -26,7 +26,14 @@ DSK   = build/gravassist.dsk
 SETS  = $(shell $(PY) -c "import sys;sys.path.insert(0,'tools');import roomfile;\
         print(' '.join('build/'+n for _,n,_ in roomfile.all_sets()))" 2>/dev/null)
 
-all: $(DSK)
+# Τα δεδομένα του browser χτίζονται ΜΑΖΙ με τη δισκέτα, όχι με το χέρι.
+# Ήταν phony στόχος χωρίς προϋποθέσεις, δηλαδή δεν έτρεχε ποτέ μόνος του:
+# το data.js έμενε πίσω σιωπηλά και η δοκιμή στον browser έσκαγε με «λείπει
+# η τάδε σταθερά» — μία σταθερά τη φορά, όποτε την ακουμπούσε ο κώδικας.
+JSDATA = editor/wwwroot/game/data.js
+PARITY = editor/wwwroot/game/parity-expected.json
+
+all: $(DSK) $(JSDATA) $(PARITY)
 
 # Τι εργαλεία θα χρησιμοποιηθούν και αν βρίσκονται.
 .PHONY: toolchain
@@ -124,8 +131,13 @@ test:
 # Δεδομένα και σενάριο ισοδυναμίας για το test run του editor.
 # Άνοιξε μετά το /game/parity.html: συγκρίνει JavaScript και μοντέλο frame
 # προς frame και δείχνει την πρώτη απόκλιση.
-editor-data:
+editor-data: $(JSDATA) $(PARITY)
+
+$(JSDATA): tools/genjs.py tools/physics.py
 	$(PY) tools/genjs.py
+
+# ΜΕΤΑ το data.js: το parity τρέχει την ίδια JavaScript που το διαβάζει.
+$(PARITY): tools/parity.py tools/physics.py editor/wwwroot/game/physics.js $(JSDATA)
 	$(PY) tools/parity.py
 
 # Οπτικό ίχνος της διαδρομής του ήρωα στο δοκιμαστικό δωμάτιο
