@@ -514,8 +514,11 @@
       // «κανονικού» παιχνιδιού μέσα στο δωμάτιο.
       if (this.noflip() && this.g !== 0) { this.g = 0; this.state = "FALL"; }
       this.events.length = 0;
-      this.platesStep();
+      // ΤΟ ΑΔΕΙΑΣΜΑ ΠΡΩΤΑ. Ήταν μετά το platesStep(), που σημαίνει ότι οι
+      // ήχοι «πλάκα» και «πύλη» σβήνονταν στην ίδια γραμμή που γεννιόντουσαν
+      // — οι πλάκες ήταν βουβές στη δοκιμή του browser.
       this.sfx.length = 0;
+      this.platesStep();
       if (this.hurtLeft) this.hurtLeft--;
       this.crateStep();
       this.touchObjects();
