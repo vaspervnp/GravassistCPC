@@ -130,7 +130,11 @@
   }
 
   function animFrame() {
-    if (hero.state === "WALK") return 2 + ((tick >> 2) & 7);
+    // >> 1 και όχι >> 2: με 4 px ανά ενημέρωση, η διαίρεση με 4 έδινε 16 px
+    // ανά καρέ animation αντί για τα 8 που σχεδιάστηκαν, και ο ήρωας
+    // γλιστρούσε. Ίδια αλλαγή με το af_walk του src/main.asm — τα δύο πρέπει
+    // να δείχνουν το ίδιο πόδι την ίδια στιγμή.
+    if (hero.state === "WALK") return 2 + ((tick >> 1) & 7);
     if (hero.state === "FALL") return 18 + ((tick >> 3) & 3);
     return (tick >> 5) & 1;
   }
