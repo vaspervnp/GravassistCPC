@@ -294,7 +294,9 @@ bb_lp:          ld   (bb_idx),a
                 or   (hl)
                 ld   (hl),a
 
-bb_next:        ld   a,(bb_idx)
+                ld   a,(bb_idx)         ; η μπάρα προχωράει και στα σετ που
+bb_next:        call boot_bar           ; λείπουν: μετράει ΠΡΟΟΔΟ, όχι επιτυχία
+                ld   a,(bb_idx)
                 inc  a
                 cp   SET_COUNT+1
                 jr   c,bb_lp
@@ -303,6 +305,54 @@ bb_next:        ld   a,(bb_idx)
                 ld   (set_cur),a        ; ο set_buf κρατά το τελευταίο σετ,
                 ret                     ; αλλά κανείς δεν το έχει ζητήσει
 
+;---------------------------------------------------------------------
+; boot_bar — η μπάρα φόρτωσης, ΠΑΝΩ στην οθόνη υποδοχής
+;
+;   Η οθόνη είναι ακόμα η MODE 0 του loader και μένει εκεί: το SCR_SET_MODE
+;   έχει μετακομίσει μετά το γέμισμα, ώστε ο παίκτης να μην κοιτάζει μαύρο.
+;   Γράφουμε κατευθείαν στη μνήμη οθόνης — καμία κλήση firmware, καμία
+;   αλλαγή παλέτας, τίποτα που να χαλάει την εικόνα από κάτω.
+;
+;   ΠΡΟΣΟΧΗ: το AMSDOS δανείζεται τα πρώτα 2 KB της οθόνης για buffer, οπότε
+;   η εικόνα υποδοχής ΘΑ ριγώσει όσο διαβάζουμε. Δεν υπάρχουν άλλα 2 KB — η
+;   μπάρα είναι εκεί ακριβώς για να δείχνει ότι αυτό είναι δουλειά, όχι βλάβη.
+;
+; IN:  A = πόσα σετ έχουν περάσει
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+BAR_X           equ  8          ; στήλη byte
+BAR_Y           equ  184        ; πρώτη scanline
+BAR_H           equ  8
+BAR_W           equ  64         ; πλήρες πλάτος σε bytes
+BAR_PEN         equ  #FF        ; MODE 0: όλα τα bits αναμμένα
+
+boot_bar:       or   a
+                ret  z
+                ld   b,a
+                xor  a
+bb_mul:         add  a,BAR_STEP
+                djnz bb_mul
+                cp   BAR_W+1            ; περισσότερα σετ από όσα χωράει η
+                jr   c,bb_wok           ; μπάρα: κόβεται στο πλήρες πλάτος
+                ld   a,BAR_W
+bb_wok:         ld   (bb_w),a
+                ld   b,BAR_Y
+                ld   c,BAR_H
+bb_row:         push bc
+                ld   c,BAR_X
+                call scr_addr
+                ld   a,(bb_w)
+                ld   b,a
+bb_px:          ld   (hl),BAR_PEN
+                inc  hl
+                djnz bb_px
+                pop  bc
+                inc  b
+                dec  c
+                jr   nz,bb_row
+                ret
+
+bb_w            db   0
 bb_idx          db   0
 bank_done       db   0          ; το γέμισμα γίνεται μία φορά, όχι ανά παρτίδα
 bank_map        ds   MAX_SETS/8 ; ένα bit ανά θέση: γέμισε ή όχι
