@@ -58,6 +58,45 @@ def main():
         return 1
     print(f"  ΟΚ   κανένα όνομα δεν είναι ταυτόχρονα equ και ετικέτα "
           f"({len(equs)} σταθερές, {len(others)} ετικέτες)")
+    return check_palette()
+
+
+def check_palette():
+    """Η παλέτα του editor απέναντι στο tools/physics.py.
+
+    ΓΙΑΤΙ ΥΠΑΡΧΕΙ: το editor/Models/TileType.cs είναι ΧΕΙΡΟΓΡΑΦΟΣ κατάλογος,
+    ένας τύπος ανά χαρακτήρα, και τίποτα δεν τον συνέδεε με το μοντέλο. Ένας
+    τύπος που μπαίνει στο physics.py και ξεχνιέται εκεί απλώς δεν υπάρχει για
+    τον σχεδιαστή: δεν μπορεί να τον ζωγραφίσει, χωρίς κανένα μήνυμα. Ο
+    αντίστροφος δρόμος είναι χειρότερος — ένας χαρακτήρας που ζωγραφίζεται και
+    δεν τον ξέρει το παιχνίδι σπάει τη φόρτωση της αίθουσας.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, os.path.join(root, "tools"))
+    import physics as P
+    path = os.path.join(root, "editor", "Models", "TileType.cs")
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        print("  ΠΑΡΑΛΕΙΨΗ παλέτας: δεν βρέθηκε το TileType.cs")
+        return 0
+    # Χαρακτήρας της C#: 'x', ή '\\' για το ίδιο το backslash.
+    # Δύο μορφές μόνο: δύο backslash για το ίδιο το backslash, ή ένας χαρακτήρας.
+    cs = set()
+    for lit in re.findall(r"new TileType\('(\\\\|[^'])'", text):
+        cs.add("\\" if lit == "\\\\" else lit)
+    py = set(P.CHARS)
+    missing = sorted(py - cs)
+    extra = sorted(cs - py)
+    for c in missing:
+        print(f"  ΛΑΘΟΣ ο τύπος «{c}» ({P.TYPE_NAMES[P.CHARS[c]]}) λείπει από "
+              f"την παλέτα του editor")
+    for c in extra:
+        print(f"  ΛΑΘΟΣ η παλέτα έχει «{c}», που δεν το ξέρει το physics.py")
+    if missing or extra:
+        return 1
+    print(f"  ΟΚ   η παλέτα του editor ξέρει και τους {len(py)} τύπους")
     return 0
 
 

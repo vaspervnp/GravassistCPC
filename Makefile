@@ -154,6 +154,7 @@ test:
 	$(PY) tools/test_sprites.py
 	$(PY) tools/test_physics.py
 	$(PY) tools/test_turret.py
+	$(PY) tools/test_turret_js.py
 	$(PY) tools/test_z80.py
 	$(PY) tools/test_music.py
 	@# Ο έλεγχος του προσωπικού φακέλου θέλει .NET, που δεν είναι στο PATH.

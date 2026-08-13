@@ -508,6 +508,40 @@ public static class TileCatalog
             </g>
             """),
 
+        // ================= Πυργίσκοι =================
+        // ΑΞΟΝΑΣ, ΟΧΙ ΦΟΡΑ: ένας τύπος καλύπτει και τις δύο κατευθύνσεις του
+        // άξονά του, γιατί ρίχνει προς τη μεριά που είναι ο ήρωας. Τα στόμια
+        // στο σχήμα δείχνουν από πού θα φύγει το βέλος.
+        new TileType('I', "turret_v", HazardGroup, "Turret, vertical",
+            "Fires an arrow up or down, at whichever side the hero is on: "
+            + "within 80 px, in line of sight, once every 5 seconds. The arrow "
+            + "outruns your walk but not your run, and hurts more the closer "
+            + "it hits.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <rect x="3" y="0" width="2" height="1" fill="var(--edge)"/>
+            <rect x="1" y="1" width="6" height="2" fill="var(--fill)"/>
+            <rect x="1" y="3" width="1" height="2" fill="var(--fill)"/>
+            <rect x="6" y="3" width="1" height="2" fill="var(--fill)"/>
+            <rect x="1" y="5" width="6" height="2" fill="var(--fill)"/>
+            <rect x="3" y="7" width="2" height="1" fill="var(--edge)"/>
+            """),
+
+        new TileType('=', "turret_h", HazardGroup, "Turret, horizontal",
+            "The same turret turned a quarter: it fires left or right instead "
+            + "of up and down.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <g transform="rotate(90 4 4)">
+            <rect x="3" y="0" width="2" height="1" fill="var(--edge)"/>
+            <rect x="1" y="1" width="6" height="2" fill="var(--fill)"/>
+            <rect x="1" y="3" width="1" height="2" fill="var(--fill)"/>
+            <rect x="6" y="3" width="1" height="2" fill="var(--fill)"/>
+            <rect x="1" y="5" width="6" height="2" fill="var(--fill)"/>
+            <rect x="3" y="7" width="2" height="1" fill="var(--edge)"/>
+            </g>
+            """),
+
         new TileType('p', "plate", MechGroup, "Pressure plate",
             "Active only while pressed by the hero or a crate.",
             Palette.Material, Palette.EdgeColor,

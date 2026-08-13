@@ -97,6 +97,14 @@
       this.keys = new Array(K.ATTR_MAX).fill(0);
       this.spikeTick = 0; this.prevCell = null; this.prevBody = null;
       this.plateOn = {};                // κανάλι -> πατημένο; (ΑΚΜΗ)
+      // --- πυργίσκοι, μεταγραφή του tools/physics.py ---
+      // Το ρολόι είναι σε VSYNC και όχι σε ενημερώσεις: μια ενημέρωση κοστίζει
+      // 3, 4 ή 7 ανάλογα με το τι κάνει ο παίκτης, οπότε μόνο έτσι σημαίνουν
+      // τα «5 δευτερόλεπτα» το ίδιο με τον Amstrad, που διαβάζει το ρολόι του
+      // firmware. Ο ίδιος κανόνας που χρησιμοποιεί ο cpcClock του run.js.
+      this.clock = 0;
+      this.arrows = [];                 // {x, y, dx, dy, gone}
+      this.turretReady = {};            // "c,r" -> ρολόι από το οποίο ξαναρίχνει
       this.keyAutoMsg = false;
       this.parachute = 0; this.paraOpen = 0; this.won = false;
       this.crateTick = 0; this.walkAcc = 0; this.worldG = g; this.cratesOn = false;
@@ -393,6 +401,101 @@
 
     /// Οι πλάκες πίεσης κρατούν ανοιχτές τις πύλες του καναλιού τους. Το
     /// κιβώτιο πάνω τους (PLATE_DOWN) τις κρατά πατημένες χωρίς εσένα.
+    // --- ΠΥΡΓΙΣΚΟΙ -----------------------------------------------------
+    heroBox() {
+      if (this.g === 0 || this.g === 4) return [K.WALL_A, K.FEET_B];
+      if (this.g === 2 || this.g === 6) return [K.FEET_B, K.WALL_A];
+      return [K.FEET_B, K.FEET_B];
+    }
+
+    arrowHitsHero(ax, ay) {
+      const [hw, hh] = this.heroBox();
+      return Math.abs(ax - this.x) <= hw && Math.abs(ay - this.y) <= hh;
+    }
+
+    // Οι μονόδρομες μετράνε ΠΑΝΤΑ στερεές για βέλος: το solidAt τις κρίνει από
+    // τη φορά της βαρύτητας του ελέγχου, που για ένα βέλος δεν σημαίνει τίποτα.
+    arrowBlocked(px, py) {
+      if (px < 0 || py < D.GRID_Y0) return true;
+      const c = Math.floor(px / D.CELL);
+      const r = Math.floor((py - D.GRID_Y0) / D.CELL);
+      if (c >= D.COLS || r >= D.ROWS) return true;
+      const t = this.room.cells[r][c];
+      const mask = D.RAMP_MASK[t];
+      if (mask) return !!mask[(py - D.GRID_Y0) % D.CELL][px % D.CELL];
+      return !!(D.PROPS[t] & (D.F.SOLID | D.F.ONEWAY));
+    }
+
+    arrowDamage(gone) {
+      const third = Math.floor(K.TURRET_RANGE / 3);
+      if (gone < third) return K.ARROW_DMG[0];
+      if (gone < 2 * third) return K.ARROW_DMG[1];
+      return K.ARROW_DMG[2];
+    }
+
+    // ΕΝΑ PIXEL ΤΗ ΦΟΡΑ, ποτέ πήδημα των έξι: αλλιώς ένα βέλος περνάει μέσα
+    // από τοίχο λεπτότερο από έξι pixel και προσπερνά τον ήρωα.
+    arrowsStep() {
+      const alive = [];
+      for (const a of this.arrows) {
+        let dead = false;
+        for (let i = 0; i < K.ARROW_STEP; i++) {
+          a.x += a.dx; a.y += a.dy; a.gone++;
+          if (a.gone >= K.TURRET_RANGE) { dead = true; break; }
+          if (this.arrowHitsHero(a.x, a.y)) {
+            this.hurt(this.arrowDamage(a.gone));
+            this.sfx.push("hurt");
+            dead = true; break;
+          }
+          if (this.arrowBlocked(a.x, a.y)) { dead = true; break; }
+        }
+        if (!dead) alive.push(a);
+      }
+      this.arrows = alive;
+    }
+
+    // ΑΠΟ ΤΟ ΣΤΟΜΙΟ, ΟΧΙ ΑΠΟ ΤΟ ΚΕΝΤΡΟ: ο πυργίσκος είναι στερεός.
+    turretLos(sx, sy, dx, dy) {
+      let x = sx, y = sy;
+      for (let i = 0; i < K.TURRET_RANGE; i++) {
+        if (this.arrowHitsHero(x, y)) return true;
+        if (this.arrowBlocked(x, y)) return false;
+        x += dx; y += dy;
+      }
+      return false;
+    }
+
+    turretStep() {
+      if (this.arrows.length >= K.TURRET_MAX) return;
+      // Ο πίνακας χτίζεται ΜΙΑ φορά ανά αίθουσα: το πλέγμα είναι 960 κελιά και
+      // ο έλεγχος γίνεται σε κάθε ενημέρωση.
+      if (!this.room.turrets) {
+        this.room.turrets = [];
+        for (let r = 0; r < D.ROWS; r++)
+          for (let c = 0; c < D.COLS; c++) {
+            const t = this.room.cells[r][c];
+            if (t === T.TURRET_V || t === T.TURRET_H)
+              this.room.turrets.push([c, r, t]);
+          }
+      }
+      for (const [c, r, t] of this.room.turrets) {
+        const key = c + "," + r;
+        if (this.clock < (this.turretReady[key] || 0)) continue;
+        const cx = c * D.CELL + (D.CELL >> 1);
+        const cy = D.GRID_Y0 + r * D.CELL + (D.CELL >> 1);
+        let d, dx, dy;
+        if (t === T.TURRET_V) { d = this.y - cy; dx = 0; dy = d > 0 ? 1 : -1; }
+        else { d = this.x - cx; dx = d > 0 ? 1 : -1; dy = 0; }
+        if (d === 0 || Math.abs(d) > K.TURRET_RANGE) continue;
+        const sx = cx + dx * ((D.CELL >> 1) + 1);
+        const sy = cy + dy * ((D.CELL >> 1) + 1);
+        if (!this.turretLos(sx, sy, dx, dy)) continue;
+        this.arrows.push({ x: sx, y: sy, dx: dx, dy: dy, gone: 0 });
+        this.turretReady[key] = this.clock + K.TURRET_RELOAD;
+        if (this.arrows.length >= K.TURRET_MAX) return;
+      }
+    }
+
     platesStep() {
       const [bc, br] = this.bodyCell();
       const held = new Set(), chans = new Set();
@@ -517,6 +620,10 @@
     // ερχόμασταν από ράμπα, που χρειάζεται το align.
     update(walk, run) {
       walk = walk | 0;
+      // Το κόστος αυτής της ενημέρωσης σε vsync, ΜΕ ΤΟΝ ΙΔΙΟ ΚΑΝΟΝΑ που
+      // χρησιμοποιεί ο cpcClock του run.js. Από εδώ βγαίνει η φόρτιση.
+      this.clock += walk ? (run ? K.CPC_VSYNC_RUN : K.CPC_VSYNC_WALK)
+                         : K.CPC_VSYNC_IDLE;
       // ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται ΚΑΤΩ και μένει εκεί — νησίδα
       // «κανονικού» παιχνιδιού μέσα στο δωμάτιο.
       if (this.noflip() && this.g !== 0) { this.g = 0; this.state = "FALL"; }
@@ -528,6 +635,10 @@
       this.platesStep();
       if (this.hurtLeft) this.hurtLeft--;
       this.crateStep();
+      // ΠΑΝΩ ΑΠΟ ΤΗΝ ΠΡΟΩΡΗ ΕΞΟΔΟ στο fallStep, όπως το crateStep: ένα βέλος
+      // σε βρίσκει και στον αέρα.
+      this.arrowsStep();
+      this.turretStep();
       this.touchObjects();
       const k = this.groundDepth(0);
       if (k === null || k > K.FEET_B + 2) { this.fallStep(); return; }
