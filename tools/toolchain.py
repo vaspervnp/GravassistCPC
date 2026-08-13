@@ -36,10 +36,15 @@ CONFIG = os.environ.get("GRAVASSIST_TOOLCHAIN") or os.path.join(ROOT, "toolchain
 # όνομα -> (κλειδί json, προεπιλογή, μεταβλητή περιβάλλοντος, ψάξε στο "dir")
 # Ο python είναι ο διερμηνέας του συστήματος, όχι εργαλείο του CPC: δεν τον
 # ψάχνουμε στον κατάλογο των rasm/iDSK ούτε γκρινιάζουμε που λείπει από κει.
+# Ο node ΔΕΝ χτίζει τίποτα: τρέχει το physics.js του browser απέναντι στο
+# μοντέλο (tools/test_turret_js.py). Χωρίς αυτόν εκείνο το τεστ δεν ελέγχει
+# τίποτα, οπότε αξίζει να δηλώνεται όπως κάθε άλλο εργαλείο αντί να ψάχνεται
+# τυφλά στο PATH — και συνήθως ΔΕΝ είναι στο PATH, γιατί δεν είναι του CPC.
 TOOLS = {
     "rasm":   ("rasm",   "rasm",    "GRAVASSIST_RASM",   True),
     "idsk":   ("idsk",   "iDSK",    "GRAVASSIST_IDSK",   True),
     "python": ("python", "python3", "GRAVASSIST_PYTHON", False),
+    "node":   ("node",   "node",    "GRAVASSIST_NODE",   False),
 }
 
 
@@ -74,6 +79,9 @@ def resolve(tool, cfg=None):
         return override
 
     name = cfg.get(key) or default
+    # Το «~» ανοίγει ΠΑΝΤΑ: μια διαδρομή σαν "~/.local/node/bin/node" περνούσε
+    # αυτούσια στο Makefile, όπου το κέλυφος δεν την ανοίγει μέσα σε μεταβλητή.
+    name = os.path.expanduser(name)
     # Απόλυτη (ή ρητά σχετική) διαδρομή: την εμπιστευόμαστε όπως δόθηκε.
     if os.path.isabs(name) or os.sep in name:
         return name

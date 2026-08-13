@@ -19,6 +19,10 @@ Puzzle game όπου ο παίκτης αλλάζει την **κατεύθυν�
 - **.NET SDK 10.0.302** στο `~/.dotnet` — **ΔΕΝ είναι στο PATH**. Χρησιμοποίησε
   `~/.dotnet/dotnet` ή κάνε πρώτα `export PATH="$HOME/.dotnet:$PATH"`.
   Περιλαμβάνει ASP.NET Core runtime και το template `mvc` (level editor).
+- **node v24** στο `~/.local/node` — **ΔΕΝ είναι στο PATH**· η διαδρομή ζει στο
+  `toolchain.json`. Δεν χτίζει τίποτα: τρέχει το `physics.js` του browser
+  απέναντι στο μοντέλο (`tools/test_turret_js.py`). Χωρίς αυτόν εκείνο το τεστ
+  δεν ελέγχει τίποτα — και το λέει με μπλοκ θαυμαστικών, όχι διακριτικά.
 
 ## Target hardware
 - Amstrad CPC 6128, 128 KB RAM, Z80 @ 4 MHz, 50 Hz

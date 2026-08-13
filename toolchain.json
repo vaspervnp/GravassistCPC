@@ -3,5 +3,7 @@
   "dir": "/usr/local/bin",
   "rasm": "rasm",
   "idsk": "iDSK",
-  "python": "python3"
+  "python": "python3",
+  "//node": "Δεν χτίζει τίποτα: τρέχει το physics.js του browser απέναντι στο μοντέλο. Εγκατεστημένος στο ~/.local/node, εκτός PATH — σβήσε τη διαδρομή για σκέτο 'node'.",
+  "node": "~/.local/node/bin/node"
 }
