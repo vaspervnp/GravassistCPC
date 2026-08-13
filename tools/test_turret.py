@@ -13,6 +13,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import physics as P
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 FAILS = []
 
@@ -214,6 +215,116 @@ for _ in range(60):
     h.update(1)
 check("περπατάει μέσα από πυργίσκο χωρίς να κολλήσει",
       h.x > 13 * P.CELL, f"ξεκίνησε {x0}, έφτασε {h.x}")
+
+
+# =====================================================================
+#  ΚΑΙ ΣΤΟΝ Z80 — άλλη υλοποίηση, ίδια προδιαγραφή
+#
+#  Το μοντέλο παραπάνω δεν λέει τίποτα για τον Amstrad: εκεί ο πίνακας
+#  πυργίσκων χτίζεται με σάρωση του cell_buf, η φόρτιση διαβάζει το ρολόι του
+#  firmware, και η αριθμητική είναι 8 και 16 bit με το χέρι. Ό,τι μπορεί να
+#  αποκλίνει, αποκλίνει — γι' αυτό τρέχει εδώ ο ΠΡΑΓΜΑΤΙΚΟΣ κώδικας.
+# =====================================================================
+print("--- ο ίδιος πυργίσκος, στον Z80")
+
+CLK = 0xB7FE                    # ελεύθερη μνήμη κάτω από το jumpblock
+
+
+def z80_room(cells):
+    """main.bin με πλέγμα και ρολόι — το firmware εδώ είναι σκέτο RET."""
+    from z80run import Z80Test
+    t = Z80Test()
+    # ΤΟ ΡΟΛΟΙ ΤΟΥ FIRMWARE, σε 11 bytes: χωρίς αυτό το KL_TIME_PLEASE γυρίζει
+    # ό,τι έτυχε να έχει το HL και η φόρτιση δεν σημαίνει τίποτα.
+    code = bytes([0x2A, CLK & 0xFF, CLK >> 8,
+                  0x11, 30, 0, 0x19,
+                  0x22, CLK & 0xFF, CLK >> 8, 0xC9])
+    for i, b in enumerate(code):
+        t.m.memory[0xBD0D + i] = b
+    t.poke16(CLK, 0)
+
+    grid = [[P.EMPTY] * P.COLS for _ in range(P.ROWS)]
+    for c in range(P.COLS):
+        grid[0][c] = grid[P.ROWS - 1][c] = P.SOLID
+    for r in range(P.ROWS):
+        grid[r][0] = grid[r][P.COLS - 1] = P.SOLID
+    for c, r, ch in cells:
+        grid[r][c] = P.CHARS[ch]
+    t.poke(t.sym("CELL_BUF"), bytes(v for row in grid for v in row))
+    t.poke16(t.sym("LEVEL_PTR"), t.sym("CELL_BUF"))
+    t.poke(t.sym("HERO_ENERGY"), bytes([P.ENERGY_MAX]))
+    t.poke(t.sym("HERO_HURT"), b"\x00")
+    t.poke(t.sym("HERO_G"), b"\x00")
+    return t
+
+
+t = z80_room([(10, 16, "I"), (4, 21, "=")])
+t.call("TURRET_LOAD")
+check("ο πίνακας βρίσκει τους δύο πυργίσκους",
+      t.peek(t.sym("TURRET_N"))[0] == 2, str(t.peek(t.sym("TURRET_N"))[0]))
+tab = t.peek(t.sym("TURRET_TAB"), 10)
+check("…με τη σωστή στήλη, γραμμή και τύπο",
+      tuple(tab[0:3]) == (10, 16, P.TURRET_V)
+      and tuple(tab[5:8]) == (4, 21, P.TURRET_H),
+      f"{list(tab[0:3])} {list(tab[5:8])}")
+
+# --- ρίχνει προς τον ήρωα και το βέλος κάνει 6 pixel ανά κλήση
+t = z80_room([(10, 16, "I")])
+t.call("TURRET_LOAD")
+t.poke16(t.sym("HERO_X"), 10 * P.CELL + P.CELL // 2)
+t.poke(t.sym("HERO_Y"), bytes([P.GRID_Y0 + 21 * P.CELL]))
+AR = t.sym("ARROW_TAB")
+t.call("TURRET_STEP")
+on = t.peek(AR)[0]
+y0 = t.peek(AR + 3)[0]
+check("ρίχνει προς τα κάτω", on == 1 and t.peek(AR + 5)[0] == 1,
+      f"on={on} dy={t.peek(AR + 5)[0]}")
+t.call("TURRET_STEP")
+y1 = t.peek(AR + 3)[0]
+check(f"το βέλος κάνει {P.ARROW_STEP} pixel ανά καρέ",
+      y1 - y0 == P.ARROW_STEP, f"{y0} -> {y1}")
+
+# --- χτυπάει, και πονάει περισσότερο από κοντά
+# Οι ζώνες μετρώνται σε ΔΙΑΝΥΘΕΙΣΑ απόσταση, όχι σε γραμμές: από πυργίσκο στη
+# γραμμή 16 ο ήρωας στο πάτωμα απέχει μόλις 33 pixel, δηλαδή μεσαία ζώνη. Για
+# τη μακρινή χρειάζεται πυργίσκος ψηλά και ήρωας χαμηλά.
+for trow, row, want, label in ((16, 18, P.ARROW_DMG[0], "κοντά"),
+                               (16, 22, P.ARROW_DMG[1], "μεσαία"),
+                               (8, 18, P.ARROW_DMG[2], "μακριά")):
+    t = z80_room([(10, trow, "I")])
+    t.call("TURRET_LOAD")
+    t.poke16(t.sym("HERO_X"), 10 * P.CELL + P.CELL // 2)
+    t.poke(t.sym("HERO_Y"), bytes([P.GRID_Y0 + row * P.CELL]))
+    for _ in range(30):
+        t.call("TURRET_STEP")
+        if t.peek(t.sym("HERO_ENERGY"))[0] != P.ENERGY_MAX:
+            break
+    got = P.ENERGY_MAX - t.peek(t.sym("HERO_ENERGY"))[0]
+    check(f"χτύπημα από {label}: ζημιά {want}", got == want, f"{got}")
+
+# --- η φόρτιση μετριέται στο ΡΟΛΟΙ
+t = z80_room([(10, 16, "I")])
+t.call("TURRET_LOAD")
+t.poke16(t.sym("HERO_X"), 10 * P.CELL + P.CELL // 2)
+t.poke(t.sym("HERO_Y"), bytes([P.GRID_Y0 + 21 * P.CELL]))
+t.call("TURRET_STEP")
+ready = t.peek16(t.sym("TURRET_TAB") + 3)
+now = t.peek16(CLK)
+check("μετά τη βολή ξαναφορτίζει σε 5 δευτερόλεπτα",
+      abs((ready - now) - 1500) <= 60,
+      f"ready {ready}, ρολόι {now}, διαφορά {ready - now} παλμοί = "
+      f"{(ready - now) / 300:.2f}s")
+
+# --- τοίχος στη μέση: ούτε ρίχνει ούτε περνάει
+t = z80_room([(10, 16, "I"), (10, 19, "#")])
+t.call("TURRET_LOAD")
+t.poke16(t.sym("HERO_X"), 10 * P.CELL + P.CELL // 2)
+t.poke(t.sym("HERO_Y"), bytes([P.GRID_Y0 + 21 * P.CELL]))
+for _ in range(10):
+    t.call("TURRET_STEP")
+check("τοίχος ανάμεσα: δεν ρίχνει και δεν πονάει",
+      t.peek(AR)[0] == 0 and t.peek(t.sym("HERO_ENERGY"))[0] == P.ENERGY_MAX,
+      f"on={t.peek(AR)[0]} ενέργεια={t.peek(t.sym('HERO_ENERGY'))[0]}")
 
 print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"ΑΠΕΤΥΧΑΝ {len(FAILS)}")
 sys.exit(1 if FAILS else 0)

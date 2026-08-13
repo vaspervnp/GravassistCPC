@@ -52,6 +52,8 @@ game_reset:     ld   a,ENERGY_MAX
                 ld   (plate_prev),a
                 ld   (crates_on),a
                 ld   (world_g),a
+                call turret_reset       ; κανένα βέλος από την προηγούμενη παρτίδα
+                xor  a
                 ld   hl,hero_keys       ; κανένα κλειδί στην τσέπη
                 ld   b,ATTR_MAX
 gr_keys:        ld   (hl),0

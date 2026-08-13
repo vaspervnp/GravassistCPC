@@ -1844,6 +1844,7 @@ linetab         ds   400, 0
                 ; από το tools/placeholders.py. 3382 bytes νεκρού βάρους, που
                 ; έγιναν τα animation προσγείωσης και θανάτου.
                 include "rooms.asm"
+                include "turret.asm"
                 include "tune.asm"      ; note table + where the tune sits in the bank
 
 ;--- κώδικας που ΠΡΕΠΕΙ να ζει πάνω από το #8000 ----------------------
@@ -1863,6 +1864,12 @@ prog_end
 ; να είναι το #4000..#7FFF — εκεί βρίσκεται η ίδια η τράπεζα από την οποία
 ; διαβάζει. Ο υπόλοιπος player ζει κάτω, μαζί με τον κώδικα του παιχνιδιού.
 mus_chan        ds   CH_SIZE*MUS_TRACKS
+
+; Πυργίσκοι της αίθουσας και τα βέλη τους. Εδώ και όχι μέσα στο turret.asm:
+; είναι κατάσταση που χτίζεται στη φόρτωση, δεν έχει λόγο να ταξιδεύει στη
+; δισκέτα ως μηδενικά.
+turret_tab      ds   TS_SIZE*TURRET_SLOTS
+arrow_tab       ds   AR_SIZE*TURRET_MAX
 
 cell_buf        ds   LVL_CELLS          ; το ξεδιπλωμένο πλέγμα που παίζεται
 journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi, τύπος)

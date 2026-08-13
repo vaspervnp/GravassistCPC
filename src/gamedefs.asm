@@ -114,6 +114,22 @@ DEMO_MODE       equ 0   ; 1 = δισκέτα επίδειξης
 ENERGY_MAX      equ 8
 ENERGY_PICK     equ 2
 SPIKE_DMG       equ 2
+
+; --- ΠΥΡΓΙΣΚΟΙ ---
+TURRET_RANGE    equ 80
+ARROW_STEP      equ 6
+TURRET_MAX      equ 2
+; Η φόρτιση σε παλμούς του ρολογιού του firmware (1/300 s), ΟΧΙ σε
+; περάσματα βρόχου: ένα πέρασμα είναι 3 ως 7 vsync ανάλογα με το τι
+; κάνει ο παίκτης, οπότε ένας μετρητής περασμάτων θα έδινε πέντε
+; δευτερόλεπτα ακίνητος και έντεκα τρέχοντας.
+TURRET_RELOAD   equ 1500
+ARROW_DMG_NEAR  equ 3
+ARROW_DMG_MID   equ 2
+ARROW_DMG_FAR   equ 1
+; Πόσους πυργίσκους κρατά ο πίνακας μιας αίθουσας. Ό,τι περισσεύει
+; αγνοείται σιωπηλά — το tools/roomfile.py σπάει το build αντ' αυτού.
+TURRET_SLOTS    equ 8
 CRATE_TICKS     equ 4
 FALL_SAFE       equ 36
 FALL_V0         equ 256

@@ -66,6 +66,10 @@ hu_nolock:      pop  af
                 ld   a,1
 hu_td:          ld   (h_td),a
                 call crate_step         ; τα κιβώτια πέφτουν κι αυτά
+                ; ΠΑΝΩ ΑΠΟ ΤΗΝ ΠΡΟΩΡΗ ΕΞΟΔΟ ΣΤΗΝ ΠΤΩΣΗ, ίδια θέση με το μοντέλο
+                ; (tools/physics.py, Hero.update): ένα βέλος σε βρίσκει και στον
+                ; αέρα, και ο πυργίσκος φορτίζει είτε στέκεσαι είτε πέφτεις.
+                call turret_step
                 call h_touch            ; και στον αέρα: μαζεύεις πέφτοντας
 
                 xor  a
@@ -616,6 +620,9 @@ rl_have:        pop  af
                 ld   hl,cell_buf
                 ld   (level_ptr),hl
                 call jr_apply           ; ξαναφέρε ό,τι είχε αλλάξει ο παίκτης
+                ; ΜΕΤΑ το jr_apply: το ημερολόγιο μπορεί να έχει αλλάξει κελιά,
+                ; και ο πίνακας πυργίσκων πρέπει να δει την ΤΕΛΙΚΗ αίθουσα.
+                call turret_load
                 ld   a,(cur_room)
                 call trail_enter        ; πόσο πίσω μπορείς ακόμα να γυρίσεις
                 call seal_doors         ; …και ποιες πόρτες έγιναν μπλοκ
