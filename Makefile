@@ -12,7 +12,7 @@ SRC   = src/main.asm
 # απαρατήρητη και το «Χτίσιμο .dsk» θα έβγαζε δισκέτα με παλιά δεδομένα.
 ROOMS = $(wildcard levels/room_*.txt)
 DEPS  = src/rotate.asm src/level.asm src/hero.asm src/tables.asm src/rooms.asm \
-        src/gamedefs.asm src/roomfile.asm src/menu.asm src/musicplay.asm src/music.asm \
+        src/gamedefs.asm src/roomfile.asm src/menu.asm src/musicplay.asm src/tune.asm \
         src/sfx.asm src/endings.asm
 GFX   = src/gfx_hero.asm src/gfx_objects.asm
 PNG   = assets/hero.png assets/objects.png
@@ -59,10 +59,12 @@ $(GFX): $(PNG) tools/sprites.py tools/cpcgfx.py tools/stickman.py tools/placehol
 src/gamedefs.asm src/tables.asm src/rooms.asm: tools/genasm.py tools/physics.py tools/roomfile.py $(ROOMS)
 	$(PY) tools/genasm.py
 
-# Η μουσική: νότες σε περιόδους του AY. Γεννιέται ώστε το src/music.asm να μην
-# είναι 150 magic numbers που κανείς δεν μπορεί να διορθώσει.
-src/music.asm: tools/genmusic.py
-	$(PY) tools/genmusic.py
+# Η ΜΟΥΣΙΚΗ, ΔΥΟ ΚΟΜΜΑΤΙΑ ΑΠΟ ΤΗΝ ΙΔΙΑ ΓΕΝΝΗΤΡΙΑ: το src/tune.asm είναι ο
+# πίνακας νοτών που μένει στη βασική μνήμη, και τα build/TUNEnn.BIN είναι οι
+# ίδιες οι νότες, που πάνε στην τράπεζα μέσω της δισκέτας. Ένας κανόνας για τα
+# δύο: τα παράγει η ίδια εκτέλεση και δεν επιτρέπεται να ξεσυγχρονιστούν.
+src/tune.asm: tools/genboss.py tools/genmusic.py
+	$(PY) tools/genboss.py
 
 # Το rasm βγάζει το build/main.bin μέσω του `save` directive στο main.asm
 # Ο πίνακας συμβόλων δεν είναι για debugging: από εκεί διαβάζει το
@@ -86,14 +88,13 @@ $(SETS): tools/roomfile.py tools/physics.py $(ROOMS) $(BIN) | build
 $(MUSBIN): src/musictest.asm src/music_boss.asm | build
 	$(ASM) src/musictest.asm
 
-src/music_boss.asm: tools/genboss.py tools/genmusic.py
-	$(PY) tools/genboss.py
+src/music_boss.asm: src/tune.asm
 
 $(MUSBAS): src/musicloader.bas | build
 	sed 's/$$/\r/' src/musicloader.bas > $(MUSBAS)
 	printf '\032' >> $(MUSBAS)
 
-$(DSK): $(BIN) $(BASD) $(SETS) $(SPLASH) $(MUSBIN) $(MUSBAS)
+$(DSK): $(BIN) $(BASD) $(SETS) $(SPLASH) $(MUSBIN) $(MUSBAS) src/tune.asm
 	rm -f $(DSK)
 	$(DISK) $(DSK) -n
 	$(DISK) $(DSK) -i $(BIN)  -t 1 -c 4000 -e 4000 -f
@@ -104,6 +105,16 @@ $(DSK): $(BIN) $(BASD) $(SETS) $(SPLASH) $(MUSBIN) $(MUSBAS)
 	@# RUN"MUSIC" from BASIC plays the theme on its own.
 	$(DISK) $(DSK) -i $(MUSBIN) -t 1 -c 8000 -e 8000 -f
 	$(DISK) $(DSK) -i $(MUSBAS) -t 0 -f
+	@# Η ΜΟΥΣΙΚΗ ΤΟΥ ΠΑΙΧΝΙΔΙΟΥ. Ωμά bytes, χωρίς διεύθυνση φόρτωσης: το
+	@# tune_boot τα διαβάζει στον set_buf και τα σπρώχνει στο μπλοκ 7.
+	@# ΞΑΝΑΠΑΡΑΓΟΝΤΑΙ ΕΔΩ, για τον ίδιο λόγο με τα σετ: το src/tune.asm ζει
+	@# έξω από το build/, οπότε μετά από `make clean` ο κανόνας του δεν θα
+	@# ξανάτρεχε και η δισκέτα θα έβγαινε με παιχνίδι αλλά χωρίς μουσική.
+	$(PY) tools/genboss.py
+	@for t in build/TUNE*.BIN; do \
+	    [ -e "$$t" ] || { echo "ΣΦΑΛΜΑ: δεν παρήχθη κανένα TUNEnn.BIN."; exit 1; }; \
+	    $(DISK) $(DSK) -i $$t -t 1 -c 0000 -e 0000 -f; \
+	done
 	@# ΤΑ ΣΕΤ ΞΑΝΑΠΑΡΑΓΟΝΤΑΙ ΕΔΩ, ΣΤΗΝ ΕΚΤΕΛΕΣΗ. Το $$(SETS) υπολογίζεται με
 	@# $$(shell) ΚΑΤΑ ΤΗΝ ΑΝΑΓΝΩΣΗ του Makefile και με το stderr κρυμμένο: αν
 	@# το roomfile.py αποτύχει — π.χ. οι αίθουσες δεν χωρούν στον buffer του

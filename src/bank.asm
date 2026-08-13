@@ -311,6 +311,8 @@ bb_next:        call boot_bar           ; λείπουν: μετράει ΠΡΟ�
                 cp   SET_COUNT+1
                 jr   c,bb_lp
 
+                call tune_boot          ; και η μουσική, στο δικό της μπλοκ
+
                 xor  a
                 ld   (set_cur),a        ; ο set_buf κρατά το τελευταίο σετ,
                 ret                     ; αλλά κανείς δεν το έχει ζητήσει

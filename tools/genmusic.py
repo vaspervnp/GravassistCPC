@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Η εισαγωγική μουσική του μενού -> src/music.asm.
+"""Νότες, περίοδοι του AY και το παλιό κομμάτι του μενού (ΒΙΒΛΙΟΘΗΚΗ).
 
 ΓΙΑΤΙ ΓΕΝΝΙΕΤΑΙ: οι περίοδοι τόνου του AY δεν είναι νότες αλλά διαιρέτες
 (period = 125000 / συχνότητα). Γραμμένες στο χέρι θα ήταν 150 magic numbers
@@ -245,6 +245,21 @@ def note_table():
 
 
 def main():
+    """ΔΕΝ ΠΑΡΑΓΕΙ ΠΙΑ ΤΟ src/music.asm — το μενού παίζει το Boss Time.
+
+    Από 2026-08-13 η μουσική του παιχνιδιού και του μενού είναι μία, έρχεται
+    από το tools/genboss.py και ζει στην τράπεζα. Αυτό το αρχείο μένει ως
+    ΒΙΒΛΙΟΘΗΚΗ — ονόματα νοτών, περίοδοι του AY, η σύμβαση MUS_NOISE, ο
+    πίνακας κρουστών — που τα χρησιμοποιεί το genboss. Το παλιό κομμάτι του
+    μενού (BASS/LEAD/PULSE πιο πάνω) μένει κι αυτό, γιατί είναι δουλειά που
+    μπορεί να ξαναχρειαστεί· απλώς δεν μεταγλωττίζεται πουθενά.
+
+    Αν το τρέξεις, γράφει το κομμάτι σε ένα ΔΙΚΟ ΤΟΥ αρχείο και όχι στο
+    src/music.asm: εκείνο το όνομα δεν το κάνει include κανείς, και ένα αρχείο
+    που κάθεται στο src/ χωρίς να μεταγλωττίζεται είναι παγίδα — οι ετικέτες
+    του χτυπούσαν με σταθερές του νέου player και το tools/check_names.py
+    έσπαγε το build.
+    """
     table = note_table()
     tracks = [("bass", BASS, VOL_BASS, 1, 0),
               ("lead", LEAD, VOL_LEAD, 2, 0),
@@ -284,12 +299,12 @@ def main():
             "φωνή θορύβου του mus_one από το commit aee150b")
 
     text = "\n".join(out) + "\n"
-    path = os.path.join(ROOT, "src", "music.asm")
+    path = os.path.join(ROOT, "build", "menu_music_old.asm")
     with open(path, "w") as f:
         f.write(text)
     total = sum(len(stream(tr, table, v)[0]) * 3 + 1
                 for _, tr, v, _, _ in tracks) + len(table) * 2
-    print(f"  src/music.asm: {len(table)} νότες, κύκλος μενού {LOOP // 100}s, "
+    print(f"  build/menu_music_old.asm: {len(table)} νότες, κύκλος {LOOP // 100}s, "
           "χωρίς τύμπανα παιχνιδιού")
 
 

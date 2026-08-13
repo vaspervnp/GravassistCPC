@@ -158,6 +158,8 @@ main:           call init_linetab       ; πίνακας γραμμών: καμ�
                 call SCR_SET_MODE       ; καθάρισε ό,τι άφησε το μενού
                 call set_palette
                 call game_reset         ; καθαρή ενέργεια, τσέπες, ημερολόγιο
+                call music_game         ; μπάσο και τύμπανα· το B στα εφέ
+                call music_start
                 ld   a,START_ROOM       ; ποια αίθουσα· ορίζεται στο build
                 call room_load
                 call prep_hero
@@ -247,7 +249,10 @@ ml_nouse:       call read_walk
 ml_upd:         ld   a,(ml_dir)
                 call hero_update
 
-ml_anim:        ld   a,(hero_zone)      ; παράσιτα όσο είναι σε ζώνη κλειδώματος
+ml_anim:        call music_step         ; ΠΡΙΝ το flyback: το SOUND QUEUE δεν
+                                        ; περιμένει καρέ, και μια νότα που
+                                        ; χάνει τη σειρά της ακούγεται
+                ld   a,(hero_zone)      ; παράσιτα όσο είναι σε ζώνη κλειδώματος
                 call sfx_amb
                 call anim_frame
                 call prep_hero          ; μετασχηματισμός sprite (εκτός vblank)
@@ -1819,7 +1824,7 @@ linetab         ds   400, 0
                 ; από το tools/placeholders.py. 3382 bytes νεκρού βάρους, που
                 ; έγιναν τα animation προσγείωσης και θανάτου.
                 include "rooms.asm"
-                include "music.asm"
+                include "tune.asm"      ; note table + where the tune sits in the bank
 
 ;--- κώδικας που ΠΡΕΠΕΙ να ζει πάνω από το #8000 ----------------------
 ; Εναλλάσσει το #4000..#7FFF, όπου βρίσκεται όλος ο υπόλοιπος κώδικας. Μπαίνει
@@ -1833,6 +1838,12 @@ prog_end
 ;--- buffers ΜΟΝΟ στη μνήμη -------------------------------------------
 ; Δηλώνονται ΜΕΤΑ το save, οπότε δεν μπαίνουν στο MAIN.BIN: είναι ~10 KB
 ; μηδενικών που δεν έχει νόημα να ταξιδεύουν στη δισκέτα και να φορτώνονται.
+; Η ΚΑΤΑΣΤΑΣΗ ΤΩΝ ΚΑΝΑΛΙΩΝ ΜΟΥΣΙΚΗΣ, και ΕΔΩ όχι από τύχη: μέσα της είναι ο
+; buffer που γεμίζει το bank_copy, και προορισμός του bank_copy δεν επιτρέπεται
+; να είναι το #4000..#7FFF — εκεί βρίσκεται η ίδια η τράπεζα από την οποία
+; διαβάζει. Ο υπόλοιπος player ζει κάτω, μαζί με τον κώδικα του παιχνιδιού.
+mus_chan        ds   CH_SIZE*MUS_TRACKS
+
 cell_buf        ds   LVL_CELLS          ; το ξεδιπλωμένο πλέγμα που παίζεται
 journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi, τύπος)
 

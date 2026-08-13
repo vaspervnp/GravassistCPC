@@ -474,60 +474,14 @@ def main():
           t.peek(t.sym("HERO_KEYS"), 8)[2] == 0,
           str(list(t.peek(t.sym("HERO_KEYS"), 8))))
 
-    # 13. Μουσική: ο player χτίζει σωστά μπλοκ για το SOUND QUEUE και ο
-    #     κύκλος ξαναρχίζει από την αρχή. Το firmware εδώ απαντά πάντα
-    #     «μπήκε στην ουρά» (SCF; RET), ώστε να προχωράει η ροή σε κάθε βήμα.
-    import genmusic as GM
-    t.m.memory[0xBCAA] = 0x37           # SCF
-    t.m.memory[0xBCAB] = 0xC9           # RET
-    t.m.memory[0xBCA7] = 0xC9           # SOUND RESET -> RET
-    t.call("MUSIC_START")
-
-    table = GM.note_table()
-    bass, _ = GM.stream(GM.BASS, table, GM.VOL_BASS)
-
-    t.call("MUSIC_STEP")
-    # Το snd_block είναι ΚΟΙΝΟ και τα κανάλια γράφουν με τη σειρά, οπότε μετά
-    # από ένα βήμα κρατά το ΤΕΛΕΥΤΑΙΟ — τον παλμό.
-    pulse, _ = GM.stream(GM.PULSE, table, GM.VOL_PULSE)
-    note, vol, dur = pulse[0]
-    blk = t.peek(t.sym("SND_BLOCK"), 9)
-    want_tone = GM.period(table[note - 1])
-    check("το μπλοκ ήχου έχει το σωστό κανάλι", blk[0] == 4, str(blk[0]))
-    check("…τη σωστή περίοδο τόνου",
-          blk[3] | (blk[4] << 8) == want_tone,
-          f"{blk[3] | (blk[4] << 8)} vs {want_tone}")
-    check("…τη σωστή ένταση και διάρκεια",
-          blk[6] == vol and blk[7] | (blk[8] << 8) == dur,
-          f"vol {blk[6]}/{vol}, dur {blk[7] | (blk[8] << 8)}/{dur}")
-    check("…και θόρυβο μόνο εκεί που πρέπει",
-          blk[5] == GM.NOISE_PULSE, str(blk[5]))
-
-    for name, base in (("bass", "MUS_BASS"), ("lead", "MUS_LEAD"),
-                       ("pulse", "MUS_PULSE")):
-        ptr = t.peek16(t.sym("MUS_P_" + name.upper()))
-        check(f"το κανάλι {name} προχώρησε μία νότα",
-              ptr == t.sym(base) + 3, f"#{ptr:04X}")
-
-    # Μία πλήρης περιστροφή: στο τελευταίο βήμα ο δείκτης δείχνει στο #FF και
-    # το επόμενο τον γυρίζει στην αρχή.
-    for _ in range(len(bass) - 1):
-        t.call("MUSIC_STEP")
-    check("ο δείκτης φτάνει στο τέλος της ροής",
-          t.peek16(t.sym("MUS_P_BASS")) == t.sym("MUS_BASS") + 3 * len(bass),
-          f"#{t.peek16(t.sym('MUS_P_BASS')):04X}")
-    t.call("MUSIC_STEP")
-    check("ο κύκλος ξαναρχίζει από την αρχή",
-          t.peek16(t.sym("MUS_P_BASS")) == t.sym("MUS_BASS") + 3,
-          f"#{t.peek16(t.sym('MUS_P_BASS')):04X}")
-
-    # Το μήκος του κύκλου: 20 δευτερόλεπτα, και τα τρία κανάλια ίσα.
-    for name, track, vol in (("bass", GM.BASS, GM.VOL_BASS),
-                             ("lead", GM.LEAD, GM.VOL_LEAD),
-                             ("pulse", GM.PULSE, GM.VOL_PULSE)):
-        data, total = GM.stream(track, table, vol)
-        check(f"το κανάλι {name} κρατά ακριβώς 20 δευτερόλεπτα",
-              total == GM.LOOP, f"{total / 100:.1f}s")
+    # 13. Μουσική: ΔΕΝ ΔΟΚΙΜΑΖΕΤΑΙ ΕΔΩ ΠΙΑ.
+    #
+    #     Ο player του μενού διάβαζε νότες από τη βασική μνήμη· ο σημερινός τις
+    #     ρουφάει από την τράπεζα με bank_copy, οπότε χρειάζεται μοντέλο
+    #     τραπεζών — και το harness αυτού του αρχείου τρέχει χωρίς. Όλα όσα
+    #     έλεγχε αυτό το τμήμα ζουν στο tools/test_music.py, μαζί με όσα δεν
+    #     μπορούσε να ελέγξει: τη ραφή του κύκλου, τη γεμάτη ουρά, την επιλογή
+    #     M, και το ότι το SOUND QUEUE χαλάει το IX.
 
     # 14. Πλάκα πίεσης -> πύλες. ΣΤΙΓΜΙΑΙΑ: ανοίγει όσο πατιέται και κλείνει
     #     μόλις φύγεις. Το κιβώτιο πάνω της την κρατά πατημένη χωρίς εσένα —
@@ -993,9 +947,15 @@ def main():
     # Πού ακριβώς σταματά μέσα στον player δεν έχει σημασία και αλλάζει με
     # κάθε νότα· σημασία έχει ότι ΔΕΝ γύρισε — περιμένει, με τη μουσική να παίζει.
     check("το THE END περιμένει αντί να γυρίσει αμέσως", where != "ret", where)
-    check("…και παίζει τη μουσική του μενού, και στα τρία κανάλια",
-          {b[0] for b in blocks} == {1, 2, 4},
-          str(sorted({b[0] for b in blocks})))
+    # ΤΟ ΟΤΙ ΠΑΙΖΕΙ Η ΜΟΥΣΙΚΗ ΔΕΝ ΕΛΕΓΧΕΤΑΙ ΕΔΩ. Οι νότες έρχονται από την
+    # τράπεζα και αυτό το harness τρέχει χωρίς μοντέλο τραπεζών (banking=False,
+    # για ταχύτητα). Το tools/test_music.py το ελέγχει νότα προς νότα.
+    #
+    # Αυτό όμως που ΜΠΟΡΕΙ να ελεγχθεί εδώ αξίζει: χωρίς φορτωμένο κομμάτι ο
+    # player πρέπει να σωπαίνει, όχι να στέλνει σκουπίδια στην ουρά. Είναι ο
+    # δρόμος του μηχανήματος 64K και της δισκέτας χωρίς TUNEnn.BIN.
+    check("…και χωρίς κομμάτι στην τράπεζα δεν βγάζει ήχο",
+          not blocks, str(sorted({b[0] for b in blocks})))
 
     # 22. ΜΕΤΑ ΤΟ GAME OVER ΤΟ ΠΑΙΧΝΙΔΙ ΠΡΕΠΕΙ ΝΑ ΞΑΝΑΡΧΙΖΕΙ.
     #     Η ενέργεια αρχικοποιείται μόνο κατά τη συναρμολόγηση, οπότε έμενε 0
@@ -1568,11 +1528,16 @@ def check_bank_asm():
     # Z80 διαβάζει σετ από λάθος θέση και η αίθουσα βγαίνει σκουπίδι.
     ta = Z80Test(banking=True)
     bad = []
-    # Οι δείκτες βγαίνουν από το ΙΔΙΟ το MAX_SETS: το μέγεθος θέσης έχει
+    # Οι δείκτες βγαίνουν από το ΙΔΙΟ το εργαλείο: το μέγεθος θέσης έχει
     # αλλάξει τρεις φορές και μια καρφωμένη λίστα ξεπερνούσε το όριο.
+    #
+    # SETS_USABLE και ΟΧΙ MAX_SETS: το τελευταίο μπλοκ ανήκει στη μουσική και
+    # το roomfile.slot_of αρνείται να δώσει θέση εκεί. Το MAX_SETS παραμένει
+    # το μέγεθος του bank_map — δύο διαφορετικά πράγματα με παρόμοιο όνομα.
     per = RF.SLOTS_PER_BANK
-    idxs = sorted({1, 2, per, per + 1, 2 * per, 2 * per + 1,
-                   RF.MAX_SETS - 1, RF.MAX_SETS} & set(range(1, RF.MAX_SETS + 1)))
+    top = RF.SETS_USABLE
+    idxs = sorted({1, 2, per, per + 1, 2 * per, 2 * per + 1, top - 1, top}
+                  & set(range(1, top + 1)))
     for idx in idxs:
         want_bank, want_addr = RF.slot_of(idx)
         ta.call("SLOT_ADDR", a=idx)
@@ -1581,7 +1546,7 @@ def check_bank_asm():
             bad.append(f"σετ {idx}: #{got_addr:04X}/#{got_org:02X} αντί για "
                        f"#{want_addr:04X}/#{0xC0 + want_bank:02X}")
     check(f"slot_addr συμφωνεί με το roomfile.slot_of ({len(idxs)} σημεία, "
-          f"{RF.MAX_SETS} σετ)",
+          f"{top} σετ· το μπλοκ 7 είναι της μουσικής)",
           not bad, "; ".join(bad))
 
     # --- slot_full: ο χάρτης γεμάτων θέσεων ---------------------------

@@ -82,6 +82,18 @@ SLOTS_PER_BANK = BANK_SIZE // SLOT_SIZE         # 8
 # στις τράπεζες είναι περισσότερες, αλλά ένα σετ που δεν μπορεί να γραφτεί στη
 # δισκέτα δεν μπορεί ούτε να φορτωθεί στην τράπεζα — το γέμισμα περνά από εκεί.
 MAX_SETS = min(SLOTS_PER_BANK * BANK_COUNT, 99)
+#
+# ΤΟ ΤΕΛΕΥΤΑΙΟ ΜΠΛΟΚ ΕΙΝΑΙ ΤΗΣ ΜΟΥΣΙΚΗΣ. Το tools/genboss.py γράφει εκεί το
+# κομμάτι (build/TUNEnn.BIN) και ο player το διαβάζει νότα-νότα όσο παίζει το
+# παιχνίδι. Αν τα σετ έφταναν ως εκεί, η 25η τετράδα αιθουσών θα γραφόταν πάνω
+# στη μουσική — μία σιωπηλή καταστροφή που θα ακουγόταν ως θόρυβος.
+#
+# ΓΙΑΤΙ ΞΕΧΩΡΙΣΤΟ ΟΡΙΟ ΚΑΙ ΟΧΙ ΜΙΚΡΟΤΕΡΟ MAX_SETS: το MAX_SETS είναι ΚΑΙ το
+# μέγεθος του bank_map, και το slot_bit του Z80 κάνει `and (MAX_SETS/8)-1`.
+# Αυτή η μάσκα θέλει δύναμη του δύο· με 24 θα έδινε `and 2` και θα έστελνε τα
+# μισά σετ σε λάθος byte του χάρτη — σιωπηλά.
+MUSIC_BANK = FIRST_BANK + BANK_COUNT - 1        # μπλοκ 7
+SETS_USABLE = SLOTS_PER_BANK * (BANK_COUNT - 1)
 BANK_WIN = 0x4000               # πού φαίνεται το μπλοκ στη μνήμη
 
 # Πόσα bytes χωράει ένα σετ στη μνήμη του CPC. Ο έλεγχος γίνεται ΕΔΩ και όχι
@@ -280,10 +292,11 @@ def slot_of(index):
     src/roomfile.asm. Εδώ είναι η πηγή αλήθειας και το τεστ τον συγκρίνει.
     """
     i = index - 1
-    if not 0 <= i < MAX_SETS:
+    if not 0 <= i < SETS_USABLE:
         raise ValueError(
-            f"σετ {index}: χωράνε {MAX_SETS} σετ στις τράπεζες "
-            f"({MAX_SETS * SET_ROOMS} αίθουσες)")
+            f"σετ {index}: χωράνε {SETS_USABLE} σετ στις τράπεζες "
+            f"({SETS_USABLE * SET_ROOMS} αίθουσες)· το τελευταίο μπλοκ "
+            f"είναι της μουσικής")
     return (FIRST_BANK + i // SLOTS_PER_BANK,
             BANK_WIN + (i % SLOTS_PER_BANK) * SLOT_SIZE)
 

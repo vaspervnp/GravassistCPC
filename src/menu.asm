@@ -65,9 +65,11 @@ endif
                 call menu_arena
                 call menu_text
                 call menu_keys
+                call menu_music         ; η επιλογή M, και η τωρινή της τιμή
                 call hs_menu            ; οι πέντε μεγαλύτερες, από τη δισκέτα
                 call KL_TIME_PLEASE     ; start the first page now, otherwise it
                 ld   (menu_page_t0),hl  ; is as long as the clock happened to be
+                call music_full         ; στο μενού δεν παίζουν εφέ: και οι τρεις
                 call music_start        ; ο βρόχος τη συντηρεί, νότα τη νότα
 
                 ; Ο ήρωας ξεκινά μέσα στην αρένα και περπατάει για πάντα.
@@ -114,6 +116,28 @@ endif
                 call prep_hero
                 call MC_WAIT_FLYBACK
                 call draw_hero
+                ; Το M ανοιγοκλείνει τη μουσική. ΜΟΝΟ ΕΔΩ: μέσα στο παιχνίδι
+                ; το M είναι το βάδισμα μπροστά. Στο μενού ο ήρωας περπατάει
+                ; μόνος του, οπότε το πλήκτρο είναι ελεύθερο.
+                ;
+                ; Ακμή και όχι κατάσταση: το KM_TEST_KEY λέει «πατημένο τώρα»,
+                ; και ο βρόχος τρέχει δεκάδες φορές το δευτερόλεπτο — χωρίς
+                ; αυτό, ένα πάτημα θα άναβε και θα έσβηνε τη μουσική δώδεκα
+                ; φορές και θα κατέληγε όπου να 'ναι.
+                ld   a,K_M
+                call KM_TEST_KEY
+                jr   z,mk_mfree
+                ld   a,(menu_mheld)
+                or   a
+                jr   nz,mk_mdone        ; κρατιέται από το προηγούμενο πέρασμα
+                ld   a,1
+                ld   (menu_mheld),a
+                call music_toggle
+                call menu_music
+                jr   mk_mdone
+mk_mfree:       xor  a
+                ld   (menu_mheld),a
+mk_mdone:
                 ld   a,K_SPACE
                 call KM_TEST_KEY
                 jr   z,menu_loop
@@ -238,6 +262,31 @@ mp_lp:          ld   a,(de)
                 inc  de
                 djnz mp_lp
                 ret
+
+MUSIC_COL       equ 28          ; η γραμμή 13 της δεξιάς στήλης ήταν κενή
+MUSIC_ROW       equ 13
+MUSIC_W         equ 12          ; ΙΔΙΟ πλάτος και στις δύο τιμές, ώστε η μία
+                                ; να γράφει πάνω στην άλλη χωρίς σβήσιμο
+
+;---------------------------------------------------------------------
+; menu_music — «M-MUSIC ON/OFF», η τωρινή κατάσταση
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+menu_music:     ld   a,INK_HERO_PEN
+                call TXT_SET_PEN
+                ld   de,mus_txt_off
+                ld   a,(music_on)
+                or   a
+                jr   z,mm_go
+                ld   de,mus_txt_on
+mm_go:          ld   h,MUSIC_COL
+                ld   l,MUSIC_ROW
+                ld   b,MUSIC_W
+                jp   menu_puts
+
+mus_txt_on:     db "M-MUSIC  ON "
+mus_txt_off:    db "M-MUSIC OFF "
+menu_mheld      db 0            ; το M ήταν πατημένο και στο προηγούμενο πέρασμα
 
 ; Πίνακας: στήλη, γραμμή, μήκος, κείμενο. Στήλη 0 = τέλος.
 ;

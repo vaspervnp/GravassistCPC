@@ -132,6 +132,11 @@ if DEMO_MODE
                 call demo_mark
 endif
                 call sfx_reset
+                ; ΣΙΩΠΗ ΠΡΩΤΑ. Το sfx_reset καθαρίζει μόνο τις σημαίες των εφέ·
+                ; η μουσική του δωματίου έχει ήδη νότες στην ουρά του firmware
+                ; και θα συνέχιζε από κάτω για ένα-δυο δευτερόλεπτα, ακριβώς
+                ; πάνω στους τέσσερις κατεβαίνοντες τόνους του GAME OVER.
+                call music_stop
                 ld   a,SFXID_OVER
                 call sfx_play
                 jp   eg_wait
@@ -153,6 +158,7 @@ if DEMO_MODE
                 call demo_mark
 endif
                 call sfx_reset
+                call music_full         ; τέλος παιχνιδιού: καμία σύγκρουση
                 call music_start        ; η ΙΔΙΑ μουσική με το μενού
 eg_endlp:       call music_step
                 call MC_WAIT_FLYBACK
