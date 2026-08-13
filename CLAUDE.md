@@ -97,6 +97,7 @@ tools/test_*.py     μοντέλο και Z80 χωριστά· parity.py: Python
 tools/checkdsk.py   ότι η δισκέτα έχει όντως αίθουσες ΚΑΙ μουσική
 tools/toolchain.py  πού είναι τα rasm/iDSK (toolchain.json)
 editor/             level editor σε ASP.NET Core MVC· δες docs/editor-manual.md
+docs/turrets.md     ο πυργίσκος: τι κάνει, πού ζει, τι λείπει ακόμα
 build/              παράγωγα (μην τα commit-άρεις)
 ```
 
