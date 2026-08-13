@@ -63,7 +63,11 @@ src/gamedefs.asm src/tables.asm src/rooms.asm: tools/genasm.py tools/physics.py 
 # πίνακας νοτών που μένει στη βασική μνήμη, και τα build/TUNEnn.BIN είναι οι
 # ίδιες οι νότες, που πάνε στην τράπεζα μέσω της δισκέτας. Ένας κανόνας για τα
 # δύο: τα παράγει η ίδια εκτέλεση και δεν επιτρέπεται να ξεσυγχρονιστούν.
-src/tune.asm: tools/genboss.py tools/genmusic.py
+# ΚΑΙ ΤΑ ΔΥΟ ΟΝΟΜΑΤΑ ΜΕ ΣΥΝΤΑΓΗ: με το music_boss.asm να κρέμεται απλώς από το
+# tune.asm και χωρίς δική του εντολή, ένα σβήσιμό του κλείδωνε το build για
+# πάντα — το make δεν ήξερε πώς να το ξαναφτιάξει. Η γεννήτρια είναι ιδεμποτική
+# και γρήγορη, οπότε το να τρέξει δεύτερη φορά δεν κοστίζει τίποτα.
+src/tune.asm src/music_boss.asm: tools/genboss.py tools/genmusic.py
 	$(PY) tools/genboss.py
 
 # Το rasm βγάζει το build/main.bin μέσω του `save` directive στο main.asm
@@ -88,7 +92,6 @@ $(SETS): tools/roomfile.py tools/physics.py $(ROOMS) $(BIN) | build
 $(MUSBIN): src/musictest.asm src/music_boss.asm | build
 	$(ASM) src/musictest.asm
 
-src/music_boss.asm: src/tune.asm
 
 $(MUSBAS): src/musicloader.bas | build
 	sed 's/$$/\r/' src/musicloader.bas > $(MUSBAS)

@@ -22,7 +22,11 @@
 ;  channel would run ahead of the other two, permanently, a little more with
 ;  every footstep. Instead the lead is dropped while a room is being played:
 ;  bass and drums keep the groove, channel B belongs to the effects, and
-;  nothing drifts. The menu, where there are no effects, plays all three.
+;  nothing drifts. The menu plays all three, and that is safe for a reason
+;  worth writing down: menu_show clears ml_dir, so the demo hero walks without
+;  footstep effects, and the bare arena has nothing else to make a sound. A Z80
+;  run of the whole menu loop makes exactly zero calls to sfx_play. Put anything
+;  audible in the menu and the lead will start slipping behind the other two.
 ;=====================================================================
 
 SOUND_QUEUE     equ  #BCAA      ; HL = μπλοκ· CF=1 μπήκε, CF=0 γεμάτη ουρά

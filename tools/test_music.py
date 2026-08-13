@@ -349,10 +349,37 @@ for on, quiet, want_ch, label in (
     t.poke(t.sym("MUS_QUIET"), bytes([quiet]))
     t.call("SFX_CHAN", a=SFXCH_ACT)
     check(t.m.a == want_ch, f"{label}  [{t.m.a}]")
+# Το άδειασμα καναλιού ΔΕΝ περνά στο B: εκεί περιμένουν και τα υπόλοιπα εφέ.
 t = game()
 t.poke(t.sym("MUS_QUIET"), b"\x01")
 t.call("SFX_CHAN", a=SFXCH_AMB + 0x80)
-check(t.m.a == SFXCH_MOVE + 0x80, f"η σημαία αδειάσματος επιβιώνει [{t.m.a:#04x}]")
+check(t.m.a == SFXCH_MOVE,
+      f"το άδειασμα δεν ακολουθεί τα εφέ στο B [{t.m.a:#04x}]")
+# …αλλά όσο δεν παίζει μουσική, το σβήσιμο των παρασίτων πρέπει να κόβει.
+t = game()
+t.poke(t.sym("MUSIC_ON"), b"\x00")
+t.call("SFX_CHAN", a=SFXCH_AMB + 0x80)
+check(t.m.a == SFXCH_AMB + 0x80,
+      f"χωρίς μουσική το άδειασμα μένει ως ήταν [{t.m.a:#04x}]")
+
+# --- ΚΑΝΕΝΑ ΕΦΕ ΣΤΟ ΜΕΝΟΥ ------------------------------------------------
+#
+# ΦΕΡΟΥΣΑ ΥΠΟΘΕΣΗ, ΟΧΙ ΕΥΧΗ. Στο μενού παίζουν και οι τρεις φωνές, άρα και το
+# κανάλι B ανήκει στο lead. Ένα και μόνο εφέ εκεί μπαίνει στην ουρά ΠΙΣΩ από
+# τις νότες του και το αφήνει μόνιμα πίσω από μπάσο και τύμπανα. Σήμερα δεν
+# υπάρχει κανένα: το menu_show μηδενίζει το ml_dir (αλλιώς ο ήρωας της αρένας
+# πατούσε βήματα μετά από κάθε παρτίδα) και η άδεια αρένα δεν έχει τίποτα άλλο
+# να ηχήσει. Αν κάποτε προστεθεί ήχος στο μενού, αυτό το τεστ πρέπει να σπάσει
+# ΠΡΙΝ φτάσει στο αυτί.
+print("--- το μενού πρέπει να είναι βουβό")
+t = z80run.Z80Test()
+t.m.memory[0xBB1E], t.m.memory[0xBB1F] = 0xAF, 0xC9   # KM_TEST_KEY -> «τίποτα»
+t.trace("SFX_PLAY", nbytes=1)
+try:
+    t.call("MENU_SHOW", timeout=8.0)
+except RuntimeError:
+    pass                                              # δεν γυρίζει ποτέ, σωστά
+check(not t.calls, f"καμία κλήση sfx_play μέσα στο μενού ({len(t.calls)})")
 
 print("ΟΛΑ ΣΩΣΤΑ" if not fails else f"ΑΠΕΤΥΧΑΝ {len(fails)}")
 sys.exit(1 if fails else 0)

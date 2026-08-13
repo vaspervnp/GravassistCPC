@@ -300,7 +300,8 @@ ml_esc:
                 ld   a,K_ESC
                 call KM_TEST_KEY
                 jp   z,main_loop        ; jp: ο βρόχος ξεπερνά το εύρος του jr
-                ret                     ; επιστροφή στη BASIC
+                call music_stop         ; αλλιώς το κομμάτι συνεχίζει να παίζει
+                ret                     ; πάνω από το READY της BASIC
 
 ml_dead:        call game_over
                 jr   ml_again

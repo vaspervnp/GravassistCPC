@@ -9,10 +9,27 @@
 να εξαρτάται από την έξοδο του iDSK.
 """
 
+import os
 import sys
 
 NEEDED = ["MAIN    BIN", "GRAV    BAS"]     # 8+3, με κενά
 NEED_PREFIX = "ROOMS"                       # τουλάχιστον ένα ROOMSnn.BIN
+# Η ΜΟΥΣΙΚΗ ΕΙΝΑΙ ΚΙ ΑΥΤΗ ΑΡΧΕΙΑ ΣΤΗ ΔΙΣΚΕΤΑ. Λείπουν σιωπηλά: το tune_boot
+# απλώς δεν βρίσκει τα TUNEnn.BIN, αφήνει tune_ok=0 και το παιχνίδι παίζει
+# ΧΩΡΙΣ ΗΧΟ — χωρίς μήνυμα, χωρίς κρασάρισμα, χωρίς τρόπο να καταλάβεις γιατί.
+# Πόσα πρέπει να είναι το ξέρει η γεννήτρια, οπότε τη ρωτάμε.
+TUNE_PREFIX = "TUNE"
+
+
+def tune_count():
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import genboss
+        _, tracks, _ = genboss.build()
+        data, _ = genboss.blob(tracks)
+        return -(-len(data) // genboss.CHUNK)
+    except Exception:
+        return None
 
 
 def entries(path):
@@ -56,20 +73,27 @@ def main(argv):
     names = entries(argv[1])
     missing = [n for n in NEEDED if n not in names]
     rooms = sorted(n for n in names if n.startswith(NEED_PREFIX))
+    tunes = sorted(n for n in names if n.startswith(TUNE_PREFIX))
+    want_tunes = tune_count()
+    tune_bad = want_tunes is not None and len(tunes) != want_tunes
 
-    if missing or not rooms:
+    if missing or not rooms or tune_bad:
         print(f"ΣΦΑΛΜΑ: η {argv[1]} δεν είναι πλήρης.", file=sys.stderr)
         for n in missing:
             print(f"        λείπει: {n.strip()}", file=sys.stderr)
         if not rooms:
             print("        λείπουν ΟΛΕΣ οι αίθουσες (ROOMSnn.BIN) — το "
                   "παιχνίδι θα σκάσει με «not found»", file=sys.stderr)
+        if tune_bad:
+            print(f"        η μουσική: {len(tunes)} από {want_tunes} "
+                  f"TUNEnn.BIN — το παιχνίδι θα έπαιζε βουβό", file=sys.stderr)
         print(f"        βρέθηκαν: {', '.join(sorted(names)) or '(τίποτα)'}",
               file=sys.stderr)
         return 1
 
     print(f"  Η δισκέτα έχει: MAIN.BIN, GRAV.BAS, "
-          f"{len(rooms)} σετ αιθουσών ({', '.join(r.strip() for r in rooms)})")
+          f"{len(rooms)} σετ αιθουσών ({', '.join(r.strip() for r in rooms)}), "
+          f"μουσική σε {len(tunes)} αρχεία")
     return 0
 
 

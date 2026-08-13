@@ -55,6 +55,7 @@ TWO OUTPUTS, ONE ARRANGEMENT:
 """
 
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -321,6 +322,17 @@ def write_asm(root, table, tracks, bars):
     return path
 
 
+def set_capacity(root):
+    """Πόσο είναι ο set_buf, από τον ΙΔΙΟ τον κώδικα και όχι από μνήμης."""
+    path = os.path.join(root, "src", "main.asm")
+    try:
+        with open(path) as f:
+            m = re.search(r"^set_capacity\s+equ\s+(\d+)", f.read(), re.M)
+    except OSError:
+        return None
+    return int(m.group(1)) if m else None
+
+
 def write_game(root, table, where, data, bars):
     """src/tune.asm + build/TUNEnn.BIN — the game's copy.
 
@@ -328,6 +340,13 @@ def write_game(root, table, where, data, bars):
     in main memory; the streams are five kilobytes and cold, so they go to the
     disc and from there into an upper bank the game never has to make room for.
     """
+    # Το tune_boot περνά κάθε κομμάτι μέσα από τον set_buf. Αν το CHUNK το
+    # ξεπεράσει, το CAS_IN_DIRECT γράφει πέρα από τον buffer — πάνω στον
+    # cas_buffer και μετά έξω από τη μνήμη του παιχνιδιού.
+    cap = set_capacity(root)
+    if cap is not None and CHUNK > cap:
+        raise SystemExit(f"CHUNK={CHUNK} > set_capacity={cap}: το tune_boot θα "
+                         f"γράψει έξω από τον set_buf")
     chunks = [data[i:i + CHUNK] for i in range(0, len(data), CHUNK)]
     out = [";" + "=" * 69,
            ";  GRAVASSIST - the tune's note table and its shape in the bank",
@@ -368,8 +387,12 @@ def write_game(root, table, where, data, bars):
 
     build = os.path.join(root, "build")
     os.makedirs(build, exist_ok=True)
+    # ΤΟ ΜΗΚΟΣ ΗΤΑΝ 12 ΚΑΙ ΤΟ ΟΝΟΜΑ ΕΙΝΑΙ 10: "TUNE01.BIN". Ο έλεγχος δεν
+    # ταίριαζε ΠΟΤΕ, οπότε ένα TUNE04.BIN από παλιότερο, μεγαλύτερο κομμάτι θα
+    # έμενε στο build/ και θα έφευγε στη δισκέτα — και το tune_boot θα το
+    # φόρτωνε σαν να ανήκε στο σημερινό. Regex αντί για μέτρημα χαρακτήρων.
     for old in sorted(os.listdir(build)):
-        if len(old) == 12 and old.startswith("TUNE") and old.endswith(".BIN"):
+        if re.fullmatch(r"TUNE\d\d\.BIN", old):
             os.remove(os.path.join(build, old))
     names = []
     for i, chunk in enumerate(chunks, 1):
