@@ -630,7 +630,7 @@ def defs_asm(rooms=()):
             f"ARROW_DMG_FAR   equ {P.ARROW_DMG[2]}",
             "; Πόσους πυργίσκους κρατά ο πίνακας μιας αίθουσας. Ό,τι περισσεύει",
             "; αγνοείται σιωπηλά — το tools/roomfile.py σπάει το build αντ' αυτού.",
-            "TURRET_SLOTS    equ 8",
+            f"TURRET_SLOTS    equ {P.TURRET_SLOTS}",
             f"CRATE_TICKS     equ {P.CRATE_TICKS}",
             f"FALL_SAFE       equ {P.FALL_SAFE}",
             f"FALL_V0         equ {P.FALL_V0}",

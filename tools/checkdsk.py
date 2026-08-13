@@ -32,8 +32,62 @@ def tune_count():
         return None
 
 
+def check_sets(dsk, names):
+    """Ότι τα σετ αιθουσών είναι ΔΙΑΒΑΣΙΜΑ, όχι απλώς παρόντα.
+
+    ΓΙΑΤΙ ΔΕΝ ΦΤΑΝΕΙ ΤΟ ΟΝΟΜΑ ΣΤΟΝ ΚΑΤΑΛΟΓΟ: το ROOMSnn.BIN έχει πέντε πίνακες
+    πριν από τα συμπιεσμένα κελιά, και ο τελευταίος (οι χρόνοι των πυργίσκων)
+    μπήκε τελευταίος. Ένα σετ γραμμένο με άλλη μορφή από αυτήν που περιμένει ο
+    src/roomfile.asm περνάει κάθε έλεγχο ονόματος και ξεδιπλώνεται σε σκουπίδια
+    στην οθόνη του Amstrad.
+
+    Ελέγχονται τα build/ROOMSnn.BIN — τα ΙΔΙΑ bytes που έβαλε το iDSK μέσα — και
+    ξεχωριστά ότι το μέγεθός τους ταιριάζει με ό,τι λέει ο κατάλογος της
+    δισκέτας. Έτσι το ξεδίπλωμα αφορά όντως το αρχείο που ταξιδεύει.
+    """
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import roomfile
+
+    problems = []
+    folder = os.path.dirname(os.path.abspath(dsk))
+    for name, records in sorted(names.items()):
+        if not name.startswith(NEED_PREFIX):
+            continue
+        plain = name[:8].rstrip() + "." + name[8:].rstrip()
+        path = os.path.join(folder, plain)
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+        except OSError:
+            problems.append(f"{plain}: είναι στη δισκέτα αλλά δεν βρέθηκε στο "
+                            f"{folder} για έλεγχο")
+            continue
+
+        # Στη δισκέτα προηγείται κεφαλίδα AMSDOS 128 bytes (iDSK -t 1), και το
+        # μέγεθος στρογγυλεύεται σε εγγραφές των 128.
+        want = 1 + -(-len(data) // 128)
+        if records != want:
+            problems.append(
+                f"{plain}: η δισκέτα κρατά {records} εγγραφές των 128 και το "
+                f"αρχείο θέλει {want} — δεν είναι το ίδιο αρχείο")
+            continue
+
+        try:
+            rooms = roomfile.parse_set(data, plain)
+        except ValueError as ex:
+            problems.append(str(ex))
+            continue
+
+        for r in rooms:
+            if len(r["cells"]) != roomfile.CELLS:
+                problems.append(
+                    f"{plain}: η αίθουσα {r['number']} ξεδίπλωσε "
+                    f"{len(r['cells'])} κελιά αντί για {roomfile.CELLS}")
+    return problems
+
+
 def entries(path):
-    """Τα ονόματα αρχείων του καταλόγου, ως '8χαρακτήρες3'."""
+    """Τα ονόματα αρχείων του καταλόγου, με τις εγγραφές των 128 bytes καθενός."""
     with open(path, "rb") as f:
         data = f.read()
     if not data.startswith(b"MV -") and not data.startswith(b"EXTENDED"):
@@ -43,7 +97,9 @@ def entries(path):
     # Ο κατάλογος AMSDOS είναι οι 4 πρώτοι τομείς των δεδομένων του track 0.
     # Αντί να αποκωδικοποιήσουμε πλήρως τη γεωμετρία —που διαφέρει ανά μορφή—
     # σαρώνουμε για εγγραφές καταλόγου: 32 bytes, user 0..15, όνομα ASCII.
-    names = set()
+    # Το πλήθος εγγραφών αθροίζεται σε όλα τα extent του ίδιου ονόματος: ένα
+    # αρχείο πάνω από 16 KB πιάνει περισσότερα από ένα.
+    names = {}
     for off in range(0, len(data) - 32, 32):
         rec = data[off:off + 32]
         if rec[0] > 15:
@@ -62,7 +118,7 @@ def entries(path):
         ok = set(base + ext) <= set(
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-!#&%@")
         if base and ext and ok:
-            names.add(txt)
+            names[txt] = names.get(txt, 0) + rec[15]
     return names
 
 
@@ -76,8 +132,9 @@ def main(argv):
     tunes = sorted(n for n in names if n.startswith(TUNE_PREFIX))
     want_tunes = tune_count()
     tune_bad = want_tunes is not None and len(tunes) != want_tunes
+    broken = check_sets(argv[1], names) if rooms else []
 
-    if missing or not rooms or tune_bad:
+    if missing or not rooms or tune_bad or broken:
         print(f"ΣΦΑΛΜΑ: η {argv[1]} δεν είναι πλήρης.", file=sys.stderr)
         for n in missing:
             print(f"        λείπει: {n.strip()}", file=sys.stderr)
@@ -87,13 +144,15 @@ def main(argv):
         if tune_bad:
             print(f"        η μουσική: {len(tunes)} από {want_tunes} "
                   f"TUNEnn.BIN — το παιχνίδι θα έπαιζε βουβό", file=sys.stderr)
+        for p in broken:
+            print(f"        {p}", file=sys.stderr)
         print(f"        βρέθηκαν: {', '.join(sorted(names)) or '(τίποτα)'}",
               file=sys.stderr)
         return 1
 
     print(f"  Η δισκέτα έχει: MAIN.BIN, GRAV.BAS, "
-          f"{len(rooms)} σετ αιθουσών ({', '.join(r.strip() for r in rooms)}), "
-          f"μουσική σε {len(tunes)} αρχεία")
+          f"{len(rooms)} σετ αιθουσών ({', '.join(r.strip() for r in rooms)}) "
+          f"που ξεδιπλώνονται καθαρά, μουσική σε {len(tunes)} αρχεία")
     return 0
 
 

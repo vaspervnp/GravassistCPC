@@ -203,8 +203,39 @@ def rle_decode(data, n=CELLS):
     return bytes(out)
 
 
+def check_turrets(room):
+    """Σπάει το build για ό,τι ο Z80 θα αγνοούσε σιωπηλά.
+
+    ΔΥΟ ΣΙΩΠΗΛΕΣ ΑΠΩΛΕΙΕΣ, και οι δύο ορατές μόνο στον emulator:
+
+    - Ο ένατος πυργίσκος δεν χωράει στον πίνακα της αίθουσας (TURRET_SLOTS) και
+      το src/turret.asm τον προσπερνά. Στην οθόνη είναι ζωγραφισμένος, στο
+      παιχνίδι δεν ρίχνει ποτέ — και τίποτα δεν το λέει.
+    - Οι δύο χρόνοι ταξιδεύουν ως ΕΝΑ byte ο καθένας. Ένα `turret 5 5 0 300 0`
+      γραμμένο στο χέρι θα γινόταν 44 δευτερόλεπτα από το `& 0xFF`, δηλαδή θα
+      δούλευε — αλλιώς από ό,τι λέει το αρχείο.
+    """
+    n = len(room.turrets)
+    if n > P.TURRET_SLOTS:
+        raise SystemExit(
+            f"ΣΦΑΛΜΑ: η αίθουσα {getattr(room, 'number', '?')} έχει {n} "
+            f"πυργίσκους και ο πίνακας "
+            f"κρατά {P.TURRET_SLOTS}.\n"
+            f"        Οι υπόλοιποι θα φαίνονταν στην οθόνη χωρίς να ρίχνουν ποτέ.")
+
+    for (cc, cr), (cool, auto) in sorted(room.turret_arg.items()):
+        for name, v in (("φόρτιση", cool), ("αυτόματο διάστημα", auto)):
+            if not 0 <= v <= 255:
+                raise SystemExit(
+                    f"ΣΦΑΛΜΑ: ο πυργίσκος ({cc},{cr}) της αίθουσας "
+                    f"{getattr(room, 'number', '?')} δηλώνει {name} "
+                    f"{v} δευτερόλεπτα.\n"
+                    f"        Στη δισκέτα χωράει ένα byte: 0..255.")
+
+
 def room_record(room):
     """Τα bytes μιας αίθουσας, ακριβώς όπως τα διαβάζει το src/roomfile.asm."""
+    check_turrets(room)
     out = bytearray()
     out += room.start_x.to_bytes(2, "little")
     out += room.start_y.to_bytes(2, "little")
@@ -297,6 +328,76 @@ def build_set(rooms):
             f"το σετ θέλει {len(out)} bytes και ο buffer του CPC είναι "
             f"{SET_MAX}. Λιγότερες ή πιο αραιές αίθουσες.")
     return bytes(out)
+
+
+def parse_set(data, name="(σετ)"):
+    """Ξεδιπλώνει ένα ΧΤΙΣΜΕΝΟ ROOMSnn.BIN, όπως θα το διάβαζε ο Z80.
+
+    ΓΙΑΤΙ ΥΠΑΡΧΕΙ: το build_set γράφει και το src/roomfile.asm διαβάζει, και
+    κανείς δεν ελέγχει ότι λένε το ίδιο πράγμα. Μια αλλαγή στη μορφή που ξεχάσει
+    τη μία πλευρά βγαίνει ως σκουπίδια στην οθόνη του Amstrad — το τελευταίο
+    μέρος όπου θέλεις να το ανακαλύψεις. Εδώ το ξεδίπλωμα γίνεται με τους ΙΔΙΟΥΣ
+    κανόνες και ό,τι δεν βγαίνει το λέει με το όνομα του αρχείου.
+
+    Επιστρέφει λίστα από λεξικά, ένα ανά αίθουσα.
+    Πετάει ValueError σε ό,τι ο Z80 θα διάβαζε λάθος.
+    """
+    if data[:3] != MAGIC:
+        raise ValueError(f"{name}: υπογραφή {data[:3]!r} αντί για {MAGIC!r}")
+    if data[3] != VERSION:
+        raise ValueError(
+            f"{name}: έκδοση {data[3]} αντί για {VERSION} — ο φορτωτής θα την "
+            f"απορρίψει, ή χειρότερα θα διαβάσει τους πίνακες μετατοπισμένους")
+
+    count = data[4]
+    if not 1 <= count <= SET_ROOMS:
+        raise ValueError(f"{name}: {count} αίθουσες σε σετ των {SET_ROOMS}")
+
+    numbers = data[5:5 + SET_ROOMS]
+    offs = [int.from_bytes(data[5 + SET_ROOMS + 2 * i:7 + SET_ROOMS + 2 * i],
+                           "little") for i in range(SET_ROOMS)]
+
+    def table(pos, width, what):
+        """Πίνακας εγγραφών σταθερού πλάτους, τερματισμένος με #FF."""
+        rows = []
+        while True:
+            if pos >= len(data):
+                raise ValueError(f"{name}: ο πίνακας {what} δεν τερματίζεται")
+            if data[pos] == 0xFF:
+                return rows, pos + 1
+            if pos + width > len(data):
+                raise ValueError(f"{name}: κομμένη εγγραφή στον πίνακα {what}")
+            rows.append(tuple(data[pos:pos + width]))
+            pos += width
+
+    out = []
+    for i in range(count):
+        pos = offs[i]
+        if not HEADER <= pos < len(data):
+            raise ValueError(f"{name}: η αίθουσα {numbers[i]} δείχνει στο "
+                             f"offset {pos}, έξω από το αρχείο ({len(data)})")
+        room = {"number": numbers[i]}
+        room["start"] = (int.from_bytes(data[pos:pos + 2], "little"),
+                         int.from_bytes(data[pos + 2:pos + 4], "little"),
+                         data[pos + 4])
+        pos += 5
+        room["exits"], pos = table(pos, 4, "εξόδων")
+        room["arrivals"], pos = table(pos, 4, "αφίξεων")
+        room["teleports"], pos = table(pos, 4, "τηλεμεταφορών")
+        room["attrs"], pos = table(pos, 3, "ιδιοτήτων")
+        # Ο ΠΕΜΠΤΟΣ ΠΙΝΑΚΑΣ. Αν λείπει ή έχει λάθος πλάτος, το RLE από κάτω
+        # ξεκινά από λάθος byte και η αίθουσα ξεδιπλώνεται σε σκουπίδια —
+        # γι' αυτό το ξεδίπλωμα ΑΜΕΣΩΣ μετά είναι ο πραγματικός έλεγχός του.
+        room["turrets"], pos = table(pos, 4, "πυργίσκων")
+        try:
+            room["cells"] = rle_decode(data[pos:], CELLS)
+        except ValueError as ex:
+            # ΤΟ ΟΝΟΜΑ ΚΑΙ Η ΑΙΘΟΥΣΑ ΜΠΡΟΣΤΑ: σκέτο «το RLE έβγαλε 963 κελιά»
+            # δεν λέει σε ποιο από τα σετ να κοιτάξεις.
+            raise ValueError(
+                f"{name}: αίθουσα {numbers[i]}: {ex}") from ex
+        out.append(room)
+    return out
 
 
 def slot_of(index):
