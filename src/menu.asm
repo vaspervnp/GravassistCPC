@@ -278,9 +278,10 @@ mp_lp:          ld   a,(de)
                 djnz mp_lp
                 ret
 
-MUSIC_COL       equ 28          ; η γραμμή 13 της δεξιάς στήλης ήταν κενή
+MUSIC_COL       equ 27          ; η γραμμή 13 της δεξιάς στήλης ήταν κενή·
+                                ; 27+13 = 40, ακριβώς το πλάτος του MODE 1
 MUSIC_ROW       equ 13
-MUSIC_W         equ 12          ; ΙΔΙΟ πλάτος και στις δύο τιμές, ώστε η μία
+MUSIC_W         equ 13          ; ΙΔΙΟ πλάτος και στις δύο τιμές, ώστε η μία
                                 ; να γράφει πάνω στην άλλη χωρίς σβήσιμο
 
 ;---------------------------------------------------------------------
@@ -299,8 +300,8 @@ mm_go:          ld   h,MUSIC_COL
                 ld   b,MUSIC_W
                 jp   menu_puts
 
-mus_txt_on:     db "M-MUSIC  ON "
-mus_txt_off:    db "M-MUSIC OFF "
+mus_txt_on:     db "M/S-MUSIC  ON"
+mus_txt_off:    db "M/S-MUSIC OFF"
 menu_mheld      db 0            ; το M ήταν πατημένο και στο προηγούμενο πέρασμα
 
 ; Πίνακας: στήλη, γραμμή, μήκος, κείμενο. Στήλη 0 = τέλος.

@@ -57,6 +57,7 @@ K_UP            equ  0          ; ενεργοποίηση — ΠΑΝΩ ή ΚΑ�
 K_DOWN          equ  2          ; ενεργοποίηση αντικειμένου
 K_SPACE         equ  47         ; το ίδιο
 K_SHIFT         equ  21         ; κρατημένο = τρέξιμο
+K_S             equ  60         ; μουσική on/off μέσα στο δωμάτιο
 
 ;--- Δικλείδα ακινησίας ----------------------------------------------
 STUCK_FRAMES    equ  5          ; πόσα frames κοιτάμε πίσω
@@ -297,6 +298,23 @@ ml_esc:
                 or   a                  ; αιτία — δες το score_add
                 jr   nz,ml_dead
 
+                ; Η ΜΟΥΣΙΚΗ, ΚΑΙ ΜΕΣΑ ΣΤΟ ΔΩΜΑΤΙΟ. Στο μενού είναι το M, εδώ το S:
+                ; το M είναι το βάδισμα μπροστά και δεν μπορεί να είναι και τα
+                ; δύο. Ακμή, όχι κατάσταση — ο βρόχος περνά από εδώ δώδεκα φορές
+                ; το δευτερόλεπτο και ένα πάτημα θα άναβε και θα έσβηνε δώδεκα.
+                ld   a,K_S
+                call KM_TEST_KEY
+                jr   z,ml_sfree
+                ld   a,(ml_sheld)
+                or   a
+                jr   nz,ml_sdone
+                ld   a,1
+                ld   (ml_sheld),a
+                call music_toggle
+                jr   ml_sdone
+ml_sfree:       xor  a
+                ld   (ml_sheld),a
+ml_sdone:
                 ld   a,K_ESC
                 call KM_TEST_KEY
                 jp   z,main_loop        ; jp: ο βρόχος ξεπερνά το εύρος του jr
@@ -312,6 +330,7 @@ ml_again:       call hs_finish          ; μπαίνει το σκορ στον 
                 jp   main               ; από την αρχή: μενού και πρώτη αίθουσα
 
 ml_dir          db   0
+ml_sheld        db   0         ; το S ήταν πατημένο και στο προηγούμενο πέρασμα
 ml_grav         db   0
 game_done       db   0   ; 1 = πέρασε την πόρτα τέλους
 

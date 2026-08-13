@@ -214,6 +214,12 @@ def game():
     return t
 
 
+# ΑΠΟ ΤΟΝ ΚΩΔΙΚΑ, ΟΧΙ ΚΑΡΦΩΤΟ: το βάθος του buffer άλλαξε από 4 σε 2 για να
+# χωρέσει ο διακόπτης S, και δύο τεστ που το είχαν γραμμένο με το χέρι έγιναν
+# κόκκινα χωρίς να υπάρχει σφάλμα πουθενά.
+BUFN = z80run.Z80Test(banking=False).sym("MUS_BUFN")
+
+
 def queued(t, steps=60):
     t.trace("SOUND_QUEUE", corrupt=FW_KILLS)
     for _ in range(steps):
@@ -295,7 +301,7 @@ check(first == 3 and len(t.calls) == 6,
 # Το ερώτημα είναι αν ΚΑΤΑΝΑΛΩΘΗΚΕ νότα, δηλαδή το CH_TAKE και το CH_LEFT.
 ch = t.sym("MUS_CHAN")
 take, left = t.peek(ch + 3)[0], t.peek(ch + 2)[0]
-check(take == 0 and left == 4,
+check(take == 0 and left == BUFN,
       f"γεμάτη ουρά: καμία νότα δεν καταναλώθηκε (take={take}, left={left})")
 
 # --- το τύλιγμα: ο κύκλος του λεπτού ------------------------------------
@@ -307,7 +313,7 @@ longest = max(len(n) for _, n in want)
 t = game()
 t.call("MUSIC_FULL")
 t.call("MUSIC_START")
-got = queued(t, steps=longest // 4 + 8)
+got = queued(t, steps=longest // BUFN + 8)
 wrapped = 0
 for chan, notes in want:
     seq = got.get(chan, [])
