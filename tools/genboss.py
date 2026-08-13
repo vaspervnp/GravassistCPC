@@ -365,6 +365,10 @@ def write_game(root, table, where, data, bars):
            "TUNE_NOISE      equ %d      ; index >= this is percussion"
            % GM.MUS_NOISE,
            f"TUNE_BYTES      equ {len(data)}",
+           "; Το μήκος του κομματιού σε παλμούς του ρολογιού του firmware",
+           "; (1/300 s). Ο player κρατά τη θέση του lead σε αυτές τις μονάδες",
+           "; και τυλίγει και τις δύο εδώ, ώστε η αφαίρεση να μένει στα 16 bit.",
+           f"TUNE_TICKS      equ {bars * BAR * 3}",
            f"TUNE_CHUNK      equ {CHUNK}",
            f"TUNE_CHUNKS     equ {len(chunks)}",
            "",

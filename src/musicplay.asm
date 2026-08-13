@@ -13,20 +13,20 @@
 ;  down when the game does — durations are hundredths of a second and the game
 ;  loop is anywhere between two and seven vsyncs.
 ;
-;  WHY THE LEAD GOES QUIET IN THE GAME. The AY has three channels and the
-;  sound effects want all three (src/sfx.asm: actions, movement, ambience).
-;  Sharing them with music has exactly one honest solution, because the wrong
-;  one is tempting: an effect COULD set the queue's flush bit and be heard at
-;  once, but flushing throws away the music notes already queued on that
-;  channel while the player has already counted them as played — so that
-;  channel would run ahead of the other two, permanently, a little more with
-;  every footstep. Instead the lead is dropped while a room is being played:
-;  bass and drums keep the groove, channel B belongs to the effects, and
-;  nothing drifts. The menu plays all three, and that is safe for a reason
-;  worth writing down: menu_show clears ml_dir, so the demo hero walks without
-;  footstep effects, and the bare arena has nothing else to make a sound. A Z80
-;  run of the whole menu loop makes exactly zero calls to sfx_play. Put anything
-;  audible in the menu and the lead will start slipping behind the other two.
+;  THE LEAD KEEPS ITS PLACE BY THE CLOCK, not by where it left off. The AY has
+;  three channels and the sound effects want all three (src/sfx.asm: actions,
+;  movement, ambience), so in a room they all share channel B with the lead and
+;  an effect flushes it to be heard at once. Flushing throws away lead notes the
+;  player has already read out of the bank — and that is fine, because mus_lead
+;  does not resume from its own state. It compares its position against the
+;  firmware clock, drops every note that should already have finished, and
+;  queues the one that belongs now. So an effect ducks the lead for as long as
+;  it lasts and the lead comes back in step with bass and drums, with an error
+;  that cannot accumulate because nothing is measured from the previous error.
+;
+;  The menu and the endings have no effects at all (tools/test_music.py proves
+;  it), so there the three voices simply play.
+;
 ;=====================================================================
 
 SOUND_QUEUE     equ  #BCAA      ; HL = μπλοκ· CF=1 μπήκε, CF=0 γεμάτη ουρά
@@ -62,13 +62,17 @@ CH_BUF          equ  5
 CH_SIZE         equ  CH_BUF+MUS_BUFB
 
 MUS_TRACKS      equ  3
-MUS_LEAD        equ  1          ; ο δείκτης του καναλιού που σιωπά στο παιχνίδι
+MUS_LEADCH        equ  1          ; ο δείκτης του καναλιού που σιωπά στο παιχνίδι
 
 ;---------------------------------------------------------------------
 ; music_start — από την αρχή του κομματιού, και οι τρεις φωνές μαζί
 ; ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL, IX
 ;---------------------------------------------------------------------
 music_start:    call SOUND_RESET
+                call KL_TIME_PLEASE     ; από πού μετράει ο χρόνος του κομματιού
+                ld   (tune_t0),hl
+                ld   hl,0
+                ld   (lead_pos),hl
                 ld   ix,mus_chan
                 ld   b,MUS_TRACKS
                 ld   c,1                ; μάσκες καναλιών AY: 1, 2, 4
@@ -135,12 +139,13 @@ music_step:     ld   a,(music_on)
                 ld   ix,mus_chan
                 ld   iy,mus_tab
                 ld   c,0                ; δείκτης καναλιού
-mus_ch:         ld   a,(mus_quiet)      ; παίζει αυτή η φωνή τώρα;
-                or   a
-                jr   z,mus_go
-                ld   a,c
-                cp   MUS_LEAD
-                jr   z,mus_next         ; στο παιχνίδι το B ανήκει στα εφέ
+mus_ch:         ld   a,c
+                cp   MUS_LEADCH
+                jr   nz,mus_go
+                push bc                 ; το C είναι ο δείκτης καναλιού
+                call mus_lead           ; χρονισμένο, όχι απλώς «γέμισε»
+                pop  bc
+                jr   mus_next
 
 mus_go:         ld   b,MUS_BUFN         ; οροφή, όχι στόχος
 mus_one:        push bc
@@ -164,30 +169,139 @@ mus_next:       ld   de,CH_SIZE
                 ret
 
 ;---------------------------------------------------------------------
+; mus_lead — το κανάλι B, οδηγημένο από το ρολόι και όχι από την ουρά
+;
+;   ΜΙΑ ΣΤΑΘΕΡΗ ΣΥΝΘΗΚΗ, ΚΑΙ ΤΙΠΟΤΑ ΑΛΛΟ: η θέση του lead μέσα στο κομμάτι
+;   πρέπει να ισούται με τον χρόνο που πέρασε από την αρχή του. Από αυτό
+;   προκύπτουν και τα δύο που χρειάζονται:
+;
+;     - Νότα που τελειώνει ΠΡΙΝ από το τώρα δεν παίζεται· καταναλώνεται και
+;       χάνεται. Έτσι το lead «συνεχίζει από εκεί που θα ήταν», όχι από εκεί
+;       που το άφησε το εφέ.
+;     - Νότα πιο μπροστά από το παράθυρο MUS_LOOK δεν μπαίνει ακόμα, ώστε η
+;       ουρά να μένει ρηχή και ένα εφέ να μη θάβει πολλή μουσική.
+;
+;   ΓΙ' ΑΥΤΟ ΤΟ ΑΔΕΙΑΣΜΑ ΤΗΣ ΟΥΡΑΣ ΔΕΝ ΧΡΕΙΑΖΕΤΑΙ ΚΑΜΙΑ ΛΟΓΙΣΤΙΚΗ. Το εφέ
+;   πετάει ό,τι είχε μπει· ο επόμενος γεμισμός βλέπει ότι η θέση έμεινε πίσω
+;   από το ρολόι, προσπερνά τις νότες που πέρασαν και ξαναπιάνει το μπάσο και
+;   τα τύμπανα ακριβώς εκεί που πρέπει. Το σφάλμα δεν συσσωρεύεται επειδή δεν
+;   μετριέται από την προηγούμενη κατάσταση αλλά από το ίδιο το ρολόι.
+;
+; IN:  IX = κατάσταση καναλιού, IY = (offset, μήκος)
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα εκτός IX, IY
+;---------------------------------------------------------------------
+MUS_LOOK        equ  120        ; 0,4 s σε 1/300 — ένα πέρασμα του βρόχου είναι
+                                ; το πολύ 6 vsync, οπότε η ουρά δεν στεγνώνει
+
+                ; ΤΥΛΙΓΜΑ ΤΟΥ ΚΥΚΛΟΥ, ΚΑΙ ΜΟΝΟ ΟΤΑΝ ΤΟ ΠΕΡΑΣΑΝ ΚΑΙ ΤΑ ΔΥΟ.
+                ; Η θέση τρέχει μπροστά από το ρολόι κατά το παράθυρο MUS_LOOK,
+                ; οπότε φτάνει πρώτη στο τέλος του κομματιού. Τυλίγοντας με βάση
+                ; μόνο αυτήν, το tune_t0 προσπερνούσε το ρολόι και το «τώρα μείον
+                ; t0» έβγαινε αρνητικό — δηλαδή, ανυπόγραφο, γύρω στις 65500. Το
+                ; lead νόμιζε ότι είχε μείνει ένα ολόκληρο λεπτό πίσω και πετούσε
+                ; τέσσερις νότες ανά πέρασμα ώσπου να ξαναπρολάβει: οκτώ χαμένες
+                ; εγγραφές στη ραφή, μία φορά ανά κύκλο. Και τα δύο μεγέθη έχουν
+                ; άφθονο περιθώριο πάνω από το TUNE_TICKS, οπότε η αναμονή είναι
+                ; δωρεάν.
+mus_lead:       ld   hl,(lead_pos)
+                ld   de,TUNE_TICKS
+                or   a
+                sbc  hl,de
+                jr   c,mld_wrapok       ; η θέση δεν έφτασε ακόμα στο τέλος
+                push hl                 ; = lead_pos - TUNE_TICKS
+                call KL_TIME_PLEASE
+                ld   de,(tune_t0)
+                or   a
+                sbc  hl,de
+                ld   de,TUNE_TICKS
+                or   a
+                sbc  hl,de
+                pop  de                 ; DE = η νέα θέση
+                jr   c,mld_wrapok       ; ο χρόνος δεν έφτασε: περίμενε
+                ld   (lead_pos),de
+                ld   hl,(tune_t0)
+                ld   de,TUNE_TICKS
+                add  hl,de
+                ld   (tune_t0),hl
+
+mld_wrapok:     call KL_TIME_PLEASE     ; HL = χαμηλή λέξη του μετρητή 1/300
+                ld   de,(tune_t0)
+                or   a
+                sbc  hl,de
+                jr   nc,mld_nowok
+                ld   hl,0               ; ΠΟΤΕ αρνητικό: ένα «τώρα» πριν από την
+mld_nowok:      ld   (mld_now),hl       ; αρχή θα σάρωνε το μισό κομμάτι
+                ld   a,MUS_BUFN+2       ; οροφή περασμάτων, όχι στόχος
+                ld   (mld_cnt),a
+
+mld_lp:          call mus_fetch          ; A = δείκτης, C = ένταση, B = διάρκεια
+                ld   (mld_idx),a
+                ld   (mld_vol),bc        ; C -> mld_vol, B -> mld_dur
+
+                ld   l,b                ; HL = διάρκεια x 3, σε 1/300
+                ld   h,0
+                ld   d,h
+                ld   e,l
+                add  hl,hl
+                add  hl,de
+                ld   de,(lead_pos)
+                add  hl,de
+                ld   (mld_end),hl        ; πού τελειώνει αυτή η νότα
+
+                ld   de,(mld_now)
+                or   a
+                sbc  hl,de              ; end - now
+                jr   c,mld_past          ; τελείωσε πριν από το τώρα: χάθηκε
+                jr   z,mld_past
+
+                ld   hl,(lead_pos)      ; αρχίζει πολύ μπροστά;
+                ld   de,(mld_now)
+                or   a
+                sbc  hl,de
+                jr   c,mld_play          ; έχει ήδη αρχίσει: μπαίνει τώρα
+                ld   de,MUS_LOOK
+                or   a
+                sbc  hl,de
+                ret  nc                 ; έξω από το παράθυρο: αρκετά για τώρα
+
+mld_play:        ld   a,(mld_idx)
+                ld   bc,(mld_vol)
+                call mus_emit
+                ret  nc                 ; γεμάτη ουρά: ξαναδοκιμάζει αργότερα
+                jr   mld_adv
+
+mld_past:        call mus_drop           ; θάφτηκε κάτω από ένα εφέ — σωστά
+
+mld_adv:         ld   hl,(mld_end)
+                ld   (lead_pos),hl
+                ld   a,(mld_cnt)
+                dec  a
+                ld   (mld_cnt),a
+                jr   nz,mld_lp
+                ret
+
+mld_now          dw   0
+mld_end          dw   0
+mld_idx          db   0
+mld_vol          db   0
+mld_dur          db   0
+mld_cnt          db   0
+
+;---------------------------------------------------------------------
 ; mus_note — μία νότα του καναλιού IX, γεμίζοντας πρώτα από την τράπεζα
 ; IN:  IX = κατάσταση καναλιού, IY = (offset, μήκος) του κομματιού
 ; OUT: CF=1 μπήκε στην ουρά, CF=0 η ουρά είναι γεμάτη
 ; ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL
 ;---------------------------------------------------------------------
-mus_note:       ld   a,(ix+CH_LEFT)
-                or   a
-                call z,mus_fill         ; άδειος buffer: φέρε τις επόμενες
+mus_note:       call mus_fetch
+                ; πέφτει μέσα στο mus_emit
 
-                push ix
-                pop  hl
-                ld   de,CH_BUF
-                add  hl,de
-                ld   a,(ix+CH_TAKE)
-                ld   e,a
-                ld   d,0
-                add  hl,de              ; HL -> η επόμενη τριάδα
-
-                ld   a,(hl)             ; δείκτης νότας· 0 = παύση
-                inc  hl
-                ld   c,(hl)             ; ένταση
-                inc  hl
-                ld   b,(hl)             ; διάρκεια
-                or   a
+;---------------------------------------------------------------------
+; mus_emit — χτίζει το μπλοκ και το δίνει στην ουρά
+; IN:  A = δείκτης νότας, C = ένταση, B = διάρκεια, IX = κανάλι
+; OUT: CF=1 μπήκε (και η νότα καταναλώθηκε), CF=0 γεμάτη ουρά
+;---------------------------------------------------------------------
+mus_emit:       or   a
                 jr   z,mn_rest
 
                 ; ΚΡΟΥΣΤΑ: δείκτης >= TUNE_NOISE σημαίνει σκέτος θόρυβος, και
@@ -246,12 +360,40 @@ mn_emit:        ld   a,c
                 pop  iy
                 pop  ix
                 ret  nc                 ; γεμάτη: η νότα μένει για την επόμενη
+                call mus_drop           ; πέρασε: προχώρα την τριάδα
+                scf
+                ret
 
-                ld   a,(ix+CH_TAKE)     ; πέρασε: προχώρα την τριάδα
+;---------------------------------------------------------------------
+; mus_fetch — η επόμενη νότα του καναλιού IX, ΧΩΡΙΣ να καταναλωθεί
+; OUT: A = δείκτης, C = ένταση, B = διάρκεια
+; ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL
+;---------------------------------------------------------------------
+mus_fetch:      ld   a,(ix+CH_LEFT)
+                or   a
+                call z,mus_fill         ; άδειος buffer: φέρε τις επόμενες
+                push ix
+                pop  hl
+                ld   de,CH_BUF
+                add  hl,de
+                ld   a,(ix+CH_TAKE)
+                ld   e,a
+                ld   d,0
+                add  hl,de              ; HL -> η επόμενη τριάδα
+                ld   a,(hl)             ; δείκτης νότας· 0 = παύση
+                inc  hl
+                ld   c,(hl)             ; ένταση
+                inc  hl
+                ld   b,(hl)             ; διάρκεια
+                ret
+
+;---------------------------------------------------------------------
+; mus_drop — καταναλώνει την τρέχουσα νότα χωρίς να την παίξει
+;---------------------------------------------------------------------
+mus_drop:       ld   a,(ix+CH_TAKE)
                 add  a,3
                 ld   (ix+CH_TAKE),a
                 dec  (ix+CH_LEFT)
-                scf
                 ret
 
 ;---------------------------------------------------------------------
@@ -411,4 +553,6 @@ snd_dur:        dw  0
 
 music_on        db  1           ; η επιλογή M του μενού
 tune_ok         db  0           ; 1 = το κομμάτι είναι στην τράπεζα
-mus_quiet       db  0           ; 1 = το κανάλι B ανήκει στα εφέ
+mus_quiet       db  0           ; 1 = τα εφέ μαζεύονται στο κανάλι B
+tune_t0         dw  0           ; ρολόι 1/300 τη στιγμή που ξεκίνησε το κομμάτι
+lead_pos        dw  0           ; πόσο κομμάτι έχει καταναλώσει το lead, σε 1/300

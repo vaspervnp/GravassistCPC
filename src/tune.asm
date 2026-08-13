@@ -12,6 +12,10 @@ TUNE_BARS       equ 32
 TUNE_NCOUNT     equ 20
 TUNE_NOISE      equ 200      ; index >= this is percussion
 TUNE_BYTES      equ 4542
+; Το μήκος του κομματιού σε παλμούς του ρολογιού του firmware
+; (1/300 s). Ο player κρατά τη θέση του lead σε αυτές τις μονάδες
+; και τυλίγει και τις δύο εδώ, ώστε η αφαίρεση να μένει στα 16 bit.
+TUNE_TICKS      equ 18432
 TUNE_CHUNK      equ 1536
 TUNE_CHUNKS     equ 3
 

@@ -203,9 +203,30 @@ print("--- ο player του παιχνιδιού, από το μπλοκ 7")
 FW_KILLS = ("a", "bc", "de", "hl", "ix")
 
 
+# ΤΟ ΡΟΛΟΙ ΤΟΥ FIRMWARE, ΣΕ 11 BYTES Z80. Το harness γεμίζει όλο το jumpblock
+# με RET, οπότε το KL_TIME_PLEASE γύριζε ό,τι έτυχε να έχει το HL — και το
+# mus_lead, που κρατά τη θέση του από το ρολόι, δεν έπαιζε ποτέ νότα. Δεν είναι
+# λεπτομέρεια του τεστ: είναι ακριβώς η ίδια κατηγορία με το SOUND QUEUE που
+# «διατηρούσε» το IX. Ένα stub που δεν λέει την αλήθεια κρύβει τον κώδικα.
+CLK = 0xB7FE                    # ελεύθερη μνήμη κάτω από το jumpblock
+CLK_STEP = 60                   # 1/300: 0,2 s ανά κλήση, σαν αργό πέρασμα βρόχου
+
+
+def install_clock(t, step=CLK_STEP):
+    code = bytes([0x2A, CLK & 0xFF, CLK >> 8,          # ld hl,(CLK)
+                  0x11, step & 0xFF, step >> 8,        # ld de,step
+                  0x19,                                # add hl,de
+                  0x22, CLK & 0xFF, CLK >> 8,          # ld (CLK),hl
+                  0xC9])                               # ret
+    for i, b in enumerate(code):
+        t.m.memory[0xBD0D + i] = b
+    t.poke16(CLK, 0)
+    return t
+
+
 def game():
     """Το main.bin με το κομμάτι ήδη στη θέση του, σαν να έτρεξε το tune_boot."""
-    t = z80run.Z80Test(banking=True)
+    t = install_clock(z80run.Z80Test(banking=True))
     _, tr, _ = GB.build()
     data, _ = GB.blob(tr)
     t.bank_poke(7, 0x4000, data)
@@ -263,13 +284,55 @@ check(any(nz for _, nz, _ in got.get(4, [])), "μενού: τα τύμπανα �
 check(not any(nz for ch in (1, 2) for _, nz, _ in got.get(ch, [])),
       "μενού: μπάσο και lead δεν έχουν θόρυβο")
 
-# --- το παιχνίδι: το κανάλι B μένει ελεύθερο για τα εφέ ----------------
+# --- το παιχνίδι: ΚΑΙ ΤΟ LEAD, μοιραζόμενο το B με τα εφέ --------------
 t = game()
 t.call("MUSIC_GAME")
 t.call("MUSIC_START")
 got = queued(t)
-check(sorted(got) == [1, 4],
-      f"παιχνίδι: παίζουν μόνο μπάσο και τύμπανα {sorted(got)}")
+check(sorted(got) == [1, 2, 4],
+      f"παιχνίδι: παίζουν και οι τρεις φωνές {sorted(got)}")
+
+# --- Η ΣΤΑΘΕΡΗ ΣΥΝΘΗΚΗ ΤΟΥ LEAD: θέση == χρόνος -----------------------
+#
+# ΑΥΤΟ ΕΙΝΑΙ ΤΟ ΟΛΟ ΝΟΗΜΑ. Ένα εφέ αδειάζει την ουρά του καναλιού B και θάβει
+# όσο lead είχε μπει. Το ζητούμενο δεν είναι να συνεχίσει από εκεί που κόπηκε —
+# αυτό θα το άφηνε μόνιμα πίσω από το μπάσο και τα τύμπανα, λίγο περισσότερο με
+# κάθε βήμα — αλλά να ξαναπιάσει εκεί που ΘΑ ΗΤΑΝ. Το δοκιμάζουμε πηδώντας το
+# ρολόι μπροστά, που είναι ακριβώς ό,τι βλέπει ο player όταν χάσει χρόνο.
+t = game()
+t.call("MUSIC_GAME")
+t.call("MUSIC_START")
+for _ in range(6):
+    t.call("MUSIC_STEP")
+before = t.peek16(t.sym("LEAD_POS"))
+
+# Κενό δύο δευτερολέπτων — πολύ μεγαλύτερο από κάθε εφέ, ώστε να φανεί ότι
+# ΣΥΓΚΛΙΝΕΙ και δεν μένει απλώς κοντά. Η ανάκτηση είναι ρυθμο-περιορισμένη
+# (τέσσερις εγγραφές ανά πέρασμα), δηλαδή γρήγορη αλλά όχι ακαριαία: ένα εφέ
+# των 25 εκατοστών το καλύπτει σε ένα πέρασμα, αυτό εδώ θέλει πέντε.
+JUMP = 600
+t.poke16(CLK, t.peek16(CLK) + JUMP)
+for _ in range(15):
+    t.call("MUSIC_STEP")
+after = t.peek16(t.sym("LEAD_POS"))
+now = t.peek16(CLK) - t.peek16(t.sym("TUNE_T0"))
+check(after > before + JUMP,
+      f"μετά από κενό 2 s το lead προσπέρασε ({before} -> {after})")
+check(abs(after - now) <= 250,
+      f"…και ξαναπιάνει το ρολόι (θέση {after}, ρολόι {now}, "
+      f"διαφορά {after - now})")
+
+# Και το αντίστροφο: ΧΩΡΙΣ κενό δεν προσπερνά τίποτα — κάθε νότα ακούγεται.
+t = game()
+t.call("MUSIC_GAME")
+t.call("MUSIC_START")
+got = queued(t, steps=40)
+_, tr, _ = GB.build()
+wrong = sum(1 for i, (idx, vol, _) in enumerate(tr["lead"][:len(got.get(2, []))])
+            if (got[2][i][0], got[2][i][1]) != expect(idx) or got[2][i][2] != vol)
+check(wrong == 0 and len(got.get(2, [])) > 20,
+      f"χωρίς κενό το lead παίζει ΚΑΘΕ νότα ({len(got.get(2, []))}, "
+      f"{wrong} λάθος)")
 
 # --- η επιλογή M -------------------------------------------------------
 t = game()
@@ -295,7 +358,9 @@ t.trace("SOUND_QUEUE", carry=False, corrupt=FW_KILLS)
 t.call("MUSIC_STEP")
 first = len(t.calls)
 t.call("MUSIC_STEP")
-check(first == 3 and len(t.calls) == 6,
+# Μπάσο και τύμπανα κάνουν από μία προσπάθεια· το lead κάνει μία μόνο αν το
+# ρολόι λέει ότι ήρθε η ώρα του, οπότε 2 ή 3 ανά πέρασμα.
+check(first in (2, 3) and len(t.calls) == 2 * first,
       f"γεμάτη ουρά: μία προσπάθεια ανά κανάλι ({first}, {len(t.calls)})")
 # ΟΧΙ το CH_POS: αυτό δείχνει ΠΟΥ ΔΙΑΒΑΣΑΜΕ, και ο buffer όντως γέμισε — σωστά.
 # Το ερώτημα είναι αν ΚΑΤΑΝΑΛΩΘΗΚΕ νότα, δηλαδή το CH_TAKE και το CH_LEFT.
@@ -313,7 +378,10 @@ longest = max(len(n) for _, n in want)
 t = game()
 t.call("MUSIC_FULL")
 t.call("MUSIC_START")
-got = queued(t, steps=longest // BUFN + 8)
+# Το lead προχωράει με το ρολόι, όχι με την ουρά: χρειάζεται TUNE_TICKS/CLK_STEP
+# περάσματα για να κάνει κύκλο, πολύ περισσότερα από τα άλλα δύο.
+ticks = z80run.Z80Test(banking=False).sym("TUNE_TICKS")
+got = queued(t, steps=max(longest // BUFN + 8, ticks // CLK_STEP + 20))
 wrapped = 0
 for chan, notes in want:
     seq = got.get(chan, [])
@@ -349,7 +417,7 @@ SFXCH_ACT, SFXCH_MOVE, SFXCH_AMB = 1, 2, 4
 for on, quiet, want_ch, label in (
         (0, 1, SFXCH_ACT, "μουσική σβηστή -> το εφέ κρατά το κανάλι του"),
         (1, 0, SFXCH_ACT, "μενού -> το εφέ κρατά το κανάλι του"),
-        (1, 1, SFXCH_MOVE, "παιχνίδι -> το εφέ πάει στο B")):
+        (1, 1, SFXCH_MOVE + 0x80, "παιχνίδι -> το εφέ πάει στο B, αδειάζοντάς το")):
     t = game()
     t.poke(t.sym("MUSIC_ON"), bytes([on]))
     t.poke(t.sym("MUS_QUIET"), bytes([quiet]))
