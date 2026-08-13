@@ -202,10 +202,18 @@ for _ in range(3):
 check(f"δεν ξεπερνά τα {P.TURRET_MAX}", len(h.arrows) <= P.TURRET_MAX,
       str(len(h.arrows)))
 
-print("--- ο πυργίσκος είναι εμπόδιο")
-check("στερεός", bool(P.PROPS[P.TURRET_V] & P.F_SOLID))
-check("…αλλά δεν πονάει με την αφή",
-      not (P.PROPS[P.TURRET_V] & P.F_DEADLY))
+print("--- ο πυργίσκος ΔΕΝ είναι εμπόδιο")
+check("περνάς από μέσα του", not (P.PROPS[P.TURRET_V] & P.F_SOLID))
+check("…και δεν πονάει με την αφή", not (P.PROPS[P.TURRET_V] & P.F_DEADLY))
+
+# Και στην πράξη: ο ήρωας πρέπει να διασχίζει το κελί χωρίς να σταματά.
+rm = room([(12, 21, "I")])
+h = settled(rm, 9, 21)
+x0 = h.x
+for _ in range(60):
+    h.update(1)
+check("περπατάει μέσα από πυργίσκο χωρίς να κολλήσει",
+      h.x > 13 * P.CELL, f"ξεκίνησε {x0}, έφτασε {h.x}")
 
 print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"ΑΠΕΤΥΧΑΝ {len(FAILS)}")
 sys.exit(1 if FAILS else 0)

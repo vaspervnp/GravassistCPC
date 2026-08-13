@@ -148,7 +148,12 @@ sprites-init:
 	$(PY) tools/sprites.py init --force
 
 # Επαληθεύσεις: αλγόριθμος περιστροφής + μοντέλο φυσικής
-test:
+#
+# ΕΞΑΡΤΑΤΑΙ ΑΠΟ ΤΟ data.js: το tools/test_turret_js.py συγκρίνει το μοντέλο με
+# την ΠΡΑΓΜΑΤΙΚΗ physics.js, που διαβάζει τους πίνακες από εκεί. Με μπαγιάτικο
+# data.js η σύγκριση αποτυγχάνει σωστά αλλά για λάθος λόγο, και ψάχνεις
+# διαφορά στη JavaScript ενώ φταίει η σειρά του build.
+test: $(JSDATA)
 	$(PY) tools/check_names.py
 	$(PY) tools/verify_rotate.py
 	$(PY) tools/test_sprites.py
