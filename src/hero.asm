@@ -121,6 +121,51 @@ hu_done:        call h_support
                 jp   h_track
 
 ;---------------------------------------------------------------------
+; sw_flip — turn the switch under (B,C) to its other face
+;
+;   A PAIR TABLE and not arithmetic: SWITCH_U kept its old type number when
+;   the other seven were added, so the off->on distance is not the same for
+;   all four facings. Eight bytes buy immunity from that.
+;
+; IN:  B = column, C = row
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+SW_PAIRS        equ  4
+
+sw_tab:         db   T_SWITCH_U, T_SWITCH_U_ON
+                db   T_SWITCH_L, T_SWITCH_L_ON
+                db   T_SWITCH_D, T_SWITCH_D_ON
+                db   T_SWITCH_R, T_SWITCH_R_ON
+
+sw_flip:        ld   a,(h_cell)         ; the type we are standing on
+                ld   hl,sw_tab
+                ld   d,SW_PAIRS
+sf_lp:          cp   (hl)
+                jr   z,sf_on            ; off -> on
+                inc  hl
+                cp   (hl)
+                jr   z,sf_off           ; on -> off
+                inc  hl
+                dec  d
+                jr   nz,sf_lp
+                ret                     ; not a switch: nothing to turn
+sf_on:          inc  hl
+                jr   sf_put
+sf_off:         dec  hl
+sf_put:         ld   a,(hl)
+                push af
+                ld   a,(cell_col)       ; cell_addr wants C = column, B = row
+                ld   c,a
+                ld   a,(cell_row)
+                ld   b,a
+                push bc
+                call cell_addr          ; HL = the cell
+                pop  bc
+                pop  af                 ; A = the new type
+                call cell_set           ; through the journal, so the state
+                jp   draw_tile          ; survives leaving and re-entering
+
+;---------------------------------------------------------------------
 ; h_crumble — το εύθραυστο κελί καταρρέει μόλις ο ήρωας φύγει από πάνω του
 ;
 ;   Το F_FRAGILE υπήρχε στον πίνακα ιδιοτήτων από την αρχή, αλλά κανείς δεν
@@ -255,8 +300,30 @@ ht_nopick:      ld   a,(h_cell)
                 ; όσο στέκεσαι πάνω του: αλλιώς οι πόρτες ανοιγοκλείνουν 50
                 ; φορές το δευτερόλεπτο και δεν ελέγχονται. Και ΔΕΝ ξοδεύεται:
                 ; το ξαναπατάς για να τις ξανακλείσεις.
-ht_nosw:        cp   T_SWITCH
-                jr   nz,ht_swclr
+                ; ONE FLAG, NOT EIGHT COMPARISONS. Four facings x two states
+                ; would be eight `cp`s here and eight more in gate_drivers —
+                ; and a forgotten one leaves a single rotation dead, which
+                ; nobody finds because the other seven work.
+ht_nosw:        ld   e,a
+                ld   d,0
+                ld   hl,tile_props
+                add  hl,de
+                ld   a,(hl)
+                and  F_SWITCH
+                jr   z,ht_swclr
+
+                ; AND ONLY FROM ITS OWN SIDE, same rule as the spikes: you
+                ; press a floor switch standing on the floor. Walking past a
+                ; ceiling switch with gravity down does nothing.
+                ld   hl,tile_facing
+                add  hl,de
+                ld   a,(hl)
+                add  a,4
+                and  7
+                ld   hl,hero_g
+                cp   (hl)
+                jp   nz,ht_spikes       ; wrong side: not a press at all
+
                 ld   a,(cell_col)
                 ld   b,a
                 ld   a,(cell_row)
@@ -273,6 +340,9 @@ ht_swfire:      ld   a,b
                 ld   (sw_prev),a
                 ld   a,c
                 ld   (sw_prev+1),a
+                push bc                 ; the switch shows its own state, so
+                call sw_flip            ; the player sees what they flipped
+                pop  bc
                 push bc
                 call cell_attr          ; A = κανάλι του διακόπτη
                 call gate_toggle

@@ -82,7 +82,7 @@
         if (h.room.attrs[k] !== ch) continue;
         const [c, r] = k.split(",").map(Number);
         const v = h.room.cell(c, r);
-        if (v === T.indexOf("SWITCH")) sw = true;
+        if (D.PROPS[v] & D.F.SWITCH) sw = true;
         if (v === T.indexOf("PLATE") || v === T.indexOf("PLATE_DOWN")) plate = true;
       }
       if (sw && plate) return "A switch or a plate opens this";
@@ -686,7 +686,10 @@
       // θα έτρωγε τη φορά 0 (DOWN) — την πιο συνηθισμένη. Δεν χρειάζεται
       // ούτως ή άλλως: το arrivalIn σαρώνει κατά γραμμές και πέφτει πρώτα στο
       // πάνω-αριστερό κελί της ομάδας, που είναι το κλειδί της δήλωσης.
-      spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("SWITCH"));
+      // Κάθε όψη και κάθε κατάσταση: ο ίδιος διακόπτης μπορεί να είναι
+      // ζωγραφισμένος πατημένος ή σε οποιαδήποτε από τις τέσσερις φορές.
+      for (let t = 0; t < D.NTYPES; t++)
+        if (D.PROPS[t] & D.F.SWITCH) spreadKind(cells, attrs, t);
       spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("GATE"));
       spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("LOCK"));
       spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("KEY"));

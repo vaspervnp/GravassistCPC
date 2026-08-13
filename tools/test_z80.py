@@ -1170,12 +1170,78 @@ def main():
     check("…και κλειδί άλλου καναλιού δεν μετράει",
           t26.m.a == 8, f"μήνυμα {t26.m.a}")
 
+    check_switch_facing()
     check_hud_energy()
     check_hiscore()
     check_banking()
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"{len(FAILS)} ΑΠΟΤΥΧΙΕΣ: {FAILS}")
     return 1 if FAILS else 0
+
+
+def check_switch_facing():
+    """A switch answers only from the side it is mounted on.
+
+    This is the whole point of making switches rotatable, and it is invisible
+    to every other test: a wrong facing looks like a switch that simply does
+    not work, in one room, for one gravity. The eight variants are found
+    through the F_SWITCH flag, so a ninth added later is covered too.
+    """
+    from z80run import Z80Test
+    t = Z80Test()
+    t.fake_set_load()
+    t.stub("RENDER_ROOM")
+    t.stub("DRAW_TILE")
+    cb = t.sym("CELL_BUF")
+
+    # WHICH CELL THE BODY IS IN is sprite geometry, not something to hardcode:
+    # hero_y is not the centre of a cell. Ask the code once, then put the
+    # switch exactly there — otherwise the test passes for the wrong reason.
+    # cell_at reads through level_ptr, not cell_buf directly. Without this the
+    # room looks empty and every check passes for the wrong reason — the two
+    # negative cases would still be green.
+    t.poke16(t.sym("LEVEL_PTR"), cb)
+    HX, HY = 20 * P.CELL + 4, P.GRID_Y0 + 12 * P.CELL + 4
+    # h_touch reads the body cell with cell_at(hero_x, hero_y). Asking cell_at
+    # directly, and not cell_col after the call, because h_touch overwrites
+    # cell_col/cell_row with the SUPPORT cell before it returns.
+    t.call("CELL_AT", bc=HX, de=HY)
+    at = cb + t.peek(t.sym("CELL_ROW"))[0] * P.COLS + t.peek(t.sym("CELL_COL"))[0]
+
+    def run(cell_type, gravity):
+        """Stand on the switch with the given gravity and touch it once."""
+        t.poke(cb, bytes(P.COLS * P.ROWS))          # empty room
+        t.poke(at, bytes((cell_type,)))
+        t.poke(t.sym("SW_PREV"), b"\xFF\xFF")      # not the same cell as last frame
+        t.poke(t.sym("HERO_G"), bytes((gravity,)))
+        t.poke16(t.sym("HERO_X"), HX)
+        t.poke16(t.sym("HERO_Y"), HY)
+        t.call("H_TOUCH")
+        return t.peek(at)[0]
+
+    # Floor switch: pressed with gravity DOWN, ignored hanging from a ceiling.
+    got = run(P.SWITCH_U, 0)
+    check("floor switch pressed with gravity down",
+          got == P.SWITCH_U_ON, P.TYPE_NAMES[got])
+    got = run(P.SWITCH_U, 4)
+    check("…and ignored with gravity up", got == P.SWITCH_U, P.TYPE_NAMES[got])
+
+    # Ceiling switch: the mirror image.
+    got = run(P.SWITCH_D, 4)
+    check("ceiling switch pressed with gravity up",
+          got == P.SWITCH_D_ON, P.TYPE_NAMES[got])
+    got = run(P.SWITCH_D, 0)
+    check("…and ignored with gravity down", got == P.SWITCH_D, P.TYPE_NAMES[got])
+
+    # Pressing again turns it back: a toggle, not a one-shot.
+    got = run(P.SWITCH_U_ON, 0)
+    check("a pressed switch turns back off", got == P.SWITCH_U,
+          P.TYPE_NAMES[got])
+
+    # Every variant carries the flag, so nothing is reachable only by number.
+    missing = [P.TYPE_NAMES[x] for x in sorted(P.SWITCHES)
+               if not (P.PROPS[x] & P.F_SWITCH)]
+    check("every switch variant carries F_SWITCH", not missing, str(missing))
 
 
 def check_hud_energy():

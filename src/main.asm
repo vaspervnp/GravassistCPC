@@ -1525,9 +1525,18 @@ gd_lp:          ld   a,(hl)
                 push bc
                 call cell_addr
                 pop  bc
+                ; Any switch, any facing, either state — one AND. With eight
+                ; comparisons here, a rotation the designer used would report
+                ; "this gate has nothing to open it" while the switch worked.
                 ld   a,(hl)
-                cp   T_SWITCH
-                jr   nz,gd_pl
+                ld   e,a
+                ld   d,0
+                ld   hl,tile_props
+                add  hl,de
+                ld   a,(hl)
+                and  F_SWITCH
+                ld   a,e                ; the type again, for the plate tests
+                jr   z,gd_pl
                 ld   a,1
                 jr   gd_mark
 gd_pl:          cp   T_PLATE

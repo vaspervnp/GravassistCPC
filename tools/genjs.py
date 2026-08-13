@@ -47,7 +47,13 @@ def build():
         "RAMP_GRAVITY": {str(k): v for k, v in P.RAMP_GRAVITY.items()},
         "F": {"SOLID": P.F_SOLID, "DEADLY": P.F_DEADLY, "PICKUP": P.F_PICKUP,
               "NOFLIP": P.F_NOFLIP, "FRAGILE": P.F_FRAGILE,
-              "ONEWAY": P.F_ONEWAY, "TRIGGER": P.F_TRIGGER},
+              "ONEWAY": P.F_ONEWAY, "TRIGGER": P.F_TRIGGER,
+              "SWITCH": P.F_SWITCH},
+
+        # Off <-> on for every switch facing. A table and not arithmetic: the
+        # eight type numbers are not contiguous.
+        "SWITCH_FLIP": {str(k): v for k, v in
+                        list(P.SWITCH_ON_OF.items()) + list(P.SWITCH_OFF_OF.items())},
 
         # Σχήμα των ραμπών ως μάσκα 8x8, ώστε το JS να μην ξαναγράψει τις
         # ανισότητες (u+v>=7 κ.λπ.) και να μην μπορεί να τις γράψει λάθος.

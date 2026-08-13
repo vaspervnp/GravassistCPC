@@ -24,7 +24,7 @@
         // και όχι κελί, γι' αυτό ένας διακόπτης οδηγεί όσες πόρτες θέλεις.
         wiring = new[]
         {
-            new { kind = "sw",   symbols = "S",  label = "Switch",  peer = "gate" },
+            new { kind = "sw",   symbols = "SQAEsqae", label = "Switch", peer = "gate" },
             new { kind = "plate",symbols = "pd", label = "Plate",   peer = "gate" },
             new { kind = "gate", symbols = "Gg", label = "Gate",    peer = "sw" },
             new { kind = "lock", symbols = "K|", label = "Lock",    peer = "key" },
@@ -985,7 +985,7 @@
                 p.className = "hintline";
                 p.style.marginTop = "0";
                 p.textContent = kinds[0] === "sw"
-                    ? "No actuators. Paint S (switch), p (plate) or k (key) cells."
+                    ? "No actuators. Paint a switch (S Q A E), p (plate) or k (key) cells."
                     : "No targets. Paint G (gate), K (lock) or spike cells.";
                 el.appendChild(p);
             }

@@ -26,7 +26,7 @@ T_PARACHUTE      equ 18
 T_KEY            equ 19
 T_LOCK           equ 20
 T_GATE           equ 21
-T_SWITCH         equ 22
+T_SWITCH_U       equ 22
 T_PLATE          equ 23
 T_TELEPORT       equ 24
 T_CRATE          equ 25
@@ -38,6 +38,13 @@ T_SPIKE_U_OFF    equ 30
 T_SPIKE_L_OFF    equ 31
 T_SPIKE_D_OFF    equ 32
 T_SPIKE_R_OFF    equ 33
+T_SWITCH_L       equ 34
+T_SWITCH_D       equ 35
+T_SWITCH_R       equ 36
+T_SWITCH_U_ON    equ 37
+T_SWITCH_L_ON    equ 38
+T_SWITCH_D_ON    equ 39
+T_SWITCH_R_ON    equ 40
 
 ; Αίθουσα εκκίνησης. Ο editor τη γράφει με --start ώστε να δοκιμάζεις
 ; οποιαδήποτε αίθουσα χωρίς να πειράζεις τα αρχεία των πιστών.
@@ -57,12 +64,12 @@ SET_VERSION     equ 2          ; ο φορτωτής απορρίπτει ό,τ�
 SLOT_SHIFT      equ 11         ; 1 << 11 = 2048 bytes ανά θέση
 SLOTS_SHIFT     equ 3         ; 1 << 3 = 8 θέσεις ανά μπλοκ
 MAX_SETS        equ 32         ; = 128 αίθουσες στη μνήμη
-SET_COUNT       equ 2          ; πόσα σετ ψάχνει η εκκίνηση
+SET_COUNT       equ 3          ; πόσα σετ ψάχνει η εκκίνηση
 ; Πόσα bytes προχωράει η μπάρα φόρτωσης ανά σετ. Υπολογισμένο εδώ
 ; ώστε η μπάρα να γεμίζει ακριβώς όσο και οι αίθουσες, όποιες κι
 ; αν είναι — στον Z80 μια διαίρεση θα κόστιζε περισσότερο από όσο
 ; αξίζει μια μπάρα.
-BAR_STEP        equ 32
+BAR_STEP        equ 21
 
 ; --- σκορ (tools/physics.py) ---------------------------------
 SCORE_START     equ 1000
@@ -95,7 +102,7 @@ TRAIL_MAX       equ 4    ; πόσα δωμάτια πίσω γυρνάς
 ; Ταβάνι μνήμης με ενεργό AMSDOS — δες την assert στο main.asm.
 MEM_CEIL        equ #A67B
 
-NTYPES          equ 34
+NTYPES          equ 41
 ATTR_MAX        equ 8   ; κανάλια διακοπτών / ταυτότητες κλειδιών
 T_LOCK_AUTO     equ 8    ; bit: η κλειδαριά ανοίγει μόλις την ακουμπήσεις
 SPIKE_TICKS     equ 10
@@ -121,3 +128,7 @@ F_NOFLIP        equ #08
 F_FRAGILE       equ #10
 F_ONEWAY        equ #20
 F_TRIGGER       equ #40
+; A switch, any facing, either state — the eight numbers are not
+; contiguous, so a range check would break the first time a type
+; is inserted.
+F_SWITCH        equ #80

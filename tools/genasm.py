@@ -100,7 +100,14 @@ PLACEHOLDER = {
     P.LOCK_OPEN: ("LOCK", 0, True),   # η "ενεργή" εκδοχή του placeholder
     P.GATE_OPEN: ("GATE", 0, True),   # ανοιγμένη: φαίνεται, αλλά περνάς
     P.KEY: ("KEY", 0), P.LOCK: ("LOCK", 0), P.GATE: ("GATE", 0),
-    P.SWITCH: ("SWITCH", 0), P.PLATE: ("PLATE", 0), P.TELEPORT: ("TELEPORT", 0),
+    P.PLATE: ("PLATE", 0), P.TELEPORT: ("TELEPORT", 0),
+    # Switches: four facings x two states, same turn numbers as the spikes.
+    # The placeholder already leans the lever the other way when active, so
+    # both states come from one drawing.
+    P.SWITCH_U: ("SWITCH", 0), P.SWITCH_L: ("SWITCH", 3),
+    P.SWITCH_D: ("SWITCH", 2), P.SWITCH_R: ("SWITCH", 1),
+    P.SWITCH_U_ON: ("SWITCH", 0, True), P.SWITCH_L_ON: ("SWITCH", 3, True),
+    P.SWITCH_D_ON: ("SWITCH", 2, True), P.SWITCH_R_ON: ("SWITCH", 1, True),
     P.CRATE: ("CRATE", 0), P.CRUMBLE: ("CRUMBLE", 0), P.GRAVLOCK: ("GRAVLOCK", 0),
     # Η ΒΑΣΗ ΚΑΘΕΤΑΙ ΑΠΕΝΑΝΤΙ ΑΠΟ ΤΙΣ ΜΥΤΕΣ. Το αριστερό και το δεξί ήταν
     # ανταλλαγμένα: το SPIKE_L (δείχνει αριστερά, FACING 2) ζωγραφιζόταν με τη
@@ -581,6 +588,10 @@ def defs_asm(rooms=()):
             "F_FRAGILE       equ #10",
             "F_ONEWAY        equ #20",
             "F_TRIGGER       equ #40",
+            "; A switch, any facing, either state — the eight numbers are not",
+            "; contiguous, so a range check would break the first time a type",
+            "; is inserted.",
+            f"F_SWITCH        equ #{P.F_SWITCH:02X}",
             ""]
     return "\n".join(out)
 

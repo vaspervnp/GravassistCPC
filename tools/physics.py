@@ -67,13 +67,42 @@ SPIKE_L_OFF = 31
 SPIKE_D_OFF = 32
 SPIKE_R_OFF = 33
 
+# --- SWITCHES: four facings, two states -------------------------------
+#
+# SWITCH keeps its old number so nothing renumbers; it is the floor-mounted,
+# unpressed one. The other seven are new.
+#
+# The facing is not decoration. Like spikes, a switch only answers from the
+# side it is mounted on: you press a floor switch standing on the floor, a
+# ceiling switch hanging from the ceiling. FACING below encodes that with the
+# same rule as spikes, (FACING + 4) % 8 == gravity.
+SWITCH_U = SWITCH               # mounted on a floor, face pointing up
+SWITCH_L = 34
+SWITCH_D = 35
+SWITCH_R = 36
+SWITCH_U_ON = 37
+SWITCH_L_ON = 38
+SWITCH_D_ON = 39
+SWITCH_R_ON = 40
+
+# Off -> on, and the reverse. The switch is a toggle: pressing it again turns
+# it back, so both directions are needed.
+SWITCH_ON_OF = {SWITCH_U: SWITCH_U_ON, SWITCH_L: SWITCH_L_ON,
+                SWITCH_D: SWITCH_D_ON, SWITCH_R: SWITCH_R_ON}
+SWITCH_OFF_OF = {v: k for k, v in SWITCH_ON_OF.items()}
+SWITCHES = set(SWITCH_ON_OF) | set(SWITCH_OFF_OF)
+
 CHARS = {
     ".": EMPTY, "#": SOLID,
     "/": RAMP_DR, "\\": RAMP_DL, "7": RAMP_UR, "F": RAMP_UL,
     "^": SPIKE_U, "<": SPIKE_L, "v": SPIKE_D, ">": SPIKE_R,
     "-": ONEWAY_U, "[": ONEWAY_L, "_": ONEWAY_D, "]": ONEWAY_R,
     ":": GRAVLOCK, "%": CRUMBLE, "X": EXIT, "+": ENERGY, "P": PARACHUTE,
-    "k": KEY, "K": LOCK, "G": GATE, "S": SWITCH, "p": PLATE,
+    "k": KEY, "K": LOCK, "G": GATE, "p": PLATE,
+    # Switches: uppercase unpressed, lowercase pressed. 'S' keeps its old
+    # meaning (floor) so existing levels stay readable.
+    "S": SWITCH_U, "Q": SWITCH_L, "A": SWITCH_D, "E": SWITCH_R,
+    "s": SWITCH_U_ON, "q": SWITCH_L_ON, "a": SWITCH_D_ON, "e": SWITCH_R_ON,
     "T": TELEPORT, "B": CRATE, "@": START, "|": LOCK_OPEN, "g": GATE_OPEN,
     "d": PLATE_DOWN,
     # Τραβηγμένα αγκάθια. Κανονικά τα βάζει το παιχνίδι, όχι ο σχεδιαστής —
@@ -85,10 +114,12 @@ TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
               "SPIKE_U", "SPIKE_L", "SPIKE_D", "SPIKE_R",
               "ONEWAY_U", "ONEWAY_L", "ONEWAY_D", "ONEWAY_R",
               "GRAVLOCK", "CRUMBLE", "EXIT", "ENERGY", "PARACHUTE",
-              "KEY", "LOCK", "GATE", "SWITCH", "PLATE", "TELEPORT", "CRATE",
+              "KEY", "LOCK", "GATE", "SWITCH_U", "PLATE", "TELEPORT", "CRATE",
               "START", "LOCK_OPEN", "GATE_OPEN", "PLATE_DOWN",
-              "SPIKE_U_OFF", "SPIKE_L_OFF", "SPIKE_D_OFF", "SPIKE_R_OFF"]
-NTYPES = 34
+              "SPIKE_U_OFF", "SPIKE_L_OFF", "SPIKE_D_OFF", "SPIKE_R_OFF",
+              "SWITCH_L", "SWITCH_D", "SWITCH_R",
+              "SWITCH_U_ON", "SWITCH_L_ON", "SWITCH_D_ON", "SWITCH_R_ON"]
+NTYPES = 41
 
 # Ποιο αγκάθι αντιστοιχεί σε ποιο τραβηγμένο, και ανάποδα.
 SPIKE_OFF = {SPIKE_U: SPIKE_U_OFF, SPIKE_L: SPIKE_L_OFF,
@@ -105,6 +136,10 @@ F_NOFLIP  = 0x08        # μέσα του δεν αλλάζει η βαρύτη�
 F_FRAGILE = 0x10        # καταρρέει αφού το πατήσεις
 F_ONEWAY  = 0x20        # στερεό μόνο από τη μία πλευρά
 F_TRIGGER = 0x40        # ενεργοποιεί κάτι (έξοδος, διακόπτης, τηλεμεταφορά)
+# A switch, any facing, either state. Its own bit and not a range check: the
+# eight numbers are not contiguous (SWITCH_U kept its old 22), and a range
+# check would go wrong the first time someone inserts a type.
+F_SWITCH = 0x80
 
 PROPS = [0] * NTYPES
 for _t in (SOLID, RAMP_DR, RAMP_DL, RAMP_UR, RAMP_UL, LOCK, GATE):
@@ -124,14 +159,23 @@ for _t in (ONEWAY_U, ONEWAY_L, ONEWAY_D, ONEWAY_R):
     PROPS[_t] |= F_ONEWAY | F_SOLID
 PROPS[GRAVLOCK] |= F_NOFLIP
 PROPS[CRUMBLE] |= F_SOLID | F_FRAGILE
-for _t in (EXIT, SWITCH, TELEPORT, PLATE, PLATE_DOWN):
+for _t in (EXIT, TELEPORT, PLATE, PLATE_DOWN):
     PROPS[_t] |= F_TRIGGER
+# EVERY switch variant, both states. The code tests this flag instead of
+# comparing against eight type numbers — one forgotten comparison would leave
+# a single rotation dead, which is exactly the bug nobody finds.
+for _t in SWITCHES:
+    PROPS[_t] |= F_TRIGGER | F_SWITCH
 
 # Η φορά που "κοιτάει" κάθε κατευθυντικός τύπος (κωδικός βαρύτητας 0..7).
 # Αγκάθι: πονάει αν πέφτεις ΠΑΝΩ στις μύτες. Μονόδρομη: στερεή μόνο όταν
 # την πλησιάζεις από αυτή την πλευρά.
 FACING = {SPIKE_U: 4, SPIKE_L: 2, SPIKE_D: 0, SPIKE_R: 6,
-          ONEWAY_U: 4, ONEWAY_L: 2, ONEWAY_D: 0, ONEWAY_R: 6}
+          ONEWAY_U: 4, ONEWAY_L: 2, ONEWAY_D: 0, ONEWAY_R: 6,
+          # Same numbers as the spikes: a switch answers only from the side it
+          # is mounted on, and both states face the same way.
+          SWITCH_U: 4, SWITCH_L: 2, SWITCH_D: 0, SWITCH_R: 6,
+          SWITCH_U_ON: 4, SWITCH_L_ON: 2, SWITCH_D_ON: 0, SWITCH_R_ON: 6}
 
 # Για κάθε ράμπα: είναι στερεό το pixel (u,v) μέσα στο κελί 8x8;
 RAMP_TEST = {
@@ -902,10 +946,21 @@ class Hero:
         # συμβαίνει τίποτα — μπαίνεις μόνο πατώντας ΠΑΝΩ ή ΚΑΤΩ (βλ. use).
         # Με αυτόματο πέρασμα κάθε άφιξη ήταν λεπτή ισορροπία: ένα γλίστρημα
         # λίγων pixel σε ξανάβαζε μέσα και πηγαινοερχόσουν.
-        elif t == SWITCH and (col, row) != self.prev_body:
+        elif t in SWITCHES and (col, row) != self.prev_body \
+                and (FACING[t] + 4) % 8 == self.g:
             # ΤΟ ΠΑΤΑΣ, ΔΕΝ ΤΟ ΞΟΔΕΥΕΙΣ: ο διακόπτης γυρίζει κάθε πόρτα του
             # καναλιού του και μένει εκεί. Ένας διακόπτης μπορεί να οδηγεί
             # ΠΟΛΛΕΣ πόρτες — αυτό είναι το νόημα του καναλιού.
+            #
+            # AND ONLY FROM ITS OWN SIDE, same rule as the spikes: you press a
+            # floor switch standing on the floor. Walking past a ceiling switch
+            # with gravity down does nothing — which is what makes the facing
+            # a puzzle element and not decoration.
+            #
+            # The switch also shows its state: off <-> on, so the player can
+            # see what they have already flipped without remembering.
+            self.room.cells[row][col] = (SWITCH_ON_OF.get(t)
+                                         or SWITCH_OFF_OF[t])
             self.toggle_targets(self.room.attr(col, row))
         self.prev_body = (col, row)
 

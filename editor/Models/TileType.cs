@@ -419,13 +419,93 @@ public static class TileCatalog
             <rect x="6" y="0" width="1" height="8" fill="var(--edge)"/>
             """),
 
-        new TileType('S', "switch", MechGroup, "Switch",
-            "Toggle: permanently flips the state of the gates.",
+        new TileType('S', "switch_floor",
+            MechGroup, "Switch, floor",
+            "Toggle. Answers only standing on the floor below it — like spikes, the facing is a rule, not decoration.",
             Palette.Ink, Palette.EdgeColor,
             """
+            <g >
+            <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
+            <line x1="4" y1="6" x2="2" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
+            <circle cx="1.9" cy="1.9" r="1" fill="var(--fill)"/>
+            </g>
+            """),
+        new TileType('s', "switch_floor_on",
+            MechGroup, "Switch, floor (pressed)",
+            "Toggle. Answers only standing on the floor below it — like spikes, the facing is a rule, not decoration.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <g >
             <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
             <line x1="4" y1="6" x2="6" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
             <circle cx="6.1" cy="1.9" r="1" fill="var(--fill)"/>
+            </g>
+            """),
+        new TileType('Q', "switch_left",
+            MechGroup, "Switch, left wall",
+            "Toggle. Answers only standing on the wall to its left — like spikes, the facing is a rule, not decoration.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <g transform="rotate(90 4 4)">
+            <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
+            <line x1="4" y1="6" x2="2" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
+            <circle cx="1.9" cy="1.9" r="1" fill="var(--fill)"/>
+            </g>
+            """),
+        new TileType('q', "switch_left_on",
+            MechGroup, "Switch, left wall (pressed)",
+            "Toggle. Answers only standing on the wall to its left — like spikes, the facing is a rule, not decoration.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <g transform="rotate(90 4 4)">
+            <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
+            <line x1="4" y1="6" x2="6" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
+            <circle cx="6.1" cy="1.9" r="1" fill="var(--fill)"/>
+            </g>
+            """),
+        new TileType('A', "switch_ceiling",
+            MechGroup, "Switch, ceiling",
+            "Toggle. Answers only hanging from the ceiling above it — like spikes, the facing is a rule, not decoration.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <g transform="rotate(180 4 4)">
+            <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
+            <line x1="4" y1="6" x2="2" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
+            <circle cx="1.9" cy="1.9" r="1" fill="var(--fill)"/>
+            </g>
+            """),
+        new TileType('a', "switch_ceiling_on",
+            MechGroup, "Switch, ceiling (pressed)",
+            "Toggle. Answers only hanging from the ceiling above it — like spikes, the facing is a rule, not decoration.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <g transform="rotate(180 4 4)">
+            <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
+            <line x1="4" y1="6" x2="6" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
+            <circle cx="6.1" cy="1.9" r="1" fill="var(--fill)"/>
+            </g>
+            """),
+        new TileType('E', "switch_right",
+            MechGroup, "Switch, right wall",
+            "Toggle. Answers only standing on the wall to its right — like spikes, the facing is a rule, not decoration.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <g transform="rotate(270 4 4)">
+            <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
+            <line x1="4" y1="6" x2="2" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
+            <circle cx="1.9" cy="1.9" r="1" fill="var(--fill)"/>
+            </g>
+            """),
+        new TileType('e', "switch_right_on",
+            MechGroup, "Switch, right wall (pressed)",
+            "Toggle. Answers only standing on the wall to its right — like spikes, the facing is a rule, not decoration.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <g transform="rotate(270 4 4)">
+            <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
+            <line x1="4" y1="6" x2="6" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
+            <circle cx="6.1" cy="1.9" r="1" fill="var(--fill)"/>
+            </g>
             """),
 
         new TileType('p', "plate", MechGroup, "Pressure plate",
