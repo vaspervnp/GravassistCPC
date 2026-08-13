@@ -40,15 +40,22 @@
   function heroSprite(g, frame) {
     return g % 2 ? rot90(HERO45[frame], g >> 1) : rot90(HERO[frame], g >> 1);
   }
-  // ΤΟ ΒΕΛΟΣ. Πέντε pixel μήκος, όσο περίπου και το βήμα του (έξι): πιο κοντό
-  // θα «πηδούσε» ορατά ανάμεσα σε δύο καρέ, πιο μακρύ θα έμοιαζε με δοκάρι.
-  // Pen 3, το πορτοκαλί των κινδύνων (docs/concept-art.md §5).
-  const ARROW_H = [[0, 3, 3, 3, 3], [3, 3, 3, 3, 3], [0, 3, 3, 3, 3]];
-  const ARROW_V = [[0, 3, 0], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]];
+  // ΤΟ ΒΕΛΟΣ, ίδιο σχήμα με το src/turret.asm: έντεκα pixel, ουρά σε pen 1
+  // και μύτη σε pen 3. Ήταν επτά pixel όλα πορτοκαλί — το χρώμα που το concept
+  // art δίνει στους κινδύνους — αλλά πορτοκαλί είναι και οι ακμές κάθε
+  // πλακιδίου, οπότε η σφαίρα χανόταν πάνω τους. Λευκή ουρά για να φαίνεται,
+  // πορτοκαλί μύτη γιατί αυτή είναι το επικίνδυνο άκρο.
+  const ARROW_DOWN = [
+    [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0],
+    [3, 3, 3], [3, 3, 3], [0, 3, 0],
+  ];
+  const flipRows = m => m.slice().reverse();
+  const transpose = m => m[0].map((_, x) => m.map(r => r[x]));
 
   function arrowSprite(dx, dy) {
-    if (!dx) return dy > 0 ? ARROW_V.slice().reverse() : ARROW_V;
-    return dx > 0 ? ARROW_H.map(r => r.slice().reverse()) : ARROW_H;
+    if (!dx) return dy > 0 ? ARROW_DOWN : flipRows(ARROW_DOWN);
+    const right = transpose(ARROW_DOWN);
+    return dx > 0 ? right : right.map(r => r.slice().reverse());
   }
 
   function paraSprite(g, frame) {

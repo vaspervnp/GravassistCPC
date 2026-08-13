@@ -498,15 +498,28 @@ as_no:          pop  de
 ;   draw_hero, arrow_draw. Έτσι ένα βέλος πάνω από τον ήρωα φαίνεται, και ένα
 ;   βέλος που πέθανε μέσα στην ενημέρωση έχει ήδη σβηστεί.
 ;
-;   ΤΟ ΣΧΗΜΑ: κοντάρι πέντε pixel και δύο αγκίδες στη μύτη, σε συντεταγμένες
-;   «κατά μήκος / εγκάρσια». Έτσι μια λίστα εξυπηρετεί και τις τέσσερις φορές —
-;   η φορά είναι το (dx,dy) και η εγκάρσια το (dy,dx).
+;   ΤΟ ΣΧΗΜΑ: βελάκι έντεκα pixel σε συντεταγμένες «κατά μήκος / εγκάρσια»,
+;   ώστε μια λίστα να εξυπηρετεί και τις τέσσερις φορές — η φορά είναι το
+;   (dx,dy) και η εγκάρσια το (dy,dx).
+;
+;   ΔΥΟ ΧΡΩΜΑΤΑ, ΚΑΙ ΟΧΙ ΓΙΑ ΟΜΟΡΦΙΑ. Ήταν επτά pixel όλα σε pen 3, το
+;   πορτοκαλί που το concept art ορίζει για τους κινδύνους — αλλά πορτοκαλί
+;   είναι ΚΑΙ οι ακμές κάθε πλακιδίου, οπότε η σφαίρα χανόταν πάνω τους. Τώρα η
+;   ουρά είναι pen 1 (λευκό, ό,τι και ο ήρωας: το πιο ευδιάκριτο της παλέτας)
+;   και η μύτη μένει πορτοκαλί, γιατί αυτή είναι το επικίνδυνο άκρο.
+;   Τεκμηριωμένο στο docs/concept-art.md.
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-ARROW_PIX       equ  7
+ARROW_PIX       equ  11
+PEN_TAIL        equ  1          ; λευκό: φαίνεται πάνω σε ό,τι κι αν περνά
+PEN_HEAD        equ  3          ; πορτοκαλί: το χρώμα του κινδύνου
 
-arrow_shape:    db   -2,0, -1,0, 0,0, 1,0, 2,0    ; κοντάρι
-                db    1,-1,  1,1                  ; αγκίδες στη μύτη
+; (κατά μήκος, εγκάρσια, pen)
+arrow_shape:    db   -3,0,PEN_TAIL,  -2,0,PEN_TAIL
+                db   -1,0,PEN_TAIL,   0,0,PEN_TAIL
+                db    1,0,PEN_HEAD,   2,0,PEN_HEAD,  3,0,PEN_HEAD
+                db    1,-1,PEN_HEAD,  1,1,PEN_HEAD
+                db    2,-1,PEN_HEAD,  2,1,PEN_HEAD
 
 arrow_erase:    ld   iy,arrow_tab
                 ld   c,TURRET_MAX
@@ -523,7 +536,7 @@ ae_slot:        ld   a,(iy+AR_ON)
 ae_one:         push bc
                 ld   l,(iy+AR_X)        ; στήλες κελιών: (x-2)>>3 ως (x+2)>>3
                 ld   h,(iy+AR_X+1)
-                ld   de,-2
+                ld   de,-3
                 add  hl,de
                 bit  7,h                ; αριστερά από την οθόνη
                 jr   z,ae_c0ok
@@ -536,7 +549,7 @@ ae_c0ok:        srl  h
                 ld   (ae_c0),a
                 ld   l,(iy+AR_X)
                 ld   h,(iy+AR_X+1)
-                ld   de,2
+                ld   de,3
                 add  hl,de
                 srl  h
                 rr   l
@@ -549,7 +562,7 @@ ae_c0ok:        srl  h
 ae_c1ok:        ld   (ae_c1),a
 
                 ld   a,(iy+AR_Y)        ; γραμμές κελιών, με το HUD από πάνω
-                sub  LVL_Y0+2
+                sub  LVL_Y0+3
                 jr   nc,ae_r0ok
                 xor  a
 ae_r0ok:        srl  a
@@ -557,7 +570,7 @@ ae_r0ok:        srl  a
                 srl  a
                 ld   (ae_r0),a
                 ld   a,(iy+AR_Y)
-                add  a,2
+                add  a,3
                 sub  LVL_Y0
                 srl  a
                 srl  a
@@ -609,13 +622,18 @@ ad_one:         push bc
                 ld   b,ARROW_PIX
 ad_lp:          push bc
                 push hl
-                ld   a,(hl)             ; A = κατά μήκος
+                inc  hl                 ; τριάδα: κατά μήκος, εγκάρσια, pen
                 inc  hl
-                ld   b,(hl)             ; B = εγκάρσια
+                ld   a,(hl)
+                ld   (ad_pen),a
+                dec  hl
+                ld   b,(hl)
+                dec  hl
+                ld   a,(hl)
                 call ad_pix
                 pop  hl
-                inc  hl
-                inc  hl
+                ld   de,3
+                add  hl,de
                 pop  bc
                 djnz ad_lp
                 pop  bc
@@ -686,8 +704,12 @@ ad_pix:         ld   (ad_a),a           ; κατά μήκος
                 ld   hl,spr_andtab
                 add  hl,de
                 ld   c,(hl)
-                ld   a,(ad_slot_i)      ; pen 3, το πορτοκαλί των κινδύνων
-                add  a,12               ; pixtab[3*4 + slot]
+                ld   a,(ad_pen)         ; pixtab[pen*4 + slot]
+                add  a,a
+                add  a,a
+                ld   e,a
+                ld   a,(ad_slot_i)
+                add  a,e
                 ld   e,a
                 ld   d,0
                 ld   hl,spr_pixtab
@@ -723,6 +745,7 @@ am_zero:        ld   hl,0
 
 ad_a            db   0
 ad_c            db   0
+ad_pen          db   0
 ae_c0           db   0
 ae_c1           db   0
 ae_r0           db   0

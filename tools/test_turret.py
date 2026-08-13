@@ -346,10 +346,10 @@ after = bytes(t.m.memory[a] for a in range(0xC000, 0x10000))
 changed = [i for i in range(len(before)) if before[i] != after[i]]
 check("το arrow_draw γράφει στην οθόνη",
       len(changed) > 0, f"{len(changed)} bytes")
-check("…και μόνο γύρω από το βέλος (7 pixel -> το πολύ 7 bytes)",
-      0 < len(changed) <= 7, f"{len(changed)}")
+check("…και μόνο γύρω από το βέλος (11 pixel -> το πολύ 11 bytes)",
+      0 < len(changed) <= 11, f"{len(changed)}")
 # Pen 3 στο MODE 1 = bits και στα δύο επίπεδα· ο πίνακας είναι ο spr_pixtab.
-check("…με pen 3, το πορτοκαλί των κινδύνων",
+check("…με αναμμένα bits (pen 1 ουρά, pen 3 μύτη)",
       all(after[i] & 0x88 or after[i] & 0x44 or after[i] & 0x22
           or after[i] & 0x11 for i in changed))
 
