@@ -22,8 +22,11 @@ CAS_OUT_ABANDON equ  #BC92
 ; ΔΕΝ περιμένει — γι' αυτό ο βρόχος του hs_ask ξαναρωτά.
 KM_READ_CHAR    equ  #BB09
 
-HS_VERSION      equ  1
-HS_ENTRY        equ  2+HISCORE_NAME     ; dw σκορ + τρία γράμματα
+; 2 = three-byte scores. The table used two, which caps at 32767 — the same
+; ceiling the in-game score just lost. A file from version 1 is rejected
+; rather than read with the fields half a byte out.
+HS_VERSION      equ  2
+HS_ENTRY        equ  3+HISCORE_NAME     ; 24-bit score + three letters
 HS_HDR_SZ       equ  4                  ; υπογραφή + έκδοση
 HS_BYTES        equ  HS_HDR_SZ+HISCORE_MAX*HS_ENTRY
 AMSDOS_BINARY   equ  2
@@ -40,10 +43,12 @@ hs_reset:       ld   ix,hs_table
                 ld   b,HISCORE_MAX
 hr_lp:          ld   (ix+0),0
                 ld   (ix+1),0
+                ld   (ix+2),0
                 push bc
                 push ix
                 pop  de
                 inc  de                 ; DE -> τα γράμματα της εγγραφής
+                inc  de
                 inc  de
                 ld   hl,hs_nul
                 ld   bc,HISCORE_NAME
@@ -64,14 +69,33 @@ hr_lp:          ld   (ix+0),0
 ; IN:  HL, DE      OUT: CF=1 αν HL > DE
 ; ΑΛΛΟΙΩΝΕΙ: AF, HL
 ;---------------------------------------------------------------------
-hs_gt:          or   a
-                sbc  hl,de
-                ret  z                  ; ίσα: το sbc άφησε CF=0
-                ld   a,h                ; κρατά S και P/V του sbc
-                jp   po,hg_nov          ; P/V=0: καμία υπερχείλιση
-                xor  #80                ; με υπερχείλιση το πρόσημο λέει ψέματα
-hg_nov:         rla                     ; bit 7 -> CF· 1 = αρνητικό = HL < DE
-                ccf
+; IN:  HL -> candidate (3 bytes), IX -> table entry
+; OUT: CF=1 if the candidate is greater
+; ΑΛΛΟΙΩΝΕΙ: AF, HL
+;
+;   UNSIGNED, and that is safe because hs_finish refuses a negative score
+;   before we get here. Signed 24-bit comparison needs the overflow flag read
+;   at exactly the right instruction and is easy to get subtly wrong; a
+;   guard plus three CPs cannot be.
+hs_gt:          inc  hl                 ; top byte first: it decides most cases
+                inc  hl
+                ld   a,(hl)
+                cp   (ix+2)
+                jr   c,hg_no
+                jr   nz,hg_yes
+                dec  hl
+                ld   a,(hl)
+                cp   (ix+1)
+                jr   c,hg_no
+                jr   nz,hg_yes
+                dec  hl
+                ld   a,(hl)
+                cp   (ix+0)
+                jr   c,hg_no
+                jr   nz,hg_yes
+hg_no:          or   a                  ; equal counts as NOT greater, so the
+                ret                     ; player who got there first keeps it
+hg_yes:         scf
                 ret
 
 ;---------------------------------------------------------------------
@@ -80,12 +104,10 @@ hg_nov:         rla                     ; bit 7 -> CF· 1 = αρνητικό = H
 ; OUT: CF=1 και A = δείκτης θέσης (0..HISCORE_MAX-1)· CF=0 δεν μπαίνει
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-hs_place:       ld   (hs_score),hl
-                ld   ix,hs_table
+; IN:  hs_score = the 24-bit candidate (already stored by the caller)
+hs_place:       ld   ix,hs_table
                 ld   b,0
-hp_lp:          ld   hl,(hs_score)
-                ld   e,(ix+0)
-                ld   d,(ix+1)
+hp_lp:          ld   hl,hs_score
                 call hs_gt
                 jr   nc,hp_next
                 ld   a,b
@@ -144,8 +166,11 @@ hi_got:         push hl
                 ld   de,(hs_score)
                 ld   (ix+0),e
                 ld   (ix+1),d
+                ld   a,(hs_score+2)
+                ld   (ix+2),a
                 push ix
                 pop  de
+                inc  de
                 inc  de
                 inc  de
                 ld   hl,hs_name
@@ -265,20 +290,21 @@ hm_lp:          ld   a,(hm_i)
                 pop  hl
                 inc  hl
                 inc  hl
+                inc  hl
                 ld   de,hs_line+3
                 ld   bc,HISCORE_NAME
                 ldir
                 ld   a,' '
                 ld   (hs_line+3+HISCORE_NAME),a
 
-                ld   l,(ix+0)           ; και το σκορ, πέντε χαρακτήρες
-                ld   h,(ix+1)
+                push ix                 ; και το σκορ
+                pop  hl
                 push ix
-                call score_digits_hl
+                call score_digits_at
                 pop  ix
                 ld   hl,score_txt
                 ld   de,hs_line+4+HISCORE_NAME
-                ld   bc,5
+                ld   bc,1+SCORE_NDIG
                 ldir
 
                 ld   a,(hm_i)           ; γραμμή = κεφαλίδα + 1 + θέση
@@ -301,7 +327,7 @@ hm_lp:          ld   a,(hm_i)
                 ret
 
 hm_i            db   0
-HS_LINE_W       equ  4+HISCORE_NAME+5
+HS_LINE_W       equ  4+HISCORE_NAME+1+SCORE_NDIG
 hs_line         ds   HS_LINE_W
 hs_title:       db   "HIGH SCORES"
 hs_title_e:
@@ -389,7 +415,13 @@ hs_prompt_e:
 ; hs_finish — τέλος παρτίδας: μπαίνει το σκορ στον πίνακα;
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-hs_finish:      ld   hl,(score)
+hs_finish:      ld   a,(score+2)        ; a negative score never places: the
+                and  #80                ; game is over BECAUSE it went below
+                ret  nz                 ; zero, and hs_gt is unsigned
+                ld   hl,(score)
+                ld   (hs_score),hl
+                ld   a,(score+2)
+                ld   (hs_score+2),a
                 call hs_place
                 ret  nc                 ; δεν έφτασε: τίποτα να ρωτήσουμε
                 push af
@@ -402,7 +434,7 @@ hs_nul:         db   "NUL"              ; όνομα όταν ο παίκτης 
 hs_fname:       db   "SCORES.BIN"
 hs_fname_end:
 
-hs_score        dw   0                  ; το σκορ που κατατίθεται
+hs_score        ds   3                  ; the 24-bit score being submitted
 hs_name         ds   HISCORE_NAME       ; τα γράμματά του
 
 ; ΚΕΦΑΛΗ ΚΑΙ ΠΙΝΑΚΑΣ ΣΥΝΕΧΟΜΕΝΑ, με αυτή τη σειρά: έτσι το αρχείο γράφεται

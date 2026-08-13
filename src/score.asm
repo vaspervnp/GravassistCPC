@@ -29,9 +29,11 @@
 score_reset:    ld   hl,SCORE_START
                 ld   (score),hl
                 xor  a
+                ld   (score+2),a
                 ld   (score_dead),a
-                ld   (score_shown+0),a  ; #0000 δεν είναι έγκυρο «φαινόμενο»
-                ld   (score_shown+1),a  ; σκορ, οπότε το HUD ξαναγράφεται
+                ld   (score_shown+0),a  ; 0 is not a score the game can show,
+                ld   (score_shown+1),a  ; so the HUD redraws on the first frame
+                ld   (score_shown+2),a
                 ld   hl,visit_map       ; καμία αίθουσα δεν έχει επισκεφθεί
                 ld   de,visit_map+1
                 ld   bc,VISIT_BYTES-1
@@ -51,16 +53,19 @@ score_reset:    ld   hl,SCORE_START
 ;---------------------------------------------------------------------
 sc_add:         ld   e,a
                 rlca                    ; bit 7 -> CF
-                sbc  a,a                ; #FF αρνητικό, #00 θετικό
+                sbc  a,a                ; #FF negative, #00 positive
                 ld   d,a
+                ld   b,a                ; and the same for the third byte
                 ld   hl,(score)
                 add  hl,de
                 ld   (score),hl
+                ld   a,(score+2)        ; ld a,(nn) leaves the carry alone
+                adc  a,b
+                ld   (score+2),a
 
-                ; ΑΡΝΗΤΙΚΟ = ΤΕΛΟΣ. Δεν μηδενίζουμε την ενέργεια για να
-                ; πυροδοτήσουμε τον υπάρχοντα θάνατο: το HUD θα έδειχνε άδεια
-                ; μπάρα και ο παίκτης θα νόμιζε ότι τον σκότωσαν τα αγκάθια.
-                ld   a,h
+                ; NEGATIVE = OVER. Not by zeroing the energy: the HUD would
+                ; show an empty bar and the player would think the spikes did
+                ; it. Bit 7 of the top byte is the sign of the 24-bit value.
                 and  #80
                 ret  z
                 ld   a,1
@@ -192,51 +197,123 @@ vb_got:         ld   b,a
                 ld   a,b
                 ret
 
+
 ;---------------------------------------------------------------------
-; score_digits — το σκορ σε πέντε χαρακτήρες στο score_txt
+; score_digits — the score as sign + six digits in score_txt
 ;
-;   Πρόσημο και τέσσερα ψηφία, ΜΕ μηδενικά μπροστά. Σταθερό πλάτος επίτηδες:
-;   ένα σκορ που κονταίνει από 1000 σε 999 θα άφηνε σκουπίδι στην οθόνη, και
-;   το HUD δεν έχει από πού να σβήσει.
+;   Fixed width on purpose: a score that shrinks from 1000 to 999 would leave
+;   a stray character behind, and the HUD has nothing to erase it with.
+;
+;   TWENTY-FOUR BIT SUBTRACTION, because 100000 does not fit in HL. Each digit
+;   is "subtract the divisor until it goes negative, then add one back" — the
+;   same shape as the old 16-bit version, one byte wider.
 ;
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-score_digits:   ld   hl,(score)
-                ; πέφτει μέσα: ο πίνακας βαθμολογιών μορφοποιεί ΑΛΛΕΣ τιμές
-score_digits_hl:
-                ld   a,' '
-                bit  7,h
-                jr   z,scd_pos
-                ld   a,h                ; αρνητικό: τύπωσε το μέτρο του
-                cpl
-                ld   h,a
-                ld   a,l
-                cpl
-                ld   l,a
+SCORE_NDIG      equ  6          ; ΟΧΙ 'SCORE_DIGITS': rasm is case-insensitive
+
+scd_tab:        db   #A0,#86,#01        ; 100000
+                db   #10,#27,#00        ;  10000
+                db   #E8,#03,#00        ;   1000
+                db   #64,#00,#00        ;    100
+                db   #0A,#00,#00        ;     10
+
+score_digits:   ld   hl,score
+                ; falls through: the high score table formats other values
+score_digits_at:
+                ld   e,(hl)             ; HL -> a 24-bit value, little endian
                 inc  hl
+                ld   d,(hl)
+                inc  hl
+                ld   a,(hl)
+                ld   (scd_acc),de       ; working copy, made positive below
+                ld   (scd_acc+2),a
+                and  #80
+                jr   z,scd_pos
+                call scd_negate
                 ld   a,'-'
-scd_pos:         ld   (score_txt),a
-                ld   ix,score_txt+1
-                ld   de,-1000
-                call scd_one
-                ld   de,-100
-                call scd_one
-                ld   de,-10
-                call scd_one
-                ld   a,l
+                jr   scd_sign
+scd_pos:        ld   a,' '
+scd_sign:       ld   (score_txt),a
+
+                ld   ix,scd_tab
+                ld   de,score_txt+1
+                ld   a,SCORE_NDIG-1     ; the last digit is the remainder
+                ld   (scd_n),a
+                ; THE DIGIT LIVES IN C, NOT A. Wrapping the call in push af /
+                ; pop af to save the count restored the carry too — the very
+                ; flag scd_sub had just set — so the loop never ended.
+scd_dig:        ld   c,'0'-1
+scd_lp:         inc  c
+                call scd_sub            ; acc -= (ix), CF=1 if it went under
+                jr   nc,scd_lp
+                ; C is ALREADY the digit: it is bumped BEFORE each subtraction,
+                ; so after N tries it holds '0'+N-1, and N-1 is how many
+                ; succeeded. Only the value needs the failed one put back.
+                call scd_add
+                ld   a,c
+                ld   (de),a
+                inc  de
+                push de
+                ld   de,3               ; next divisor
+                add  ix,de
+                pop  de
+                ld   hl,scd_n
+                dec  (hl)
+                jr   nz,scd_dig
+
+                ld   a,(scd_acc)        ; 0..9 left over
                 add  a,'0'
-                ld   (ix+0),a
+                ld   (de),a
                 ret
 
-; scd_one — πόσες φορές χωράει το DE (αρνητικό) στο HL· γράφει το ψηφίο
-scd_one:         ld   a,'0'-1
-scd_lp:          inc  a
-                add  hl,de
-                jr   c,scd_lp            ; CF=1 όσο το άθροισμα δεν «γύρισε»
-                sbc  hl,de              ; μία παραπάνω: πάρ' τη πίσω. Το CF
-                ld   (ix+0),a           ; είναι ήδη 0 — το jr c μόλις απέτυχε
-                inc  ix
+; scd_sub — acc -= (IX); CF=1 if the result went negative
+scd_sub:        ld   hl,scd_acc
+                ld   a,(hl)
+                sub  (ix+0)
+                ld   (hl),a
+                inc  hl
+                ld   a,(hl)
+                sbc  a,(ix+1)
+                ld   (hl),a
+                inc  hl
+                ld   a,(hl)
+                sbc  a,(ix+2)
+                ld   (hl),a
                 ret
+
+; scd_add — the inverse, to undo the one subtraction too many
+scd_add:        ld   hl,scd_acc
+                ld   a,(hl)
+                add  a,(ix+0)
+                ld   (hl),a
+                inc  hl
+                ld   a,(hl)
+                adc  a,(ix+1)
+                ld   (hl),a
+                inc  hl
+                ld   a,(hl)
+                adc  a,(ix+2)
+                ld   (hl),a
+                ret
+
+; scd_negate — two's complement of the 24-bit working copy
+scd_negate:     ld   hl,scd_acc
+                ld   b,3
+                xor  a
+                ld   c,a                ; C = 0, borrow chain starts clear
+                scf
+scn_lp:         ld   a,(hl)
+                cpl
+                adc  a,c
+                ld   (hl),a
+                inc  hl
+                ld   c,0
+                djnz scn_lp
+                ret
+
+scd_n           db   0
+scd_acc         ds   3
 
 ;---------------------------------------------------------------------
 ; score_draw — το σκορ στη δεξιά άκρη του HUD
@@ -250,13 +327,19 @@ scd_lp:          inc  a
 ;
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-score_draw:     ld   hl,(score)
+score_draw:     ld   hl,(score)         ; changed since the last redraw?
                 ld   de,(score_shown)
                 or   a
                 sbc  hl,de
+                jr   nz,scdr_go
+                ld   a,(score+2)
+                ld   hl,score_shown+2
+                cp   (hl)
                 ret  z
-                ld   hl,(score)
+scdr_go:        ld   hl,(score)
                 ld   (score_shown),hl
+                ld   a,(score+2)
+                ld   (score_shown+2),a
 
                 call score_digits
                 ld   a,INK_HERO_PEN
@@ -264,7 +347,7 @@ score_draw:     ld   hl,(score)
                 ld   h,SCORE_COL
                 ld   l,1                ; η γραμμή του HUD
                 ld   de,score_txt
-                ld   b,5
+                ld   b,1+SCORE_NDIG
                 jp   menu_puts
 
 ; Είδη θετικών που ΕΠΑΝΑΛΑΜΒΑΝΟΝΤΑΙ: ο διακόπτης γυρίζει όσες φορές θες, η
@@ -342,12 +425,15 @@ st_lock:        cp   T_LOCK_OPEN
 ; σε MODE 1). Το σκορ ζωγραφιζόταν από πάνω τους. Οι στήλες 30..34 είναι το
 ; τελευταίο ελεύθερο πεντάρι: το inventory τελειώνει στη 21 και τα βέλη
 ; αρχίζουν στην 35.
-SCORE_COL       equ  30
+SCORE_COL       equ  30         ; seven characters: sign + six digits
 
-score           dw   SCORE_START
-score_shown     dw   0          ; τι δείχνει η οθόνη τώρα
+; THREE BYTES, NOT TWO. Six digits do not fit in 16 bits (32767 is five), and
+; more to the point a score that passed 32767 wrapped NEGATIVE — which this
+; file reads as "you lost". A long game ended itself for doing well.
+score           db   SCORE_START&255, SCORE_START>>8, 0
+score_shown     db   0,0,0      ; τι δείχνει η οθόνη τώρα
 score_dead      db   0          ; 1 = το σκορ βγήκε αρνητικό
 room_scored     db   0          ; 1 = πρώτη επίσκεψη· η πύλη των θετικών
 room_awarded    db   0          ; ποια είδη πληρώθηκαν ΣΕ ΑΥΤΗ την αίθουσα
-score_txt       ds   5
+score_txt       ds   1+SCORE_NDIG
 visit_map       ds   VISIT_BYTES

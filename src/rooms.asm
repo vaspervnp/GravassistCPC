@@ -528,6 +528,26 @@ grav_gfx_hero:      ; 8 φορές x 8 γραμμές x 2 bytes
                 db #00,#0F
                 db #00,#0F
 
+hud_bolt:        ; 8 γραμμές x 2 bytes
+                db #11,#CC
+                db #33,#88
+                db #77,#00
+                db #FF,#CC
+                db #11,#CC
+                db #33,#88
+                db #77,#00
+                db #CC,#00
+
+hud_star:        ; 8 γραμμές x 2 bytes
+                db #01,#08
+                db #01,#08
+                db #0F,#0F
+                db #07,#0E
+                db #03,#0C
+                db #07,#0E
+                db #06,#06
+                db #0C,#03
+
 ; Γράμματα του τίτλου: 8x8 μάσκα, ένα bit ανά pixel. Ζωγραφίζονται
 ; σε διπλό μέγεθος με τον πίνακα font_x2 από κάτω.
 TITLE_LEN       equ 10

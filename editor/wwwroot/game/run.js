@@ -385,8 +385,9 @@
   // score_digits του src/score.asm. Σταθερό πλάτος ώστε να μην αφήνει
   // σκουπίδι όταν το σκορ κονταίνει.
   function scoreText() {
-    const n = Math.abs(score) % 10000;
-    return (score < 0 ? "-" : " ") + String(n).padStart(4, "0");
+    const n = Math.abs(score) % 10 ** D.HUD.score_digits;
+    return (score < 0 ? "-" : " ") +
+           String(n).padStart(D.HUD.score_digits, "0");
   }
 
   function scoreEvents(h) {
@@ -510,9 +511,8 @@
     }
     screen.hud(hero);
     screen.flush();
-    // ΣΤΗΛΗ 30, όπως το SCORE_COL του src/score.asm: στη δεξιά άκρη κάθονται
-    // τα δύο βελάκια βαρύτητας (στήλες 35 και 37) και το σκορ θα έπεφτε πάνω.
-    screen.text(scoreText(), 1, 30);
+    // Θέση από το μοντέλο, ίδια με το SCORE_COL του src/score.asm.
+    screen.text(scoreText(), 1, D.HUD.score_col);
 
     // ΜΗΝΥΜΑ ΓΙΑ Ο,ΤΙ ΠΑΤΑΣ, στο ΑΛΛΟ μισό της οθόνης ώστε να μη σκεπάζει
     // αυτό που περιγράφει. Σκέτη σχεδίαση μετά το frame: δεν αγγίζει τη

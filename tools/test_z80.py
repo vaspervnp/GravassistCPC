@@ -241,10 +241,13 @@ def main():
         t.call("DRAW_HUD")
         want_w = [tuple(GA.pack_mode1(GA.arrow_pixels(gw, 3)[y])) for y in range(8)]
         want_h = [tuple(GA.pack_mode1(GA.arrow_pixels(gh, 2)[y])) for y in range(8)]
+        # ΑΠΟ ΤΑ ΣΥΜΒΟΛΑ, όχι καρφωτά: οι στήλες μετακινήθηκαν όταν τα δύο
+        # βελάκια κόλλησαν μεταξύ τους στη δεξιά άκρη, και ένα τεστ που ξέρει
+        # τη θέση από μόνο του λέει «χάλασε» σε κάθε αλλαγή διάταξης.
         check(f"το draw_hud ζωγραφίζει το βέλος κόσμου (φορά {gw})",
-              hud_bytes(t.sym("GRAV_WX") if False else 68) == want_w)
+              hud_bytes(t.sym("GRAV_WX")) == want_w)
         check(f"το draw_hud ζωγραφίζει το βέλος ήρωα (φορά {gh})",
-              hud_bytes(72) == want_h)
+              hud_bytes(t.sym("GRAV_HX")) == want_h)
 
     # …και ΧΩΡΙΣ hud_dirty, όταν αλλάξει μόνο η βαρύτητα. Ο ήρωας γυρίζει σε
     # κάθε γωνία που περπατάει χωρίς να πειράζει ενέργεια ή inventory: με
@@ -253,8 +256,21 @@ def main():
     t.poke(t.sym("HERO_G"), b"\x02")
     t.call("DRAW_HUD")
     check("το βέλος ήρωα ενημερώνεται χωρίς hud_dirty",
-          hud_bytes(72) == [tuple(GA.pack_mode1(GA.arrow_pixels(2, 2)[y]))
-                            for y in range(8)])
+          hud_bytes(t.sym("GRAV_HX")) == [
+              tuple(GA.pack_mode1(GA.arrow_pixels(2, 2)[y])) for y in range(8)])
+
+    # ΤΑ ΔΥΟ ΒΕΛΑΚΙΑ ΕΙΝΑΙ ΚΟΛΛΗΤΑ: μία ανάγνωση, όχι δύο ξεχωριστά εικονίδια.
+    check("τα δύο βελάκια είναι διπλανά",
+          t.sym("GRAV_HX") - t.sym("GRAV_WX") == 2,
+          f"απόσταση {t.sym('GRAV_HX') - t.sym('GRAV_WX')} bytes")
+
+    # …και τα δύο σταθερά σύμβολα μπροστά από ενέργεια και σκορ.
+    for name, col, art, pen in (("κεραυνός", t.sym("HUD_BOLT_X"), GA.HUD_BOLT, 3),
+                                ("αστέρι", t.sym("HUD_STAR_X"), GA.HUD_STAR, 2)):
+        want = [tuple(GA.pack_mode1([pen if ch == "X" else 0 for ch in row]))
+                for row in art]
+        check(f"το draw_hud ζωγραφίζει το σύμβολο: {name}",
+              hud_bytes(col) == want)
 
     # 7. Η πόρτα ανοίγει ΜΟΝΟ με ενεργοποίηση. Το h_touch δεν την κοιτάει
     #    πια· το h_use την κρίνει από το κελί του ΣΩΜΑΤΟΣ.
@@ -1321,19 +1337,19 @@ def check_hiscore():
     from z80run import Z80Test
     t = Z80Test()
     tab = t.sym("HS_TABLE")
-    entry = 2 + P.HISCORE_NAME
+    entry = 3 + P.HISCORE_NAME
 
     def put(scores):
         for i, (sc, nm) in enumerate(scores):
-            t.poke(tab + i * entry, sc.to_bytes(2, "little", signed=True))
-            t.poke(tab + i * entry + 2, nm.encode())
+            t.poke(tab + i * entry, sc.to_bytes(3, "little", signed=True))
+            t.poke(tab + i * entry + 3, nm.encode())
 
     def table():
         out = []
         for i in range(P.HISCORE_MAX):
             b = t.peek(tab + i * entry, entry)
-            out.append((int.from_bytes(b[:2], "little", signed=True),
-                        b[2:].decode(errors="replace")))
+            out.append((int.from_bytes(b[:3], "little", signed=True),
+                        b[3:].decode(errors="replace")))
         return out
 
     # --- hs_reset ----------------------------------------------------
@@ -1347,7 +1363,8 @@ def check_hiscore():
     for score, want in ((600, 0), (450, 1), (350, 2), (150, 4), (50, None),
                         (100, None), (500, 1)):
         put(base)
-        t.call("HS_PLACE", hl=score & 0xFFFF)
+        t.poke(t.sym("HS_SCORE"), score.to_bytes(3, "little", signed=True))
+        t.call("HS_PLACE")
         placed = bool(t.m.f & 1)
         if want is None:
             check(f"hs_place {score}: δεν μπαίνει", not placed,
@@ -1362,7 +1379,7 @@ def check_hiscore():
 
     # --- hs_insert ---------------------------------------------------
     put(base)
-    t.poke16(t.sym("HS_SCORE"), 450)
+    t.poke(t.sym("HS_SCORE"), (450).to_bytes(3, "little"))
     t.poke(t.sym("HS_NAME"), b"NEW")
     t.call("HS_INSERT", a=1)
     check("hs_insert: μπαίνει στη θέση και σπρώχνει τα από κάτω",
@@ -1370,25 +1387,27 @@ def check_hiscore():
                       (300, "CCC"), (200, "DDD")], str(table()))
 
     put(base)
-    t.poke16(t.sym("HS_SCORE"), 1)
+    t.poke(t.sym("HS_SCORE"), (1).to_bytes(3, "little"))
     t.poke(t.sym("HS_NAME"), b"LST")
     t.call("HS_INSERT", a=P.HISCORE_MAX - 1)
     check("hs_insert: τελευταία θέση δεν σπρώχνει τίποτα",
           table() == base[:-1] + [(1, "LST")], str(table()[-2:]))
 
     put(base)
-    t.poke16(t.sym("HS_SCORE"), 999)
+    t.poke(t.sym("HS_SCORE"), (999).to_bytes(3, "little"))
     t.poke(t.sym("HS_NAME"), b"TOP")
     t.call("HS_INSERT", a=0)
     check("hs_insert: πρώτη θέση σπρώχνει όλες",
           table() == [(999, "TOP")] + base[:-1], str(table()[:2]))
 
     # --- score_digits ------------------------------------------------
-    for value, want in ((1000, " 1000"), (0, " 0000"), (42, " 0042"),
-                        (9999, " 9999"), (-5, "-0005"), (-1234, "-1234")):
-        t.poke16(t.sym("SCORE"), value & 0xFFFF)
+    for value, want in ((1000, " 001000"), (0, " 000000"), (42, " 000042"),
+                        (999999, " 999999"), (32768, " 032768"),
+                        (100000, " 100000"), (-5, "-000005"),
+                        (-1234, "-001234")):
+        t.poke(t.sym("SCORE"), (value & 0xFFFFFF).to_bytes(3, "little"))
         t.call("SCORE_DIGITS")
-        got = t.peek(t.sym("SCORE_TXT"), 5).decode(errors="replace")
+        got = t.peek(t.sym("SCORE_TXT"), 7).decode(errors="replace")
         check(f"score_digits {value} -> '{want}'", got == want, f"'{got}'")
 
 

@@ -85,7 +85,10 @@
 
     /* Τα κουμπιά γεμίζουν ΟΛΟ το πλάτος του πάνελ: όσες στήλες χωρέσουν με
        ελάχιστο πλάτος που να μη σπάει η ετικέτα. */
-    .panel.tilebox .palette { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); }
+    /* ΤΡΙΑ ΑΝΑ ΓΡΑΜΜΗ, σταθερά. Με auto-fill το πλήθος άλλαζε με το πλάτος
+       του παραθύρου και τα ονόματα των πλακιδίων κόβονταν — και μεγάλωσαν
+       όταν ο διακόπτης απέκτησε οκτώ παραλλαγές με περιγραφικά ονόματα. */
+    .panel.tilebox .palette { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
     @@media (max-width: 1000px) {
         .stagerow { grid-template-columns: 1fr; }

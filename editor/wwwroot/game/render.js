@@ -85,7 +85,8 @@
       for (let i = 0; i < D.K.ENERGY_MAX; i++) {
         const pen = i < hero.energy ? (hero.energy < 3 ? 3 : 2) : 0;
         for (let y = 2; y < 6; y++)
-          for (let x = 0; x < 8; x++) this.px(8 + i * 8 + x, y, pen);
+          for (let x = 0; x < 8; x++)
+            this.px(D.HUD.energy * 4 + i * 8 + x, y, pen);
       }
       const inv = [];
       // Άθροισμα όλων των ταυτοτήτων: το HUD δείχνει ΠΟΣΑ κλειδιά έχεις,
@@ -97,16 +98,22 @@
       for (let i = 0; i < 10; i++) {
         const px = D.TILE_PX[i < inv.length ? inv[i] : 0];
         for (let v = 0; v < D.CELL; v++)
-          for (let u = 0; u < D.CELL; u++) this.px(88 + i * 8 + u, v, px[v][u]);
+          for (let u = 0; u < D.CELL; u++)
+            this.px(D.HUD.inv * 4 + i * 8 + u, v, px[v][u]);
       }
       // Δύο ΞΕΧΩΡΙΣΤΑ βελάκια: η βαρύτητα του ΚΟΣΜΟΥ (την όρισε ο παίκτης,
       // την ακολουθούν τα κιβώτια) και η βαρύτητα του ΗΡΩΑ (γυρίζει μόνη της
-      // σε κάθε γωνία). Ίδιες θέσεις με το src/main.asm: στήλες byte 68 και 72.
-      for (const [bank, g, col] of [[0, hero.worldG, 68], [1, hero.g, 72]]) {
-        const px = D.GRAV_PX[bank][g];
+      // σε κάθε γωνία). Κολλητά στη δεξιά άκρη, όπως στο src/main.asm.
+      const glyph = (art, col) => {
         for (let v = 0; v < 8; v++)
-          for (let u = 0; u < 8; u++) this.px(col * 4 + u, v, px[v][u]);
-      }
+          for (let u = 0; u < 8; u++) this.px(col * 4 + u, v, art[v][u]);
+      };
+      for (const [bank, g, col] of [[0, hero.worldG, D.HUD.grav_w],
+                                    [1, hero.g, D.HUD.grav_h]])
+        glyph(D.GRAV_PX[bank][g], col);
+      // …και τα δύο σταθερά σύμβολα που λένε τι μετράει ο αριθμός δίπλα τους.
+      glyph(D.HUD_BOLT_PX, D.HUD.bolt);
+      glyph(D.HUD_STAR_PX, D.HUD.star);
     }
     flush() {
       const d = this.img.data;

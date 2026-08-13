@@ -65,6 +65,15 @@ gr_seal:        ld   (hl),0
                 ld   a,1                ; γεμάτη μπάρα από το πρώτο καρέ: το
                 ld   (hud_dirty),a      ; hud_dirty αρχικοποιείται μόνο στο
                                         ; assembly, όχι σε κάθε νέα παρτίδα
+                ; THE WHOLE HUD IS GONE after SCR_SET_MODE, but the flags that
+                ; remember what is on screen are not. The arrows had this bug
+                ; from the start: after a game over they stayed blank until the
+                ; player happened to change gravity.
+                xor  a
+                ld   (hud_glyphs),a
+                dec  a
+                ld   (hud_g_last),a
+                ld   (hud_g_last+1),a
                 call score_reset        ; 1000 πόντοι και άδειος χάρτης
                 jp   sfx_reset
 

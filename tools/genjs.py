@@ -114,6 +114,17 @@ def build():
         # στον browser να δείχνει ακριβώς ό,τι θα δεις στην οθόνη του CPC.
         "GRAV_PX": [[arrow_pixels(g, 3) for g in range(8)],
                     [arrow_pixels(g, 2) for g in range(8)]],
+        # Τα δύο σταθερά σύμβολα, από το ίδιο σχέδιο με τον Amstrad.
+        "HUD_BOLT_PX": [[3 if ch == "X" else 0 for ch in row]
+                        for row in GA.HUD_BOLT],
+        "HUD_STAR_PX": [[2 if ch == "X" else 0 for ch in row]
+                        for row in GA.HUD_STAR],
+        # ΟΙ ΘΕΣΕΙΣ ΤΟΥ HUD, σε στήλες byte, από ΜΙΑ πηγή. Ήταν γραμμένες με
+        # το χέρι και στις δύο γλώσσες, και όταν μετακινήθηκαν τα βελάκια ο
+        # editor έδειχνε άλλο HUD από το παιχνίδι.
+        "HUD": {"bolt": 0, "energy": 2, "inv": 22,
+                "star": 56, "score_col": 30,
+                "grav_w": 76, "grav_h": 78, "score_digits": 6},
         "HERO": {"w": stickman.W, "h": stickman.H,
                  "frames": sprite_frames(stickman.build_frames())},
         "HERO45": {"w": stickman.W45, "h": stickman.H45,

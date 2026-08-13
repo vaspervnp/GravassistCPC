@@ -87,12 +87,20 @@ HUD_Y           equ  2          ; πρώτη scanline
 HUD_H           equ  4          ; ύψος σε γραμμές
 HUD_SEG         equ  2          ; bytes ανά μονάδα ενέργειας
 INV_X           equ  22         ; πρώτη στήλη byte του inventory
+; Symbols that say WHAT the number next to them counts. Drawn by draw_garrow
+; with direction 0 — one glyph each, same 8x8x2-byte format as the arrows, so
+; there is no second drawing path to keep in step.
+HUD_BOLT_X      equ  0          ; lightning, in front of the energy bar
+HUD_STAR_X      equ  56         ; star, in front of the score
 ; Τα δύο βελάκια βαρύτητας, δεξιά από το inventory. Δύο ΞΕΧΩΡΙΣΤΑ πράγματα:
 ; η βαρύτητα του ΚΟΣΜΟΥ είναι αυτή που όρισε ο παίκτης και την ακολουθούν τα
 ; κιβώτια· η βαρύτητα του ΗΡΩΑ γυρίζει μόνη της σε κάθε γωνία που περπατάει.
 ; Χωρίς αυτά ο παίκτης δεν είχε τρόπο να δει γιατί το κιβώτιο πάει αλλού.
-GRAV_WX         equ  68          ; στήλη byte του βέλους του κόσμου
-GRAV_HX         equ  72          ; στήλη byte του βέλους του ήρωα
+; The two arrows sit TOGETHER at the right edge, with the gap before them
+; rather than between them: they are one reading — world gravity next to hero
+; gravity — and four pixels of air in the middle made them look unrelated.
+GRAV_WX         equ  76          ; στήλη byte του βέλους του κόσμου
+GRAV_HX         equ  78          ; στήλη byte του βέλους του ήρωα
 INV_MAX         equ  10         ; πόσα εικονίδια χωράνε δίπλα στη μπάρα
 BYTE_PEN2       equ  #0F        ; 4 pixels pen2 (πράσινο)
 BYTE_PEN3       equ  #FF        ; 4 pixels pen3 (πορτοκαλί)
@@ -642,6 +650,25 @@ draw_garrows:   ld   a,(world_g)
                 inc  hl
                 cp   (hl)
                 ret  z                  ; τίποτα δεν άλλαξε
+                ; The two symbols never change, so they are drawn once, when
+                ; the arrows first appear. Redrawing them every frame would
+                ; cost two more tile writes for a picture that never moves.
+                ld   a,(hud_glyphs)
+                or   a
+                jr   nz,dga_go
+                inc  a
+                ld   (hud_glyphs),a
+                push af
+                xor  a
+                ld   hl,hud_bolt
+                ld   c,HUD_BOLT_X
+                call draw_garrow
+                xor  a
+                ld   hl,hud_star
+                ld   c,HUD_STAR_X
+                call draw_garrow
+                pop  af
+
 dga_go:         ld   a,(world_g)
                 ld   (hud_g_last),a
                 ld   hl,grav_gfx_world
@@ -655,6 +682,7 @@ dga_go:         ld   a,(world_g)
 
 ; #FF: καμία έγκυρη φορά, ώστε η πρώτη κλήση να ζωγραφίζει σίγουρα.
 hud_g_last      db #FF,#FF
+hud_glyphs      db 0            ; 1 = the two fixed symbols are on screen
 
 ; inv_add — προσθέτει A αντίγραφα του τύπου C, όσο υπάρχει χώρος (B)
 inv_add:        or   a
