@@ -170,6 +170,15 @@ for _t in SWITCHES:
 # Η φορά που "κοιτάει" κάθε κατευθυντικός τύπος (κωδικός βαρύτητας 0..7).
 # Αγκάθι: πονάει αν πέφτεις ΠΑΝΩ στις μύτες. Μονόδρομη: στερεή μόνο όταν
 # την πλησιάζεις από αυτή την πλευρά.
+# Ό,τι μπορεί να φέρει αριθμό καλωδίωσης: ενεργοποιητές και στόχοι μαζί. Οι
+# διακόπτες μπαίνουν από το SWITCHES, ώστε μια ένατη παραλλαγή να καλύπτεται
+# χωρίς να το θυμηθεί κανείς.
+WIRED_TYPES = SWITCHES | {
+    GATE, GATE_OPEN, LOCK, LOCK_OPEN, KEY, PLATE, PLATE_DOWN,
+    SPIKE_U, SPIKE_L, SPIKE_D, SPIKE_R,
+    SPIKE_U_OFF, SPIKE_L_OFF, SPIKE_D_OFF, SPIKE_R_OFF,
+}
+
 FACING = {SPIKE_U: 4, SPIKE_L: 2, SPIKE_D: 0, SPIKE_R: 6,
           ONEWAY_U: 4, ONEWAY_L: 2, ONEWAY_D: 0, ONEWAY_R: 6,
           # Same numbers as the spikes: a switch answers only from the side it
@@ -303,11 +312,13 @@ class Room:
 
         # Η ιδιότητα απλώνεται σε ΟΛΑ τα κελιά της ομάδας, όπως ο προορισμός
         # μιας εξόδου: μια ψηλή πόρτα δύο κελιών είναι ΕΝΑ αντικείμενο.
+        # ΚΑΘΕ τύπος που μπορεί να καλωδιωθεί, ΠΑΡΑΓΟΜΕΝΟΣ και όχι γραμμένος
+        # στο χέρι. Όταν ο διακόπτης απέκτησε τέσσερις φορές και δύο
+        # καταστάσεις, η χειρόγραφη λίστα κρατούσε μόνο την παλιά: ο διακόπτης
+        # ταβανιού έχανε το κανάλι του ΕΔΩ, στο parsing, και έφτανε στον Z80
+        # ακαλωδίωτος. Ο μοχλός γύριζε, η πύλη δεν άνοιγε ποτέ.
         self.attrs = {}
-        for kind in (SWITCH, GATE, GATE_OPEN, LOCK, LOCK_OPEN, KEY,
-                     PLATE, PLATE_DOWN,
-                     SPIKE_U, SPIKE_L, SPIKE_D, SPIKE_R,
-                     SPIKE_U_OFF, SPIKE_L_OFF, SPIKE_D_OFF, SPIKE_R_OFF):
+        for kind in sorted(WIRED_TYPES):
             for cell, v in self._link(kind, attrs, "ιδιότητας").items():
                 self.attrs[cell] = v or 0
 

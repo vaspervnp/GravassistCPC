@@ -1238,6 +1238,28 @@ def check_switch_facing():
     check("a pressed switch turns back off", got == P.SWITCH_U,
           P.TYPE_NAMES[got])
 
+    # END TO END, ON A REAL ROOM. The synthetic grid above proved the facing
+    # rule but not the wiring: the attribute is attached during parsing, by
+    # cell type, and the ceiling switch was dropped there — the lever turned
+    # and the gate never opened. Nothing that pokes its own grid can catch it.
+    for room in P.all_rooms():
+        sw = [(c, r) for r in range(P.ROWS) for c in range(P.COLS)
+              if room.cells[r][c] in P.SWITCHES]
+        if not sw:
+            continue
+        t2 = Z80Test()
+        t2.fake_set_load()
+        t2.stub("RENDER_ROOM")
+        data = dict((i, d) for i, _, d in RF.all_sets())[RF.set_of(room.number)]
+        t2.poke(t2.sym("SET_BUF"), data)
+        t2.poke(t2.sym("JR_COUNT"), b"\x00")
+        t2.call("ROOM_LOAD", a=room.number)
+        for c, r in sw:
+            want = room.attrs.get((c, r), 0)
+            t2.call("CELL_ATTR", bc=(c << 8) | r)
+            check(f"room {room.number}: switch ({c},{r}) keeps its channel",
+                  t2.m.a == want, f"{t2.m.a} vs {want}")
+
     # Every variant carries the flag, so nothing is reachable only by number.
     missing = [P.TYPE_NAMES[x] for x in sorted(P.SWITCHES)
                if not (P.PROPS[x] & P.F_SWITCH)]
