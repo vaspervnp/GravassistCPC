@@ -259,6 +259,14 @@ ml_anim:        call music_step         ; ΠΡΙΝ το flyback: το SOUND QUEU
                 call prep_hero          ; μετασχηματισμός sprite (εκτός vblank)
 
                 call MC_WAIT_FLYBACK
+                ; ΟΛΟ ΤΟ ΒΕΛΟΣ ΜΕΣΑ ΣΕ ΑΥΤΟ ΤΟ ΜΠΛΟΚ: σβήσιμο της παλιάς θέσης
+                ; και σχέδιο της νέας, με μερικές δεκάδες microseconds ανάμεσα.
+                ; Το σβήσιμο γινόταν μέσα στο hero_update, δηλαδή πριν από όλη τη
+                ; φυσική, το prep_hero και την αναμονή του flyback: το βέλος
+                ; έλειπε από την οθόνη το μεγαλύτερο μέρος κάθε περάσματος, και
+                ; αυτό ήταν το τρεμόπαιγμα. Πρώτα το σβήσιμο και μετά ο ήρωας,
+                ; ώστε βέλος που τον ακουμπά να μη σβήνει κομμάτι του.
+                call arrow_erase
                 call draw_hero          ; μόνο εγγραφές στην οθόνη
                 call arrow_draw         ; ΜΕΤΑ τον ήρωα: ένα βέλος από πάνω του
                                         ; πρέπει να φαίνεται
@@ -1872,6 +1880,10 @@ mus_chan        ds   CH_SIZE*MUS_TRACKS
 ; δισκέτα ως μηδενικά.
 turret_tab      ds   TS_SIZE*TURRET_SLOTS
 arrow_tab       ds   AR_SIZE*TURRET_MAX
+; Η ΘΕΣΗ ΤΩΝ ΒΕΛΩΝ ΠΡΙΝ ΚΟΥΝΗΘΟΥΝ, για το σβήσιμο. Δεκατέσσερα bytes ώστε το
+; σβήσιμο να μπορεί να φύγει από το hero_update και να κολλήσει δίπλα στο
+; σχέδιο, μετά το flyback — δες arrow_save στο src/turret.asm.
+arrow_old       ds   AR_SIZE*TURRET_MAX
 
 cell_buf        ds   LVL_CELLS          ; το ξεδιπλωμένο πλέγμα που παίζεται
 journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi, τύπος)

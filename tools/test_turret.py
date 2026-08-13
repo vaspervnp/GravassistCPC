@@ -600,10 +600,19 @@ check("…με αναμμένα bits (pen 1 ουρά, pen 3 μύτη)",
       all(after[i] & 0x88 or after[i] & 0x44 or after[i] & 0x22
           or after[i] & 0x11 for i in changed))
 
-# Και το σβήσιμο επαναφέρει το φόντο.
+# ΚΑΙ ΤΟ ΣΒΗΣΙΜΟ ΑΚΟΛΟΥΘΕΙ ΤΗΝ ΠΑΛΙΑ ΘΕΣΗ, ΟΧΙ ΤΗ ΝΕΑ.
+#
+# Το σβήσιμο έφυγε από το hero_update και κόλλησε δίπλα στη σχεδίαση, μετά το
+# flyback — αλλιώς το βέλος έλειπε από την οθόνη σχεδόν όλο το πέρασμα και
+# τρεμόπαιζε. Τη στιγμή που τρέχει τώρα, τα βέλη έχουν ΗΔΗ κουνηθεί, οπότε το
+# arrow_erase διαβάζει το αντίγραφο που κράτησε το arrow_save. Αν το ξαναδιάβαζε
+# από τον ζωντανό πίνακα, θα καθάριζε ένα ορθογώνιο έξι pixel παρακάτω και θα
+# άφηνε πίσω του το βέλος — μια ουρά από φαντάσματα σε κάθε βολή.
+t.call("ARROW_SAVE")
+t.call("AR_MOVE")
 t.call("ARROW_ERASE")
 back = bytes(t.m.memory[a] for a in range(0xC000, 0x10000))
-check("το arrow_erase ξαναφέρνει το φόντο", back == before,
+check("το arrow_erase ξαναφέρνει το φόντο ΕΚΕΙ ΠΟΥ ΗΤΑΝ", back == before,
       f"{sum(1 for i in range(len(back)) if back[i] != before[i])} bytes διαφορά")
 
 print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"ΑΠΕΤΥΧΑΝ {len(FAILS)}")
