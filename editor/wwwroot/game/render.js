@@ -40,6 +40,17 @@
   function heroSprite(g, frame) {
     return g % 2 ? rot90(HERO45[frame], g >> 1) : rot90(HERO[frame], g >> 1);
   }
+  // ΤΟ ΒΕΛΟΣ. Πέντε pixel μήκος, όσο περίπου και το βήμα του (έξι): πιο κοντό
+  // θα «πηδούσε» ορατά ανάμεσα σε δύο καρέ, πιο μακρύ θα έμοιαζε με δοκάρι.
+  // Pen 3, το πορτοκαλί των κινδύνων (docs/concept-art.md §5).
+  const ARROW_H = [[0, 3, 3, 3, 3], [3, 3, 3, 3, 3], [0, 3, 3, 3, 3]];
+  const ARROW_V = [[0, 3, 0], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]];
+
+  function arrowSprite(dx, dy) {
+    if (!dx) return dy > 0 ? ARROW_V.slice().reverse() : ARROW_V;
+    return dx > 0 ? ARROW_H.map(r => r.slice().reverse()) : ARROW_H;
+  }
+
   function paraSprite(g, frame) {
     return g % 2 ? rot90(PARA45[frame], g >> 1) : rot90(PARA[frame], g >> 1);
   }
@@ -188,5 +199,5 @@
     }
   }
 
-  window.GRAV_RENDER = { Screen, heroSprite, paraSprite, W, H };
+  window.GRAV_RENDER = { Screen, heroSprite, paraSprite, arrowSprite, W, H };
 })(window.GAME_DATA);

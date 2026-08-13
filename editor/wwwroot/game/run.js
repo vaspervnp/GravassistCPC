@@ -509,6 +509,11 @@
                       hero.y + G.off(hero.g, 0, -14)[1]);
       screen.sprite(R.heroSprite(hero.g, animFrame()), hero.x, hero.y);
     }
+    // ΤΑ ΒΕΛΗ ΜΕΤΑ ΤΟΝ ΗΡΩΑ, και έξω από το αναβόσβημα της ατρωσίας: το βέλος
+    // δεν σβήνει επειδή είσαι άτρωτος, και ένα βέλος που εξαφανίζεται μισό
+    // δευτερόλεπτο δεν λέει στον παίκτη τι τον χτύπησε.
+    for (const a of hero.arrows)
+      screen.sprite(R.arrowSprite(a.dx, a.dy), a.x, a.y);
     screen.hud(hero);
     screen.flush();
     // Θέση από το μοντέλο, ίδια με το SCORE_COL του src/score.asm.
