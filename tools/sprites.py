@@ -80,8 +80,18 @@ def cmd_init(argv):
         print(f"  {s.png}: {len(frames)} frames {s.w}x{s.h} -> εικόνα {W}x{H}")
 
 
+# Ο buffer ξεπακεταρίσματος του src/rotate.asm (SPR_SRCSZ). Κάθε καρέ περνά
+# από εκεί ένα-ένα, οπότε ένα sheet μεγαλύτερο από αυτό θα έγραφε έξω από τον
+# buffer — πάνω στον spr_buf και μετά στον κώδικα. Ο έλεγχος ζει εδώ γιατί το
+# assert του rasm αποτιμάται σε πρώιμη πέραση και δεν είναι αξιόπιστο.
+SPR_SRCSZ = 180
+
+
 def cmd_build(argv):
     for s in SHEETS:
+        if s.w * s.h > SPR_SRCSZ:
+            sys.exit(f"το sheet '{s.key}' είναι {s.w}x{s.h} = {s.w * s.h} "
+                     f"pixels και ο spr_src του rotate.asm είναι {SPR_SRCSZ}")
         if not os.path.exists(s.path_png()):
             sys.exit(f"λείπει το {s.png} — τρέξε πρώτα: python3 tools/sprites.py init")
         frames = cpcgfx.read_sheet(s.path_png(), s.w, s.h, s.cols, s.count)
@@ -93,8 +103,10 @@ def cmd_build(argv):
         os.makedirs(os.path.dirname(s.path_asm()), exist_ok=True)
         with open(s.path_asm(), "w") as f:
             f.write(asm + "\n".join(eq) + "\n")
+        stride = (s.w + 3) // 4
         print(f"  {s.png} -> {s.asm} ({len(frames)} frames, "
-              f"{len(frames) * s.w * s.h} bytes δεδομένων)")
+              f"{len(frames) * stride * s.h} bytes δεδομένων, "
+              f"από {len(frames) * s.w * s.h} απακετάριστα)")
 
 
 def cmd_export(argv):
@@ -109,6 +121,7 @@ def cmd_export(argv):
                 m = re.match(r"\s*db\s+([0-9,\s]+)$", ln)
                 if m:
                     rows.append([int(v) for v in m.group(1).split(",")])
+        rows = [cpcgfx.unpack_row(r, s.w) for r in rows]
         frames = [rows[i:i + s.h] for i in range(0, len(rows), s.h)]
         out = s.path_png().replace(".png", "-export.png")
         cpcgfx.write_sheet(out, frames, s.w, s.h, s.cols)

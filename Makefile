@@ -151,6 +151,7 @@ sprites-init:
 test:
 	$(PY) tools/check_names.py
 	$(PY) tools/verify_rotate.py
+	$(PY) tools/test_sprites.py
 	$(PY) tools/test_physics.py
 	$(PY) tools/test_z80.py
 	$(PY) tools/test_music.py

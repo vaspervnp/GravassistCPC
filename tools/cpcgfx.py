@@ -83,27 +83,59 @@ def read_sheet(path, cell_w, cell_h, cols, count):
 
 # --- Έξοδος σε assembly ----------------------------------------------
 
+def pack_row(row):
+    """Μία γραμμή pixel -> bytes, ΤΕΣΣΕΡΑ pixel ανά byte.
+
+    Ένα pen του MODE 1 είναι 0..3, δηλαδή δύο bits· τα δεδομένα κρατούσαν ένα
+    ολόκληρο byte για καθένα και ο ήρωας μόνος του έπιανε 5.5 KB σε μηχάνημα
+    που είχε μείνει με 11 ελεύθερα bytes. Πρώτο pixel στα bits 7-6, μετά 5-4,
+    3-2, 1-0· η τελευταία τετράδα γεμίζει με pen 0, που είναι το διαφανές.
+
+    Ο περιστροφέας δεν διαβάζει ΑΥΤΗ τη μορφή: το spr_transform ξεπακετάρει
+    πρώτα το καρέ σε πρόχειρο buffer (spr_unpack, src/rotate.asm) και μετά
+    δουλεύει όπως πάντα. Έτσι η συμπίεση δεν ακούμπησε καθόλου τον αλγόριθμο
+    περιστροφής ούτε το tools/verify_rotate.py που τον φυλάει.
+    """
+    out = []
+    for i in range(0, len(row), 4):
+        quad = list(row[i:i + 4]) + [0, 0, 0]
+        out.append((quad[0] << 6) | (quad[1] << 4) | (quad[2] << 2) | quad[3])
+    return out
+
+
+def unpack_row(data, width):
+    """Το αντίστροφο του pack_row — για τον έλεγχο round-trip."""
+    out = []
+    for b in data:
+        out += [(b >> 6) & 3, (b >> 4) & 3, (b >> 2) & 3, b & 3]
+    return out[:width]
+
+
 def to_asm(label, frames, cell_w, cell_h, title):
-    """Παράγει πηγαίο rasm: 1 byte ανά pixel, γραμμή-γραμμή."""
+    """Παράγει πηγαίο rasm: 4 pixels ανά byte, γραμμή-γραμμή."""
+    stride = (cell_w + 3) // 4
     out = [
         ";" + "=" * 69,
         f";  {title}",
         ";  ΠΑΡΑΓΕΤΑΙ ΑΥΤΟΜΑΤΑ από tools/sprites.py — ΜΗΝ το επεξεργάζεσαι.",
-        f";  {len(frames)} frames, {cell_w}x{cell_h}, 1 byte ανά pixel (pen 0..3),",
-        ";  κανονική φορά βαρύτητας DOWN. Περιστροφή: src/rotate.asm",
+        f";  {len(frames)} frames, {cell_w}x{cell_h}, 4 pixels ανά byte",
+        f";  ({stride} bytes ανά γραμμή), κανονική φορά βαρύτητας DOWN.",
+        ";  Ξεπακετάρισμα + περιστροφή: src/rotate.asm",
         ";" + "=" * 69,
         "",
         f"{label}_w       equ {cell_w}",
         f"{label}_h       equ {cell_h}",
         f"{label}_frames  equ {len(frames)}",
-        f"{label}_size    equ {cell_w * cell_h}",
+        f"{label}_stride  equ {stride}",
+        f"{label}_size    equ {stride * cell_h}",
         "",
         f"{label}:",
     ]
     for i, fr in enumerate(frames):
         out.append(f"                ; --- frame {i} ---")
         for row in fr:
-            out.append("                db " + ",".join(str(v) for v in row))
+            out.append("                db " + ",".join(
+                str(v) for v in pack_row(row)))
     out.append("")
     return "\n".join(out)
 

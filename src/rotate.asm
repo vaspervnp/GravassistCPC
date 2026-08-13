@@ -13,6 +13,11 @@ SPR_MAXW        equ 5           ; μέγιστο πλάτος εξόδου (αλ
 SPR_MAXH        equ 16          ; μέγιστο ύψος εξόδου (αλεξίπτωτο γυρισμένο)
 SPR_BUFSZ       equ SPR_MAXW*2*SPR_MAXH
 
+; Το μεγαλύτερο καρέ σε pixels: το αλεξίπτωτο, 15x12. Το tools/sprites.py
+; σπάει το build αν κάποιο sheet το ξεπεράσει — ο έλεγχος ζει εκεί και όχι σε
+; assert του rasm, που αποτιμάται σε πρώιμη πέραση και έχει ήδη πει ψέματα.
+SPR_SRCSZ       equ 180
+
 ;---------------------------------------------------------------------
 ; spr_transform
 ;   IN:  HL = unpacked frame (W*H bytes, 1 byte/pixel, pen 0..3)
@@ -24,8 +29,18 @@ SPR_BUFSZ       equ SPR_MAXW*2*SPR_MAXH
 ;   ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL, IX
 ;
 ;   Το blit μετά είναι:  ld a,(de) : and mask : or data : ld (de),a
+;
+;   Η ΠΗΓΗ ΕΡΧΕΤΑΙ ΠΑΚΕΤΑΡΙΣΜΕΝΗ, τέσσερα pixels ανά byte, και ξεπακετάρεται
+;   εδώ σε ένα καρέ τη φορά. Ο υπόλοιπος αλγόριθμος δεν το ξέρει καν: περπατά
+;   την πηγή με βήματα ±1 και ±W σε pixels, που με πακεταρισμένα δεδομένα θα
+;   σήμαινε διαίρεση και εξαγωγή πεδίου 2 bit σε κάθε pixel του εσωτερικού
+;   βρόχου. Ένα ξεπακετάρισμα των 180 bytes ανά μετασχηματισμό κοστίζει
+;   λιγότερο και δεν ακουμπά τίποτα από όσα φυλάει το verify_rotate.py.
 ;---------------------------------------------------------------------
 spr_transform:
+                push af
+                call spr_unpack             ; HL = πακεταρισμένο -> spr_src
+                pop  af
                 and  3
                 ld   (spr_orient),a         ; ΠΡΩΤΑ αυτό: το A χάνεται αμέσως μετά
                 ld   (spr_srcbase),hl
@@ -261,6 +276,54 @@ ht_go:          ld   a,(ht_rot)
 
 ht_rot          db 0
 
+;---------------------------------------------------------------------
+; spr_unpack — ένα καρέ από 4 pixels/byte σε 1 byte/pixel
+;
+;   Κάθε γραμμή ξεκινά σε ακέραιο byte, οπότε τα περισσεύματα της τελευταίας
+;   τετράδας απλώς προσπερνιούνται· είναι pen 0, δηλαδή διαφανή.
+;
+; IN:  HL = καρέ, B = W, C = H
+; OUT: HL = spr_src·  B και C ΑΝΕΠΑΦΑ, τα θέλει ο καλών
+; ΑΛΛΟΙΩΝΕΙ: AF, DE
+;---------------------------------------------------------------------
+spr_unpack:     push bc
+                ld   de,spr_src
+                ld   a,c
+                ld   (su_rows),a
+su_row:         ld   a,b
+                ld   (su_left),a
+su_grp:         ld   c,(hl)                 ; τέσσερα pixels μαζί
+                inc  hl
+                ld   a,4
+                ld   (su_n),a
+su_px:          ld   a,c                    ; κάθε στροφή φέρνει το επόμενο
+                rlca                        ; ζεύγος bits στα χαμηλά δύο
+                rlca
+                ld   c,a
+                and  3
+                ld   (de),a
+                inc  de
+                ld   a,(su_left)
+                dec  a
+                ld   (su_left),a
+                jr   z,su_eol               ; η γραμμή τελείωσε μέσα στο byte
+                ld   a,(su_n)
+                dec  a
+                ld   (su_n),a
+                jr   nz,su_px
+                jr   su_grp
+su_eol:         ld   a,(su_rows)
+                dec  a
+                ld   (su_rows),a
+                jr   nz,su_row
+                pop  bc
+                ld   hl,spr_src
+                ret
+
+su_rows         db 0
+su_left         db 0
+su_n            db 0
+
 ;--- βοηθητικά --------------------------------------------------------
 ; spr_mul_ade: HL = A * DE   (A = 0..31, DE <= 169 -> max 5408)
 spr_mul_ade:    ld   hl,0
@@ -325,6 +388,9 @@ spr_shift       db 0        ; 0..3 — γράψ' το ΠΡΙΝ την κλήση
 spr_bw          db 0        ; ΕΞΟΔΟΣ: πλάτος σε bytes
 spr_bh          db 0        ; ΕΞΟΔΟΣ: γραμμές (= spr_dh)
 
+; Το ξεπακετάρισμα δουλεύει εδώ. Δίπλα στον spr_buf επίτηδες: είναι το ίδιο
+; πράγμα, πρόχειρος χώρος ενός καρέ, και μπαίνει στο MAIN.BIN ως μηδενικά.
+spr_src         ds SPR_SRCSZ, 0
 spr_buf         ds SPR_BUFSZ, 0
 para_buf        ds SPR_BUFSZ, 0        ; δεύτερο sprite: ο ήρωας και το
                                        ; αλεξίπτωτο ζωγραφίζονται μαζί
