@@ -39,7 +39,7 @@ KL_TIME_PLEASE  equ #BD0D
 ; Three seconds per page of controls.
 ;
 ; MEASURED IN REAL TIME, NOT LOOP PASSES. The old code counted iterations of
-; menu_loop and called them frames, but one pass costs two to four vsyncs —
+; menu_loop and called them frames, but one pass costs three to seven vsyncs —
 ; hero_update dominates — so "500 frames = 10 seconds" was really 20 to 40,
 ; and it drifted with whatever else the loop was doing.
 MENU_PAGE       equ 3*300

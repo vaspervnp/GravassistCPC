@@ -11,7 +11,7 @@
 ;  plays them on its own interrupt, so nothing here counts frames: every call
 ;  pushes notes until the queue says no. That is why the music does not slow
 ;  down when the game does — durations are hundredths of a second and the game
-;  loop is anywhere between two and seven vsyncs.
+;  loop is anywhere between three and seven vsyncs.
 ;
 ;  THE LEAD KEEPS ITS PLACE BY THE CLOCK, not by where it left off. The AY has
 ;  three channels and the sound effects want all three (src/sfx.asm: actions,
@@ -197,7 +197,8 @@ mus_next:       ld   de,CH_SIZE
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα εκτός IX, IY
 ;---------------------------------------------------------------------
 MUS_LOOK        equ  120        ; 0,4 s σε 1/300 — ένα πέρασμα του βρόχου είναι
-                                ; το πολύ 6 vsync, οπότε η ουρά δεν στεγνώνει
+                                ; το πολύ 7 vsync (CPC_VSYNC_RUN), οπότε η ουρά
+                                ; δεν στεγνώνει ούτε τρέχοντας
 
                 ; ΤΥΛΙΓΜΑ ΤΟΥ ΚΥΚΛΟΥ, ΚΑΙ ΜΟΝΟ ΟΤΑΝ ΤΟ ΠΕΡΑΣΑΝ ΚΑΙ ΤΑ ΔΥΟ.
                 ; Η θέση τρέχει μπροστά από το ρολόι κατά το παράθυρο MUS_LOOK,

@@ -1,14 +1,14 @@
 ;=====================================================================
 ;  GRAVASSIST - sprites αντικειμένων (PLACEHOLDERS)
 ;  ΠΑΡΑΓΕΤΑΙ ΑΥΤΟΜΑΤΑ από tools/sprites.py — ΜΗΝ το επεξεργάζεσαι.
-;  28 frames, 8x8, 4 pixels ανά byte
+;  30 frames, 8x8, 4 pixels ανά byte
 ;  (2 bytes ανά γραμμή), κανονική φορά βαρύτητας DOWN.
 ;  Ξεπακετάρισμα + περιστροφή: src/rotate.asm
 ;=====================================================================
 
 obj_gfx_w       equ 8
 obj_gfx_h       equ 8
-obj_gfx_frames  equ 28
+obj_gfx_frames  equ 30
 obj_gfx_stride  equ 2
 obj_gfx_size    equ 16
 
@@ -265,6 +265,24 @@ obj_gfx:
                 db 8,32
                 db 3,192
                 db 0,0
+                ; --- frame 28 ---
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                ; --- frame 29 ---
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
 
 ; --- δείκτες frame του obj_gfx ---
 obj_gfx_EXIT_0     equ 0
@@ -295,3 +313,5 @@ obj_gfx_KEY_0      equ 24
 obj_gfx_KEY_1      equ 25
 obj_gfx_PARACHUTE_0 equ 26
 obj_gfx_PARACHUTE_1 equ 27
+obj_gfx_TURRET_0   equ 28
+obj_gfx_TURRET_1   equ 29
