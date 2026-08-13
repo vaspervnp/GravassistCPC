@@ -32,6 +32,16 @@ public sealed record TeleportDto(int Col, int Row, int? DestCol, int? DestRow, i
 /// <param name="Value">Κανάλι (διακόπτες, πόρτες) ή ταυτότητα (κλειδιά, κλειδαριές).</param>
 public sealed record AttrDto(string Kind, int Col, int Row, int Value, int Cells);
 
+/// <summary>
+/// Ένας πυργίσκος με τις τρεις ρυθμίσεις του. Χωριστός από το
+/// <see cref="AttrDto"/>, που κουβαλά ΕΝΑΝ αριθμό — δες <see cref="TurretGraph"/>.
+/// </summary>
+/// <param name="Channel">Κανάλι διακόπτη 0..7· 0 = ακαλωδίωτος.</param>
+/// <param name="Reload">Δευτερόλεπτα ανάμεσα σε δύο βολές «όταν σε βλέπει».</param>
+/// <param name="Auto">0 = μόνο όταν σε βλέπει· αλλιώς ρυθμός σε δευτερόλεπτα.</param>
+public sealed record TurretDto(int Col, int Row, int Channel, int Reload, int Auto,
+    int Cells);
+
 /// <summary>Απάντηση φόρτωσης/δημιουργίας πίστας προς τον browser.</summary>
 public sealed record LevelDto(
     string Name,
@@ -42,7 +52,8 @@ public sealed record LevelDto(
     IReadOnlyList<TeleportDto> Teleports,
     int? Room,
     int Gravity,
-    IReadOnlyList<AttrDto> Attrs);
+    IReadOnlyList<AttrDto> Attrs,
+    IReadOnlyList<TurretDto> Turrets);
 
 /// <summary>
 /// Αίτημα αποθήκευσης από τον browser.
@@ -64,6 +75,9 @@ public sealed class SaveLevelRequest
 
     /// <summary>Καλωδίωση διακοπτών/πορτών και κλειδιών/κλειδαριών.</summary>
     public List<AttrDto> Attrs { get; set; } = [];
+
+    /// <summary>Οι πυργίσκοι — μία εγγραφή ανά ομάδα κελιών.</summary>
+    public List<TurretDto> Turrets { get; set; } = [];
 }
 
 /// <summary>Ενιαία μορφή απάντησης σφάλματος (ελληνικό μήνυμα).</summary>

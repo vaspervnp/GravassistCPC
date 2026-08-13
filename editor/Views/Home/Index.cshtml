@@ -22,15 +22,22 @@
         teleport = Model.TeleportSymbol.ToString(),
         // Τα είδη καλωδίωσης: ο σύνδεσμος είναι ΑΡΙΘΜΟΣ (κανάλι ή ταυτότητα)
         // και όχι κελί, γι' αυτό ένας διακόπτης οδηγεί όσες πόρτες θέλεις.
+        // Το «times» ξεχωρίζει τον πυργίσκο: το κανάλι του ταξιδεύει όπως κάθε
+        // άλλης καλωδίωσης, αλλά οι δύο χρόνοι του θέλουν δική τους γραμμή στο
+        // αρχείο (δες TurretGraph) και δικά τους πεδία στον πίνακα.
         wiring = new[]
         {
-            new { kind = "sw",   symbols = "SQAEsqae", label = "Switch", peer = "gate" },
-            new { kind = "plate",symbols = "pd", label = "Plate",   peer = "gate" },
-            new { kind = "gate", symbols = "Gg", label = "Gate",    peer = "sw" },
-            new { kind = "lock", symbols = "K|", label = "Lock",    peer = "key" },
-            new { kind = "key",  symbols = "k",  label = "Key",     peer = "lock" },
-            new { kind = "spikes",symbols = "^v<>ujhl", label = "Spikes", peer = "plate" },
+            new { kind = "sw",   symbols = "SQAEsqae", label = "Switch", peer = "gate", times = false },
+            new { kind = "plate",symbols = "pd", label = "Plate",   peer = "gate", times = false },
+            new { kind = "gate", symbols = "Gg", label = "Gate",    peer = "sw", times = false },
+            new { kind = "lock", symbols = "K|", label = "Lock",    peer = "key", times = false },
+            new { kind = "key",  symbols = "k",  label = "Key",     peer = "lock", times = false },
+            new { kind = "spikes",symbols = "^v<>ujhl", label = "Spikes", peer = "plate", times = false },
+            new { kind = "turret", symbols = new string(TurretGraph.Symbols),
+                  label = "Turret", peer = "sw", times = true },
         },
+        turretReload = TurretGraph.DefaultReload,
+        turretMax = TurretGraph.MaxSeconds,
         start = Model.StartSymbol.ToString(),
         tiles = Model.Tiles.Select(t => new
         {
@@ -686,6 +693,14 @@
         let attrGroups = new Map();       // kind -> [{col,row,cells,value}]
         let attrHighlight = null;         // [kind, index] που δείχνει γραμμές
 
+        // ΟΙ ΔΥΟ ΧΡΟΝΟΙ ΤΟΥ ΠΥΡΓΙΣΚΟΥ, χωριστά από το κανάλι του: εκείνο είναι
+        // ένας αριθμός σαν όλων των άλλων και ζει στο attrVals. Κλειδί "col,row"
+        // ανά ΚΕΛΙ, τιμή [φόρτιση, ρυθμός] — ίδια λογική με τους προορισμούς,
+        // ώστε να επιβιώνει όταν η ομάδα μεγαλώσει ή μετακινηθεί.
+        let turretTimes = new Map();
+        const TURRET_RELOAD = DATA.turretReload;
+        const TURRET_MAX_S = DATA.turretMax;
+
         let teleDests = new Map();
         let teleGroups = [];              // [{col,row,cells:[[c,r],…],dest:[c,r]|null}]
 
@@ -806,6 +821,7 @@
         /// Ξαναϋπολογίζει τις ομάδες καλωδίωσης και των τεσσάρων ειδών.
         function syncAttrs() {
             const next = new Map();
+            const nextTimes = new Map();
             attrGroups = new Map();
             for (const w of WIRING) {
                 // Ένα είδος μπορεί να έχει ΔΥΟ χαρακτήρες: η ανοιγμένη πόρτα
@@ -823,10 +839,25 @@
                     g.value = v;
                     g.cells.forEach(cell =>
                         next.set(attrKey(w.kind, cell[0], cell[1]), v));
+
+                    // Οι χρόνοι με τον ΙΔΙΟ κανόνα: η πρώτη γνωστή τιμή της
+                    // ομάδας κερδίζει και απλώνεται σε όλα της τα κελιά.
+                    if (!w.times) return;
+                    let t = null;
+                    for (const cell of g.cells) {
+                        const got = turretTimes.get(cellKey(cell[0], cell[1]));
+                        if (got) { t = got; break; }
+                    }
+                    if (!t) t = [TURRET_RELOAD, 0];
+                    g.reload = t[0];
+                    g.auto = t[1];
+                    g.cells.forEach(cell =>
+                        nextTimes.set(cellKey(cell[0], cell[1]), t));
                 });
                 attrGroups.set(w.kind, groups);
             }
             attrVals = next;
+            turretTimes = nextTimes;
             if (attrHighlight &&
                 attrHighlight[1] >= (attrGroups.get(attrHighlight[0]) || []).length)
                 attrHighlight = null;
@@ -845,6 +876,19 @@
             renderAttrLabels();
             renderAttrPanels();
             renderAttrLinks();
+        }
+
+        /// Οι δύο χρόνοι ενός πυργίσκου, ανά ομάδα. Δεν αγγίζει το κανάλι —
+        /// εκείνο περνά από το setAttrValue, όπως κάθε άλλη καλωδίωση.
+        function setTurretTimes(kind, index, reload, auto) {
+            const g = (attrGroups.get(kind) || [])[index];
+            if (!g) return;
+            g.reload = reload;
+            g.auto = auto;
+            g.cells.forEach(cell =>
+                turretTimes.set(cellKey(cell[0], cell[1]), [reload, auto]));
+            dirty = true;
+            renderAttrPanels();
         }
 
         function renderAttrLabels() {
@@ -917,7 +961,9 @@
 
         function renderAttrPanels() {
             renderAttrPanel(swListEl, ["sw", "plate", "key"]);
-            renderAttrPanel(keyListEl, ["gate", "lock", "spikes"]);
+            // Ο πυργίσκος είναι ΣΤΟΧΟΣ: ο διακόπτης τον σβήνει, όπως ανοίγει
+            // την πύλη και τραβάει τα αγκάθια.
+            renderAttrPanel(keyListEl, ["gate", "lock", "spikes", "turret"]);
         }
 
         function renderAttrPanel(el, kinds) {
@@ -950,6 +996,34 @@
                         const v = (n === null || n < 0) ? 0 : (n & 7);
                         setAttrValue(kind, i, v | (auto ? 8 : 0));
                     });
+
+                    // ΟΙ ΔΥΟ ΧΡΟΝΟΙ ΤΟΥ ΠΥΡΓΙΣΚΟΥ. Το «rhythm» μηδέν σημαίνει
+                    // «ρίχνει όταν σε βλέπει» και τότε μετράει το «reload»·
+                    // πάνω από μηδέν, ρίχνει σε αυτόν τον ρυθμό χωρίς να
+                    // κοιτάξει, και το «reload» δεν χρησιμοποιείται καθόλου.
+                    if (w.times) {
+                        const reload = coordInput(
+                            "reload: seconds between two shots when it sees you",
+                            String(g.reload), TURRET_MAX_S);
+                        const rhythm = coordInput(
+                            "rhythm: 0 = fires only when it sees you. Above 0, "
+                            + "fires every N seconds with no line of sight and "
+                            + "no range check — and reload is then unused.",
+                            String(g.auto), TURRET_MAX_S);
+                        const push = () => {
+                            const rl = parseCoord(reload.value);
+                            const rh = parseCoord(rhythm.value);
+                            setTurretTimes(kind, i,
+                                rl === null ? TURRET_RELOAD
+                                            : Math.min(Math.max(rl, 1), TURRET_MAX_S),
+                                rh === null ? 0
+                                            : Math.min(Math.max(rh, 0), TURRET_MAX_S));
+                        };
+                        reload.addEventListener("change", push);
+                        rhythm.addEventListener("change", push);
+                        row.append(document.createTextNode("reload"), reload,
+                                   document.createTextNode("rhythm"), rhythm);
+                    }
 
                     let autoBox = null;
                     if (kind === "lock") {
@@ -989,7 +1063,7 @@
                 p.style.marginTop = "0";
                 p.textContent = kinds[0] === "sw"
                     ? "No actuators. Paint a switch (S Q A E), p (plate) or k (key) cells."
-                    : "No targets. Paint G (gate), K (lock) or spike cells.";
+                    : "No targets. Paint G (gate), K (lock), spike or turret cells.";
                 el.appendChild(p);
             }
         }
@@ -1621,6 +1695,7 @@
                 rooms: new Map(exitRooms), two: new Map(exitTwo),
                 arrive: new Map(exitArrive), arriveG: new Map(exitArriveG),
                 tele: new Map(teleDests), attrs: new Map(attrVals),
+                times: new Map(turretTimes),
                 gravity: startGravity,
             };
         }
@@ -1633,6 +1708,7 @@
             exitArriveG = new Map(s.arriveG);
             teleDests = new Map(s.tele);
             attrVals = new Map(s.attrs);
+            turretTimes = new Map(s.times);
             startGravity = s.gravity;
             gravSel.value = String(startGravity);
             renderGravHint();
@@ -1719,6 +1795,7 @@
             exitArriveG = moveMap(exitArriveG, false);
             teleDests = moveMap(teleDests, true);
             attrVals = moveMap(attrVals, false);
+            turretTimes = moveMap(turretTimes, false);
 
             sel = { c0: sel.c0 + dx, r0: sel.r0 + dy,
                     c1: sel.c1 + dx, r1: sel.r1 + dy };
@@ -1787,6 +1864,7 @@
             exitArriveG = shiftMap(exitArriveG, false);
             teleDests = shiftMap(teleDests, true);
             attrVals = shiftMap(attrVals, false);
+            turretTimes = shiftMap(turretTimes, false);
 
             dirty = true;
             // drawAll και ΟΧΙ refreshSource: το δεύτερο ενημερώνει μόνο το
@@ -2124,6 +2202,14 @@
             (dto.attrs || []).forEach(function (a) {
                 attrVals.set(attrKey(a.kind, a.col, a.row), a.value || 0);
             });
+            // Ο πυργίσκος έρχεται σε δική του λίστα, γιατί κουβαλά τρεις
+            // αριθμούς. Το κανάλι μπαίνει στον ΙΔΙΟ πίνακα με όλα τα άλλα.
+            turretTimes = new Map();
+            (dto.turrets || []).forEach(function (t) {
+                attrVals.set(attrKey("turret", t.col, t.row), t.channel || 0);
+                turretTimes.set(cellKey(t.col, t.row),
+                                [t.reload || TURRET_RELOAD, t.auto || 0]);
+            });
             teleDests = new Map();
             (dto.teleports || []).forEach(function (t) {
                 const dest = (t.destCol === null || t.destCol === undefined ||
@@ -2235,10 +2321,17 @@
                 })),
                 // Μία εγγραφή ανά ΟΜΑΔΑ καλωδίωσης· ο server παραλείπει όσες
                 // έχουν 0, που είναι η προεπιλογή και δεν χρειάζεται γραμμή.
-                attrs: WIRING.flatMap(w =>
+                attrs: WIRING.filter(w => !w.times).flatMap(w =>
                     (attrGroups.get(w.kind) || []).map(g => ({
                         kind: w.kind, col: g.col, row: g.row, value: g.value || 0,
                         cells: g.cells.length,
+                    }))),
+                // ΕΞΩ ΑΠΟ ΤΑ attrs, γιατί η γραμμή του πυργίσκου έχει τρεις
+                // αριθμούς και δικό της σχήμα. Ο server τη γράφει ανά κελί.
+                turrets: WIRING.filter(w => w.times).flatMap(w =>
+                    (attrGroups.get(w.kind) || []).map(g => ({
+                        col: g.col, row: g.row, channel: g.value || 0,
+                        reload: g.reload, auto: g.auto, cells: g.cells.length,
                     }))),
                 // Μία εγγραφή ανά ΟΜΑΔΑ — ο server γράφει μία γραμμή «tp …» για
                 // όσες έχουν προορισμό και παραλείπει τις υπόλοιπες.

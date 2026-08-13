@@ -69,6 +69,12 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             doc.SetAttrLinks(request.Attrs
                 .Select(a => new AttrLink(a.Kind, a.Col, a.Row, a.Value)));
 
+            // ΞΕΧΩΡΙΣΤΑ ΑΠΟ ΤΑ Attrs: ο πυργίσκος έχει τρεις αριθμούς και δική
+            // του γραμμή. Το SetAttrLinks δεν την αγγίζει — αν την άγγιζε, θα
+            // την ξανάγραφε χωρίς τους χρόνους.
+            doc.SetTurretLinks(request.Turrets
+                .Select(t => new TurretLink(t.Col, t.Row, t.Channel, t.Reload, t.Auto)));
+
             doc.StartGravity = request.Gravity;
 
             var warnings = store.Save(request.Name, doc);
@@ -297,7 +303,31 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
                     byKind.TryGetValue((kind, g.Col, g.Row), out var v) ? v : 0,
                     g.Cells.Count));
 
+        // Η δήλωση του πυργίσκου ζητιέται από ΟΠΟΙΟΔΗΠΟΤΕ κελί της ομάδας και όχι
+        // μόνο από το αναγνωριστικό της. Ο editor γράφει γραμμή για κάθε κελί,
+        // αλλά ένα αρχείο γραμμένο στο χέρι μπορεί να έχει μία μόνο, οπουδήποτε
+        // μέσα στην ομάδα — και δεν έχει νόημα να τη χάσει ο σχεδιαστής επειδή
+        // δεν τη διάλεξε στο πάνω-αριστερό κελί.
+        var turByCell = doc.TurretLinks()
+            .GroupBy(l => (l.Col, l.Row))
+            .ToDictionary(g => g.Key, g => g.Last());
+
+        var turrets = doc.TurretGroups()
+            .Select(g =>
+            {
+                var link = g.Cells
+                    .Select(c => turByCell.TryGetValue((c.Col, c.Row), out var l) ? l : null)
+                    .FirstOrDefault(l => l is not null);
+                return link is null
+                    ? new TurretDto(g.Col, g.Row, 0, TurretGraph.DefaultReload, 0,
+                        g.Cells.Count)
+                    : new TurretDto(g.Col, g.Row, link.Channel, link.Reload, link.Auto,
+                        g.Cells.Count);
+            })
+            .ToList();
+
         return new LevelDto(name, doc.Rows, doc.Header, doc.Footer,
-            exits, teleports, RoomNaming.NumberOf(name), doc.StartGravity, attrs);
+            exits, teleports, RoomNaming.NumberOf(name), doc.StartGravity, attrs,
+            turrets);
     }
 }

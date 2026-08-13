@@ -176,8 +176,17 @@ geometry the hero will actually meet.
 | `v` | Spikes ↓ | Points down, base at the top. |
 | `<` | Spikes ← | Points left, base on the right. |
 | `>` | Spikes → | Points right, base on the left. |
+| `I` | Turret ↕ | Shoots up or down, towards whichever side you are on. |
+| `=` | Turret ↔ | Shoots left or right. |
+| `i` `o` | Turret, off | The same two, drawn already switched off. |
 
 Spikes drain energy while you are in contact, not instantly.
+
+A turret is **not solid** — you walk straight through it. Its arrow travels 6 pixels per
+update while you walk at 4 and run at 8, so you cannot outrun one at walking pace; and
+running costs double score per step. It reaches 80 pixels and hurts more the closer it
+catches you. Two arrows can be in the air at once, counted across the whole room. Its
+three settings live in the *Wiring — targets* panel — see §8.
 
 ### Surfaces & zones
 
@@ -338,12 +347,30 @@ does.
 | **Gate (`G`)** | Not solid — you pass through. A gate can also be opened directly: stand on it holding a key of its channel and press the action key — the in-game hint says so when you are carrying the right key. |
 | **Lock (`K`)** | Unlocked — you pass through. |
 | **Spikes (`^ v < >`)** | Retracted into the floor: still solid, but harmless. |
+| **Turret (`I` `=`)** | Switched off: it stops shooting. |
 
 Any actuator drives any target: a switch can unlock a lock, a key can open a gate, a
-pressure plate can pull spikes in. "Open" means the same thing in all three cases — *it
-no longer stops you*.
+pressure plate can pull spikes in. "Open" means the same thing in all cases — *it no
+longer stops you*, or in the turret's case *it no longer shoots you*.
 
 Channels run **1–7**. **Channel 0 means unwired** and writes nothing to the file.
+
+### The turret's two extra fields
+
+A turret row has three fields instead of one. Beside the channel:
+
+| | |
+|---|---|
+| **reload** | Seconds between two shots **when it sees you**. Default 5, range 1–60. |
+| **rhythm** | `0` = shoots only when it sees you. Above 0, it shoots **every N seconds** with no line of sight and no range check — and then **reload is not used at all**. |
+
+The two modes are different puzzles. With `rhythm 0` the turret reacts to you: stay out of
+its line, or cross it fast enough. With a rhythm it is a metronome you have to time,
+firing whether or not anyone is there.
+
+Adjacent cells of the **same** turret character are one object and share all three
+settings, exactly like a two-cell gate. A vertical and a horizontal turret side by side
+are two separate objects, because they are different characters.
 
 Hover a row to see the connection: the group and all its peers on the same channel are
 boxed in yellow and joined by dashed arrows. The channel number is drawn on the cells
@@ -550,9 +577,15 @@ identity. **A value of 0 is never written** — 0 is the default and a line for 
 noise. For a lock, `auto` adds 8 to the value, so `lock 12 4 11` is identity 3 with auto
 opening.
 
+**`turret <col> <row> <channel> [<reload> [<rhythm>]]`** — a turret needs three numbers,
+so it gets its own line instead of a wiring one. The two times are optional and
+positional; left out, they mean 5 and 0. Unlike every other object, a line is written for
+**each cell** of a multi-cell turret, because the game reads the times per cell and only
+the channel per group.
+
 Everything is matched loosely — case and spacing do not matter — so hand-written lines
-are read back correctly. The editor rewrites all `exit`, `tp` and wiring lines from its
-own state on every save; your comments survive untouched.
+are read back correctly. The editor rewrites all `exit`, `tp`, wiring and `turret` lines
+from its own state on every save; your comments survive untouched.
 
 ---
 
@@ -565,11 +598,14 @@ own state on every save; your comments survive untouched.
 | Start markers | at most one `@` per room |
 | Channels / identities | 1–7 (0 = unwired) |
 | Gravity directions | 0–7 |
-| Rooms per set file | 40 |
-| Room set files | up to 99, so about 3960 rooms in principle |
+| Turrets per room | 8 |
+| Turret reload / rhythm | 1–60 and 0–60 seconds |
+| Arrows in the air | 2, across the whole room |
+| Rooms per set file | 4 |
+| Room set files | up to 99 |
 | Undo depth | 100 steps |
 
-The real constraint is **memory, not room count**. Each set of 40 rooms must fit in the
+The real constraint is **memory, not room count**. Each set of rooms must fit in the
 CPC's buffer after compression. If it does not, the build fails and says so — the message
 asks for fewer or sparser rooms. Rooms with large blocks of the same cell compress well;
 rooms of scattered detail do not.

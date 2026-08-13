@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using GravassistEditor.Models;
 using GravassistEditor.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
@@ -460,6 +461,116 @@ var mixed = arc.Import(new MemoryStream(
 Check("μη-.txt αγνοείται και η υπόλοιπη εισαγωγή προχωρά",
       File.Exists(Path.Combine(zdir, "room_3.txt"))
       && mixed.Any(e => e.Name == "readme.md" && e.Kind == "skipped"));
+
+// ==================================================================== πυργίσκοι
+//
+// Ο πυργίσκος είναι το μόνο καλωδιωμένο αντικείμενο με ΤΡΕΙΣ αριθμούς, οπότε
+// έχει δική του γραμμή και δικό του γράφο. Ό,τι ελέγχεται εδώ είναι ακριβώς τα
+// σημεία όπου αυτό διαφέρει από τα υπόλοιπα είδη.
+
+Console.WriteLine("--- πυργίσκοι");
+
+// Πίστα με πυργίσκους σε δοσμένες θέσεις, πάνω στο ίδιο άδειο δωμάτιο.
+string TurretLevel(params (int Col, int Row, char Sym)[] cells)
+{
+    var rows = new List<string> { new('#', 40) };
+    for (var i = 0; i < 22; i++) rows.Add("#" + new string('.', 38) + "#");
+    rows.Add(new string('#', 40));
+    foreach (var (c, r, s) in cells)
+    {
+        var line = rows[r].ToCharArray();
+        line[c] = s;
+        rows[r] = new string(line);
+    }
+
+    return "; turrets\n" + string.Join("\n", rows) + "\ngravity 0\n";
+}
+
+var tOne = TurretGraph.ParseLines(["turret 10 16 4 2 3"]).Single();
+Check("η γραμμή διαβάζεται με τους τρεις αριθμούς",
+      tOne is { Col: 10, Row: 16, Channel: 4, Reload: 2, Auto: 3 }, tOne.ToString());
+
+var tShort = TurretGraph.ParseLines(["turret 10 16 4"]).Single();
+Check("χωρίς χρόνους ισχύουν οι προεπιλογές — όπως στο physics.py",
+      tShort is { Channel: 4, Auto: 0 } && tShort.Reload == TurretGraph.DefaultReload,
+      tShort.ToString());
+
+// Η ΓΡΑΜΜΗ ΔΕΝ ΑΝΗΚΕΙ ΣΤΟΝ AttrGraph. Αν του ανήκε, το SetAttrLinks θα την
+// έσβηνε και θα την ξανάγραφε ως «turret c r v» — δηλαδή χωρίς τους χρόνους.
+//
+// ΜΕ ΤΗ ΣΥΝΤΟΜΗ ΜΟΡΦΗ, και όχι με την πλήρη: εκείνη έχει πέντε αριθμούς και δεν
+// ταιριάζει στο σχήμα της καλωδίωσης ούτως ή άλλως, οπότε δεν αποδεικνύει
+// τίποτα. Η «turret 10 16 4» είναι ακριβώς όσο μοιάζει με «gate 10 16 4», και
+// είναι ΝΟΜΙΜΗ γραμμή — έτσι γράφονταν οι πυργίσκοι πριν αποκτήσουν χρόνους.
+foreach (var line in new[] { "turret 10 16 4", "turret 10 16 4 2 3" })
+{
+    Check($"ο AttrGraph ΔΕΝ αναγνωρίζει «{line}»", !AttrGraph.IsAttrLine(line));
+    Check("…ούτε τη διαβάζει ως καλωδίωση", AttrGraph.ParseLines([line]).Count == 0);
+
+    var keep = LevelDocument.Parse(TurretLevel((10, 16, 'I')));
+    keep.Footer.Add(line);
+    keep.SetAttrLinks([new AttrLink("gate", 5, 5, 1)]);
+    Check("…και το SetAttrLinks την αφήνει άθικτη",
+          keep.Footer.Contains(line), string.Join(" | ", keep.Footer));
+}
+
+// ΜΙΑ ΓΡΑΜΜΗ ΑΝΑ ΚΕΛΙ. Το turret_arg του μοντέλου έχει κλειδί το κελί και δεν
+// απλώνεται στην ομάδα: με μία μόνο γραμμή, ο δεύτερος από δύο κολλητούς
+// πυργίσκους θα κρατούσε το κανάλι αλλά θα έπαιρνε τους προεπιλεγμένους χρόνους.
+var pair = LevelDocument.Parse(TurretLevel((10, 16, 'I'), (10, 17, 'I')));
+Check("δύο κολλητοί πυργίσκοι είναι ΜΙΑ ομάδα",
+      pair.TurretGroups().Single().Cells.Count == 2);
+pair.SetTurretLinks([new TurretLink(10, 16, 4, 2, 3)]);
+Check("…και γράφονται ΔΥΟ γραμμές, μία ανά κελί",
+      pair.Footer.Count(TurretGraph.IsTurretLine) == 2
+      && pair.Footer.Contains("turret 10 16 4 2 3")
+      && pair.Footer.Contains("turret 10 17 4 2 3"),
+      string.Join(" | ", pair.Footer.Where(TurretGraph.IsTurretLine)));
+
+// Οι δύο άξονες είναι ΔΙΑΦΟΡΕΤΙΚΟΙ χαρακτήρες, άρα διαφορετικά αντικείμενα
+// ακόμα κι όταν ακουμπάνε — ακριβώς όπως τα κρίνει το _groups_of του physics.py.
+var axes = LevelDocument.Parse(TurretLevel((10, 16, 'I'), (11, 16, '=')));
+Check("κάθετος και οριζόντιος δίπλα-δίπλα ΔΕΝ ενώνονται",
+      axes.TurretGroups().Count == 2, axes.TurretGroups().Count.ToString());
+
+var plain = LevelDocument.Parse(TurretLevel((10, 16, 'I')));
+plain.SetTurretLinks([new TurretLink(10, 16, 0, TurretGraph.DefaultReload, 0)]);
+Check("ολόκληρη προεπιλογή -> καμία γραμμή, καθαρό αρχείο",
+      !plain.Footer.Any(TurretGraph.IsTurretLine),
+      string.Join(" | ", plain.Footer));
+
+var orphan = LevelDocument.Parse(TurretLevel((10, 16, 'I')));
+orphan.SetTurretLinks([new TurretLink(3, 3, 4, 2, 3)]);
+Check("δήλωση χωρίς πυργίσκο στο πλέγμα πετιέται",
+      !orphan.Footer.Any(TurretGraph.IsTurretLine));
+
+var stray = LevelDocument.Parse(TurretLevel((10, 16, 'I')));
+stray.Footer.Add("turret 3 3 4 2 3");
+Check("…και όταν έρχεται από το αρχείο, το λέει",
+      stray.ValidateContent(_ => true).Warnings.Any(w => w.Contains("turret 3 3")),
+      string.Join(" | ", stray.ValidateContent(_ => true).Warnings));
+
+// Φόρτιση 0 ΧΩΡΙΣ ρυθμό σημαίνει «ρίχνει σε κάθε ενημέρωση»: στο μοντέλο το
+// turret_ready βγαίνει ίσο με το ρολόι και ο πυργίσκος δεν σταματά ποτέ.
+var clamped = TurretGraph.Clamp(new TurretLink(1, 1, 9, 0, 999));
+Check("οι τιμές μπαίνουν στα όρια του παιχνιδιού",
+      clamped is { Channel: 7, Reload: 1 } && clamped.Auto == TurretGraph.MaxSeconds,
+      clamped.ToString());
+
+var reload = LevelDocument.Parse(TurretLevel((10, 16, 'I')));
+reload.SetTurretLinks([new TurretLink(10, 16, 0, 0, 0)]);
+Check("…και γράφονται ήδη διορθωμένες",
+      reload.Footer.Contains("turret 10 16 0 1 0"),
+      string.Join(" | ", reload.Footer));
+
+// Round-trip: αποθήκευση χωρίς αλλαγή δεν πολλαπλασιάζει γραμμές.
+var twice = LevelDocument.Parse(TurretLevel((10, 16, 'I')));
+twice.SetTurretLinks([new TurretLink(10, 16, 4, 2, 3)]);
+var read = twice.TurretLinks().Single();
+twice.SetTurretLinks([new TurretLink(10, 16, read.Channel, read.Reload, read.Auto)]);
+Check("δεύτερη αποθήκευση δεν διπλασιάζει τη γραμμή",
+      twice.Footer.Count(TurretGraph.IsTurretLine) == 1,
+      string.Join(" | ", twice.Footer.Where(TurretGraph.IsTurretLine)));
 
 Console.WriteLine(fails == 0 ? "ΟΛΑ ΣΩΣΤΑ" : $"{fails} ΑΠΟΤΥΧΙΕΣ");
 Environment.Exit(fails);

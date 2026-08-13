@@ -55,10 +55,118 @@ public sealed record TeleportLink(int Col, int Row, int DestCol, int DestRow);
 public sealed record AttrLink(string Kind, int Col, int Row, int Value);
 
 /// <summary>
+/// Μία γραμμή footer «turret &lt;col&gt; &lt;row&gt; &lt;κανάλι&gt; [φόρτιση] [αυτόματα]».
+///
+/// WHY ITS OWN LINE, and not one more entry in <see cref="AttrGraph"/>: a turret
+/// carries THREE numbers, and an attribute line carries one. The channel could
+/// live in the attribute byte, the two times could not — that byte spends 3 bits
+/// on the channel and bit 3 on LOCK_AUTO.
+/// </summary>
+/// <param name="Channel">Κανάλι διακόπτη, 0..7. 0 = ακαλωδίωτος.</param>
+/// <param name="Reload">Δευτερόλεπτα ανάμεσα σε δύο βολές «όταν σε βλέπει».</param>
+/// <param name="Auto">
+/// 0 = ρίχνει μόνο όταν σε βλέπει. Μεγαλύτερο του 0 = ρίχνει σε αυτόν τον ρυθμό
+/// (δευτερόλεπτα) χωρίς οπτική επαφή, και τότε το <paramref name="Reload"/> δεν
+/// χρησιμοποιείται καθόλου.
+/// </param>
+public sealed record TurretLink(int Col, int Row, int Channel, int Reload, int Auto);
+
+/// <summary>
+/// Ανάγνωση και γραφή των γραμμών «turret» του footer.
+///
+/// ΜΙΑ ΓΡΑΜΜΗ ΑΝΑ ΚΕΛΙ, όχι ανά ομάδα — και είναι η μόνη καλωδίωση που το κάνει.
+/// Το tools/physics.py κρατά τους δύο χρόνους σε λεξικό με κλειδί το ΚΕΛΙ
+/// (<c>turret_arg</c>) και δεν τους απλώνει στην ομάδα, ενώ το κανάλι το απλώνει
+/// (<c>_link</c>). Δύο κολλητοί πυργίσκοι με μία γραμμή θα κρατούσαν λοιπόν το
+/// ίδιο κανάλι αλλά διαφορετικούς χρόνους — ο ένας τους δικούς σου, ο άλλος τις
+/// προεπιλογές.
+/// </summary>
+public static class TurretGraph
+{
+    /// <summary>Η προεπιλεγμένη φόρτιση σε δευτερόλεπτα — <c>TURRET_COOL</c> στο tools/physics.py.</summary>
+    public const int DefaultReload = 5;
+
+    /// <summary>Το ανώτατο των δύο χρόνων. Ταξιδεύουν ως ένα byte στη δισκέτα.</summary>
+    public const int MaxSeconds = 60;
+
+    /// <summary>Και οι δύο άξονες, αναμμένοι και σβηστοί.</summary>
+    public static readonly char[] Symbols = ['I', '=', 'i', 'o'];
+
+    // Το ΙΔΙΟ pattern με το tools/physics.py: οι δύο χρόνοι είναι προαιρετικοί
+    // και θέσης, ώστε οι γραμμές που γράφτηκαν στο χέρι πριν υπάρξουν οι
+    // παράμετροι να διαβάζονται ακόμα.
+    private static readonly Regex LinePattern = new(
+        @"^\s*turret\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?(?:\s+(\d+))?\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    public static bool IsTurretLine(string line) => LinePattern.IsMatch(line);
+
+    /// <summary>Οι τιμές μέσα στα όρια που δέχεται το παιχνίδι.</summary>
+    /// <remarks>
+    /// Η φόρτιση δεν κατεβαίνει κάτω από 1: με 0 και χωρίς ρυθμό, το
+    /// <c>turret_ready</c> του μοντέλου βγαίνει ίσο με το ρολόι και ο πυργίσκος
+    /// ρίχνει σε κάθε ενημέρωση.
+    /// </remarks>
+    public static TurretLink Clamp(TurretLink link) => link with
+    {
+        Channel = Math.Clamp(link.Channel, 0, 7),
+        Reload = Math.Clamp(link.Reload, 1, MaxSeconds),
+        Auto = Math.Clamp(link.Auto, 0, MaxSeconds),
+    };
+
+    /// <summary>Είναι όλα στην προεπιλογή, άρα η γραμμή περιττή;</summary>
+    public static bool IsDefault(TurretLink link) =>
+        link.Channel == 0 && link.Reload == DefaultReload && link.Auto == 0;
+
+    /// <summary>
+    /// Και οι πέντε αριθμοί, πάντα. Οι δύο τελευταίοι είναι προαιρετικοί στον
+    /// parser, αλλά γραμμένοι φαίνονται — και μια γραμμή γράφεται μόνο όταν
+    /// κάτι δεν είναι προεπιλογή, οπότε δεν υπάρχει θόρυβος να γλιτώσουμε.
+    /// </summary>
+    public static string FormatLine(TurretLink link) => string.Create(
+        CultureInfo.InvariantCulture,
+        $"turret {link.Col} {link.Row} {link.Channel} {link.Reload} {link.Auto}");
+
+    public static List<TurretLink> ParseLines(IEnumerable<string> lines)
+    {
+        var links = new List<TurretLink>();
+        foreach (var line in lines)
+        {
+            var m = LinePattern.Match(line);
+            if (!m.Success) continue;
+            links.Add(new TurretLink(
+                int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture),
+                int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture),
+                int.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture),
+                m.Groups[4].Success
+                    ? int.Parse(m.Groups[4].Value, CultureInfo.InvariantCulture)
+                    : DefaultReload,
+                m.Groups[5].Success
+                    ? int.Parse(m.Groups[5].Value, CultureInfo.InvariantCulture) : 0));
+        }
+
+        return links;
+    }
+
+    /// <summary>Οι ομάδες κελιών πυργίσκου, σε σειρά σάρωσης κατά γραμμές.</summary>
+    public static List<CellGroup> FindGroups(IReadOnlyList<string> rows)
+    {
+        var groups = Symbols.SelectMany(s => CellGroups.Find(rows, s)).ToList();
+        groups.Sort((a, b) => a.Row != b.Row ? a.Row - b.Row : a.Col - b.Col);
+        return groups;
+    }
+}
+
+/// <summary>
 /// Ανάγνωση και γραφή των γραμμών καλωδίωσης του footer.
 ///
 /// Ένας πίνακας για τα τέσσερα είδη: κάθε κελί έχει ακριβώς έναν τύπο, οπότε
 /// το είδος προκύπτει από το ίδιο το πλέγμα και δεν υπάρχει ασάφεια.
+///
+/// Ο ΠΥΡΓΙΣΚΟΣ ΔΕΝ ΕΙΝΑΙ ΕΔΩ, αν και είναι καλωδιωμένος: θέλει τρεις αριθμούς
+/// και εδώ χωράει ένας. Ζει στο <see cref="TurretGraph"/>, και το
+/// <see cref="LinePattern"/> επίτηδες δεν ταιριάζει τις γραμμές του — αλλιώς το
+/// <c>SetAttrLinks</c> θα τις έσβηνε και θα τις ξανάγραφε χωρίς τους χρόνους.
 /// </summary>
 public static class AttrGraph
 {

@@ -290,6 +290,38 @@ public sealed class LevelDocument
             Footer.Add(AttrGraph.FormatLine(link));
     }
 
+    // ===================== Πυργίσκοι =====================
+
+    /// <summary>Οι ομάδες κελιών πυργίσκου, σε σειρά σάρωσης κατά γραμμές.</summary>
+    public List<CellGroup> TurretGroups() => TurretGraph.FindGroups(Rows);
+
+    /// <summary>Οι δηλώσεις «turret …» της ουράς.</summary>
+    public List<TurretLink> TurretLinks() => TurretGraph.ParseLines(Footer);
+
+    /// <summary>
+    /// Ξαναγράφει τις γραμμές «turret» της ουράς. Οι σύνδεσμοι έρχονται ΑΝΑ
+    /// ΟΜΑΔΑ — ένα σύνολο ρυθμίσεων ανά αντικείμενο, όπως παντού αλλού στον
+    /// editor — και γράφονται ΑΝΑ ΚΕΛΙ, γιατί έτσι τους διαβάζει το μοντέλο
+    /// (δες <see cref="TurretGraph"/>).
+    ///
+    /// Ό,τι είναι ολόκληρο στην προεπιλογή δεν γράφεται· ό,τι δεν πέφτει πάνω
+    /// σε ομάδα του πλέγματος πετιέται, όπως και μια ορφανή «exit».
+    /// </summary>
+    public void SetTurretLinks(IEnumerable<TurretLink> links)
+    {
+        Footer.RemoveAll(TurretGraph.IsTurretLine);
+        var groups = TurretGroups().ToDictionary(g => (g.Col, g.Row));
+        foreach (var link in links)
+        {
+            if (!groups.TryGetValue((link.Col, link.Row), out var group)) continue;
+            var v = TurretGraph.Clamp(link);
+            if (TurretGraph.IsDefault(v)) continue;
+            foreach (var cell in group.Cells)
+                Footer.Add(TurretGraph.FormatLine(
+                    v with { Col = cell.Col, Row = cell.Row }));
+        }
+    }
+
     /// <summary>
     /// Επικύρωση περιεχομένου (πέρα από τη μορφή): δείκτες εκκίνησης και έξοδοι.
     ///
@@ -351,6 +383,7 @@ public sealed class LevelDocument
         }
 
         ValidateTeleports(errors, warnings);
+        ValidateTurrets(warnings);
         return new ValidationReport(errors, warnings);
     }
 
@@ -396,6 +429,25 @@ public sealed class LevelDocument
         {
             warnings.Add($"The declaration \"{TeleportGraph.FormatLine(link)}\" does not match " +
                          "a teleporter group on the grid and was ignored.");
+        }
+    }
+
+    /// <summary>
+    /// Δήλωση «turret» πάνω σε κελί που δεν είναι πυργίσκος: δεν κάνει τίποτα
+    /// στο παιχνίδι και θα χαθεί στην επόμενη αποθήκευση. ΠΡΟΕΙΔΟΠΟΙΗΣΗ και όχι
+    /// σφάλμα — τυπικά είναι πυργίσκος που έσβησε ο σχεδιαστής, όχι λάθος.
+    /// </summary>
+    private void ValidateTurrets(List<string> warnings)
+    {
+        var cells = TurretGroups()
+            .SelectMany(g => g.Cells)
+            .Select(c => (c.Col, c.Row))
+            .ToHashSet();
+
+        foreach (var link in TurretLinks().Where(l => !cells.Contains((l.Col, l.Row))))
+        {
+            warnings.Add($"The declaration \"{TurretGraph.FormatLine(link)}\" does not " +
+                         "match a turret on the grid and was ignored.");
         }
     }
 
