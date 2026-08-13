@@ -32,7 +32,17 @@ ARENA_H         equ 5
 ; κατέβηκε από τη 20 στη 22.
 MENU_TXT_ROW    equ 22          ; γραμμές κειμένου του firmware (από 1)
 MENU_SIG_ROW    equ 23
-MENU_PAGE       equ 500         ; frames ανά σελίδα πλήκτρων = 10 δευτερόλεπτα
+; KL TIME PLEASE: DEHL = time since reset in 1/300 s. AF corrupt, every other
+; register preserved. This is the only honest clock we have here.
+KL_TIME_PLEASE  equ #BD0D
+
+; Three seconds per page of controls.
+;
+; MEASURED IN REAL TIME, NOT LOOP PASSES. The old code counted iterations of
+; menu_loop and called them frames, but one pass costs two to four vsyncs —
+; hero_update dominates — so "500 frames = 10 seconds" was really 20 to 40,
+; and it drifted with whatever else the loop was doing.
+MENU_PAGE       equ 3*300
 
 ;---------------------------------------------------------------------
 ; menu_show — δείχνει το μενού και γυρίζει όταν πατηθεί SPACE
@@ -56,6 +66,8 @@ endif
                 call menu_text
                 call menu_keys
                 call hs_menu            ; οι πέντε μεγαλύτερες, από τη δισκέτα
+                call KL_TIME_PLEASE     ; start the first page now, otherwise it
+                ld   (menu_page_t0),hl  ; is as long as the clock happened to be
                 call music_start        ; ο βρόχος τη συντηρεί, νότα τη νότα
 
                 ; Ο ήρωας ξεκινά μέσα στην αρένα και περπατάει για πάντα.
@@ -76,17 +88,17 @@ endif
                 xor  a
                 ld   (last_valid),a
 
-menu_loop:      ld   hl,(menu_tick)     ; κάθε MENU_PAGE frames, άλλαξε σελίδα
-                inc  hl
-                ld   (menu_tick),hl
-                ld   a,h
-                cp   MENU_PAGE/256
-                jr   nz,mk_no
-                ld   a,l
-                cp   MENU_PAGE&255
-                jr   nz,mk_no
-                ld   hl,0
-                ld   (menu_tick),hl
+menu_loop:      call KL_TIME_PLEASE     ; HL = low word of the 1/300 s counter
+                ld   (menu_now),hl      ; 16 bits span 218 s — far more than a
+                ld   de,(menu_page_t0)  ; page, so the high word is not needed
+                or   a
+                sbc  hl,de              ; HL = ticks on this page
+                ld   de,MENU_PAGE
+                or   a
+                sbc  hl,de
+                jr   c,mk_no            ; page not finished yet
+                ld   hl,(menu_now)
+                ld   (menu_page_t0),hl
                 ld   a,(key_page)
                 xor  1
                 ld   (key_page),a
@@ -206,10 +218,11 @@ menu_keys:      ld   a,INK_HERO_PEN
                 ld   hl,menu_keys_b
 mk_go:          jr   mt_lp
 
-; ΟΧΙ 'menu_page': το rasm είναι case-insensitive και θα
-; συγκρουόταν με τη σταθερά MENU_PAGE.
+; NOT 'menu_page': rasm is case-insensitive and it would clash with the
+; MENU_PAGE constant.
 key_page        db 0
-menu_tick       dw 0
+menu_page_t0    dw 0            ; when the visible page started, in 1/300 s
+menu_now        dw 0
 
 ; menu_puts — τυπώνει B χαρακτήρες από το DE στη θέση (H,L)
 ;   OUT: DE = ένα byte μετά το κείμενο

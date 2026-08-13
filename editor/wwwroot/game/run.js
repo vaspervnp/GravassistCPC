@@ -553,7 +553,11 @@
     [[3, 12, "F7 F8 F9"], [3, 13, "F4    F6"], [3, 14, "F1 F2 F3"],
      [28, 11, "< >  walk"]],
   ];
-  const MENU_PAGE = 500;              // frames ανά σελίδα = 10 δευτερόλεπτα
+  // Three seconds per page of controls, same as MENU_PAGE in src/menu.asm.
+  // COUNTED IN VSYNCS, not in mtick: one mtick is a whole CPC update, which
+  // costs CPC_VSYNC_WALK vsyncs. Counting ticks would make the page length
+  // depend on the frame cost, which is the bug the Amstrad side just lost.
+  const MENU_PAGE_VSYNC = 3 * 50;
 
   function menu(firstRoom) {
     const SOLID = D.TYPE_NAMES.indexOf("SOLID");
@@ -591,7 +595,8 @@
         mhero.x, mhero.y);
       screen.flush();
       screen.menuText(MENU_LINES);      // …και το firmware κείμενο από πάνω
-      screen.menuText(MENU_KEYS[Math.floor(mtick / MENU_PAGE) % 2]);
+      const vsyncs = mtick * D.K.CPC_VSYNC_WALK;
+      screen.menuText(MENU_KEYS[Math.floor(vsyncs / MENU_PAGE_VSYNC) % 2]);
       return D.K.CPC_VSYNC_WALK;
     });
   }
