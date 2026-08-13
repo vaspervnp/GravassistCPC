@@ -139,6 +139,7 @@ test:
 	$(PY) tools/verify_rotate.py
 	$(PY) tools/test_physics.py
 	$(PY) tools/test_z80.py
+	$(PY) tools/test_music.py
 	@# Ο έλεγχος του προσωπικού φακέλου θέλει .NET, που δεν είναι στο PATH.
 	@if [ -x "$$HOME/.dotnet/dotnet" ]; then \
 	    "$$HOME/.dotnet/dotnet" run --project editor.Tests -v q --nologo; \

@@ -14,6 +14,14 @@
 ;  that runs while the window is open must sit above it — here the whole
 ;  program does, which is why this file needs no separate stub.
 ;
+;  AND THAT INCLUDES THE STACK, which is the part that bit. The loader has to
+;  do MEMORY &7FFF to leave room for a program at #8000, and on the CPC the
+;  BASIC stack sits just below HIMEM — that is #7FFx, INSIDE the window. The
+;  game gets away with a plain `pop` around its own bank switch only because
+;  its loader does MEMORY &3FFF and its stack is below #4000; src/bank.asm
+;  refuses to switch at all if that is ever untrue. Here refusing would mean
+;  never playing, so the program takes a stack of its own instead.
+;
 ;  Only the firmware jumpblock (#B800+) and the screen are touched otherwise,
 ;  so this cannot disturb the game's build in any way.
 ;=====================================================================
@@ -38,18 +46,33 @@ BANK_WIN        equ  #4000
 BUF_NOTES       equ  10
 BUF_BYTES       equ  BUF_NOTES*3
 
-start:          ld   a,1
+; Room for our own stack plus whatever the firmware pushes on top of it — the
+; 300 Hz ticker interrupts throughout and services the sound queue there. Our
+; own nesting is five calls deep at worst; the rest of this is the firmware's,
+; and generous on purpose, because an overflow here would land on chan_src and
+; look exactly like the bug this file was written to avoid.
+STACK_SZ        equ  256
+
+start:          ld   (bas_sp),sp        ; BASIC's stack is in the window; ours
+                ld   sp,our_stack       ; is up here, out of the bank's way
+                ld   a,1
                 call SCR_SET_MODE
                 ld   hl,msg_play
                 call puts
 
                 call bank_probe
-                ld   a,(bank_ok)
+                ld   a,(sp_bad)
+                or   a
+                jr   z,mt_sp_ok
+                ld   hl,msg_sp          ; cannot happen now; says so if it does
+                call puts
+                jr   mt_wait
+mt_sp_ok:       ld   a,(bank_ok)
                 or   a
                 jr   nz,mt_have
                 ld   hl,msg_no64
                 call puts
-                jp   mt_wait            ; 64K machine: say so, do not pretend
+                jr   mt_wait            ; 64K machine: say so, do not pretend
 
 mt_have:        call bank_load          ; the three tracks into block 4
                 call SOUND_RESET
@@ -61,6 +84,7 @@ mt_loop:        call chan_step
                 call SOUND_RESET
 mt_wait:        ld   hl,msg_done
                 call puts
+                ld   sp,(bas_sp)        ; hand BASIC back the stack it lent us
                 ret
 
 ;---------------------------------------------------------------------
@@ -71,12 +95,30 @@ mt_wait:        ld   hl,msg_done
 ;   is ignored, both writes land in the same byte, and the marker is gone.
 ;   The byte belongs to this program, so it is put back either way.
 ;
-; OUT: bank_ok = 1 if the banks answer
+;   FIRST, THOUGH: the stack must not be in the window. Same ten bytes as
+;   src/bank.asm, and here for the same reason — a switch with the stack about
+;   to vanish is not a bug you can debug from the sound it makes. start moves
+;   the stack before calling this, so a failure here means someone changed
+;   that; hence its own flag and its own message rather than a quiet no.
+;
+; OUT: bank_ok = 1 if the banks answer, sp_bad = 1 if the stack is in the way
 ; ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL
 ;---------------------------------------------------------------------
 bank_probe:     xor  a
                 ld   (bank_ok),a
-                di
+                ld   (sp_bad),a
+
+                ld   hl,0               ; HL = SP, without touching the stack
+                add  hl,sp
+                ld   a,h
+                and  #C0
+                cp   BANK_WIN >> 8
+                jr   nz,bp_sp_ok
+                ld   a,1
+                ld   (sp_bad),a
+                ret
+
+bp_sp_ok:       di
                 ld   hl,BANK_WIN
                 ld   d,(hl)             ; whatever is there now
                 ld   bc,GA_PORT_HI*256+ORG_BANK0
@@ -103,8 +145,12 @@ bank_probe:     xor  a
 ; bank_put / bank_get — the only two routines that open the window
 ;
 ;   ONLY LDIR RUNS WITH THE WINDOW OPEN. No call, no jump into #4000..#7FFF,
-;   no firmware. DI around it because the sound queue is serviced on the
-;   interrupt and we hand the firmware nothing while the map is unusual.
+;   no firmware — AND NO STACK. This used to `push bc` before the switch and
+;   `pop bc` after it, which reads the stack, which the switch may just have
+;   replaced. It did: BC came back as whatever happened to be in the bank at
+;   that address (#FFFF on a cold machine) and the LDIR copied sixty-four
+;   kilobytes over the program, the firmware and the screen. The count is kept
+;   above the window instead, where nothing can page it away.
 ;
 ; IN:  HL = source, DE = destination, BC = count
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
@@ -112,10 +158,10 @@ bank_probe:     xor  a
 bank_put:                               ; main memory -> bank
 bank_get:                               ; bank -> main memory (same code)
                 di
-                push bc
+                ld   (bp_len),bc
                 ld   bc,GA_PORT_HI*256+ORG_BANK0
                 out  (c),c
-                pop  bc
+                ld   bc,(bp_len)
                 ldir
                 ld   bc,GA_PORT_HI*256+ORG_BASE
                 out  (c),c
@@ -285,7 +331,26 @@ cn_emit:        ld   a,c
                 ld   a,(ix+CH_MASK)
                 ld   (snd_block),a
                 ld   hl,snd_block
+
+                ; SOUND QUEUE CORRUPTS IX. SOFT968 lists it plainly — "in either
+                ; case A, BC, DE, IX and the other flags are corrupt" — because
+                ; the firmware's own sound manager keeps its channel block in
+                ; IX. Ours is in IX too, and the three lines below dereference
+                ; it, so without this the first queued note leaves IX pointing
+                ; into firmware RAM and the second writes CH_TAKE on top of the
+                ; sound manager's state. IY goes with it: the contract is not
+                ; worth re-reading every time someone adds a firmware call.
+                ; `pop` leaves the flags alone, so the carry still belongs to
+                ; SOUND QUEUE when `ret nc` reads it.
+                ;
+                ; src/musicplay.asm never hit this because it uses no index
+                ; register at all — which is exactly why it works and this
+                ; did not.
+                push ix
+                push iy
                 call SOUND_QUEUE
+                pop  iy
+                pop  ix
                 ret  nc                 ; full: the note stays for next time
 
                 ld   a,(ix+CH_TAKE)     ; consumed: step over the triple
@@ -389,6 +454,7 @@ puts:           ld   a,(hl)
 msg_play:       db   "BOSS TIME - from the upper bank", 13, 10
                 db   "any key to stop", 13, 10, 0
 msg_no64:       db   "no second 64K on this machine", 13, 10, 0
+msg_sp:         db   "stack is inside the bank window", 13, 10, 0
 msg_done:       db   13, 10, "stopped", 13, 10, 0
 
 ; --- channel state ---------------------------------------------------
@@ -400,6 +466,9 @@ CH_BUF          equ  5
 CH_SIZE         equ  CH_BUF+BUF_BYTES
 
 bank_ok         db   0          ; 1 = the banks answered
+sp_bad          db   0          ; 1 = the stack sits in #4000..#7FFF
+bas_sp          dw   0          ; BASIC's stack, to be given back on exit
+bp_len          dw   0          ; LDIR count, held where no bank can hide it
 chan            ds   CH_SIZE*3
 chan_src        ds   4*3        ; bank address + length, per track
 
@@ -413,6 +482,15 @@ snd_vol:        db   0
 snd_dur:        dw   0
 
                 include "music_boss.asm"
+
+; Our stack, above the window — and deliberately the LAST thing in the file.
+; It grows DOWN, so whatever sits immediately below it is what an overflow
+; eats first. Below here is the boss data, which is read once at startup to
+; fill the bank and never again; the alternative position, above the channel
+; state, would have put chan_src there instead — the three (address, length)
+; pairs the whole player streams from.
+                ds   STACK_SZ
+our_stack:
 
 prog_end
                 save 'build/music.bin', #8000, prog_end-#8000

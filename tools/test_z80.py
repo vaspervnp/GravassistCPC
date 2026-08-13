@@ -16,6 +16,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import physics as P
 import roomfile as RF
 
+# Τι χαλάει στ' αλήθεια το SOUND QUEUE (#BCAA) — SOFT968: «A, BC, DE, IX and
+# the other flags are corrupt». Το harness από μόνο του κάνει RET, που τα
+# διατηρεί όλα· η διαφορά κόστισε ένα MUSIC.BIN που κρατούσε δείκτη στο IX.
+# Ο ήχος του παιχνιδιού δεν αγγίζει index registers, οπότε εδώ ο έλεγχος απλώς
+# κλειδώνει ότι θα συνεχίσει να μην τους αγγίζει.
+FW_QUEUE_KILLS = ("a", "bc", "de", "hl", "ix")
+
 FAILS = []
 
 
@@ -830,7 +837,7 @@ def main():
     #     μπαίνει στην ουρά τη σωστή στιγμή, ΜΙΑ φορά. Αυτό δεν φαίνεται από
     #     τη μνήμη: το μπλοκ είναι κοινό και κρατά μόνο το τελευταίο, οπότε
     #     παγιδεύουμε τις ίδιες τις κλήσεις στο SOUND QUEUE.
-    t.trace("SOUND_QUEUE")
+    t.trace("SOUND_QUEUE", corrupt=FW_QUEUE_KILLS)
 
     def sfx():
         """Τα κανάλια των ήχων που μπήκαν στην ουρά από την τελευταία κλήση."""
@@ -861,12 +868,12 @@ def main():
     check("άγνωστος αριθμός εφέ δεν παίζει τίποτα", not sfx())
 
     # Γεμάτη ουρά: το εφέ κόβεται, δεν επαναλαμβάνεται στο άπειρο.
-    t.trace("SOUND_QUEUE", carry=False)
+    t.trace("SOUND_QUEUE", carry=False, corrupt=FW_QUEUE_KILLS)
     t.calls.clear()
     t.call("SFX_PLAY", a=5)             # SFXID_TELE, τέσσερα βήματα
     check("με γεμάτη ουρά δοκιμάζει ΜΙΑ φορά και τα παρατά",
           len(t.calls) == 1, f"{len(t.calls)} κλήσεις")
-    t.trace("SOUND_QUEUE", carry=True)
+    t.trace("SOUND_QUEUE", carry=True, corrupt=FW_QUEUE_KILLS)
 
     # --- Τα παράσιτα της ζώνης
     t.call("SFX_RESET")

@@ -181,6 +181,13 @@ class Z80Test:
         HALT — έτσι δεν χρειάζεται να ξέρουμε πόσο θα τρέξει η ρουτίνα.
         """
         addr = self.sym(name) if isinstance(name, str) else name
+        # #BFF0 ταιριάζει με το ΠΑΙΧΝΙΔΙ: ο loader του κάνει MEMORY &3FFF, άρα
+        # η στοίβα του είναι κάτω από το #4000 — έξω από το παράθυρο των
+        # τραπεζών, όπως και αυτή. ΔΕΝ ταιριάζει με ό,τι φορτώνει ψηλά: με
+        # MEMORY &7FFF η στοίβα κάθεται στο #7FFx, ΜΕΣΑ στο παράθυρο, και τότε
+        # κάθε push/pop γύρω από εναλλαγή τράπεζας συμπεριφέρεται αλλιώς. Αν
+        # δοκιμάζεις τέτοιον κώδικα, βάλε τη στοίβα εκεί που θα είναι στ'
+        # αλήθεια — δες το tools/test_music.py.
         self.m.sp = 0xBFF0
         self.m.sp = (self.m.sp - 2) & 0xFFFF
         self.poke16(self.m.sp, SENTINEL)
@@ -215,24 +222,45 @@ class Z80Test:
     # Η παγίδα σταματά ΠΡΙΝ εκτελεστεί η εντολή στη διεύθυνση, καταγράφει, και
     # μετά κάνει το RET με το χέρι.
 
-    def trace(self, name, nbytes=9, carry=True):
+    def trace(self, name, nbytes=9, carry=True, corrupt=()):
         """Καταγράφει κάθε κλήση στη διεύθυνση: HL και το μπλοκ που δείχνει.
 
         carry=True σημαίνει «η ουρά δέχτηκε τον ήχο». Με False δοκιμάζουμε τι
         κάνει ο κώδικας σε γεμάτη ουρά.
+
+        corrupt: ποιους καταχωρητές ΧΑΛΑΕΙ η ρουτίνα του firmware, π.χ.
+        ("a","bc","de","hl","ix") για το SOUND QUEUE.
+
+        ΓΙΑΤΙ ΥΠΑΡΧΕΙ ΤΟ corrupt: όλο το jumpblock εδώ είναι σκέτο RET, που
+        διατηρεί ΤΑ ΠΑΝΤΑ. Το πραγματικό firmware δεν διατηρεί τίποτα τέτοιο,
+        και το SOUND QUEUE (#BCAA) χαλάει το IX — ο sound manager του κρατάει
+        εκεί το δικό του channel block (SOFT968: «A, BC, DE, IX and the other
+        flags are corrupt»). Ο player του MUSIC.BIN κρατούσε το δικό του IX
+        ζωντανό πάνω από την κλήση και έγραφε μετά πάνω στο firmware· η δοκιμή
+        ήταν πράσινη ακριβώς επειδή το RET του harness ήταν πιο ευγενικό από
+        το σίδερο.
         """
         addr = self.sym(name) if isinstance(name, str) else name
-        self.traps[addr] = (nbytes, carry)
+        self.traps[addr] = (nbytes, carry, tuple(corrupt))
         self.m.set_breakpoint(addr)
         return self
 
+    # Τα bytes-σκουπίδια που αφήνει η παγίδα στους καταχωρητές. Σταθερά, όχι
+    # τυχαία: μια δοκιμή που αποτυγχάνει μία στις πέντε δεν είναι δοκιμή.
+    JUNK = 0xDEAD
+
     def _trapped(self):
-        nbytes, carry = self.traps[self.m.pc]
+        nbytes, carry, corrupt = self.traps[self.m.pc]
         self.calls.append(self.peek(self.m.hl, nbytes))
         ret = self.peek16(self.m.sp)        # η CALL έχει ήδη σπρώξει τη διεύθυνση
         self.m.sp = (self.m.sp + 2) & 0xFFFF
         self.m.pc = ret
         self.m.f = (self.m.f | 0x01) if carry else (self.m.f & 0xFE)
+        for reg in corrupt:
+            if reg in ("a", "b", "c", "d", "e", "h", "l"):
+                setattr(self.m, reg, self.JUNK & 0xFF)
+            else:
+                setattr(self.m, reg, self.JUNK)
 
     def where(self, addr):
         """Το κοντινότερο σύμβολο πριν από τη διεύθυνση — για τα μηνύματα."""
