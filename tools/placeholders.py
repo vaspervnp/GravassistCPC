@@ -107,10 +107,12 @@ def _frame(kind, active):
         rect(f, 1, 1, 6, 6, body)
         line(f, 2, 2, 5, 2, hi)
         line(f, 2, 5, 5, 5, hi)
-        put(f, 3, 0, hi); put(f, 4, 0, hi)   # στόμιο πάνω
-        put(f, 3, 7, hi); put(f, 4, 7, hi)   # στόμιο κάτω
-        if active:
-            put(f, 3, 3, hi); put(f, 4, 4, hi)
+        if not active:                       # αναμμένος: ανοιχτά στόμια
+            put(f, 3, 0, hi); put(f, 4, 0, hi)
+            put(f, 3, 7, hi); put(f, 4, 7, hi)
+        else:                                # σβηστός: κατεβασμένα καπάκια
+            line(f, 2, 0, 5, 0, body)
+            line(f, 2, 7, 5, 7, body)
 
     elif kind == "TELEPORT":                 # δακτύλιος
         rect(f, 1, 1, 6, 6, hi)

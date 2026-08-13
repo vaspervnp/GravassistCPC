@@ -542,6 +542,34 @@ public static class TileCatalog
             </g>
             """),
 
+        new TileType('i', "turret_v_off", HazardGroup, "Turret, vertical (off)",
+            "The same turret with its shutters down. A switch on its channel "
+            + "turns it off and on; draw it like this only when you want it to "
+            + "start switched off.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <rect x="2" y="0" width="4" height="1" fill="var(--fill)"/>
+            <rect x="1" y="1" width="6" height="2" fill="var(--fill)"/>
+            <rect x="1" y="3" width="1" height="2" fill="var(--fill)"/>
+            <rect x="6" y="3" width="1" height="2" fill="var(--fill)"/>
+            <rect x="1" y="5" width="6" height="2" fill="var(--fill)"/>
+            <rect x="2" y="7" width="4" height="1" fill="var(--fill)"/>
+            """),
+
+        new TileType('o', "turret_h_off", HazardGroup, "Turret, horizontal (off)",
+            "The horizontal turret with its shutters down.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <g transform="rotate(90 4 4)">
+            <rect x="2" y="0" width="4" height="1" fill="var(--fill)"/>
+            <rect x="1" y="1" width="6" height="2" fill="var(--fill)"/>
+            <rect x="1" y="3" width="1" height="2" fill="var(--fill)"/>
+            <rect x="6" y="3" width="1" height="2" fill="var(--fill)"/>
+            <rect x="1" y="5" width="6" height="2" fill="var(--fill)"/>
+            <rect x="2" y="7" width="4" height="1" fill="var(--fill)"/>
+            </g>
+            """),
+
         new TileType('p', "plate", MechGroup, "Pressure plate",
             "Active only while pressed by the hero or a crate.",
             Palette.Material, Palette.EdgeColor,

@@ -93,7 +93,15 @@ SWITCH_R_ON = 40
 # πλακίδια και τέσσερις γραμμές σε κάθε πίνακα για καμία επιπλέον δυνατότητα.
 TURRET_V = 41           # ρίχνει πάνω ή κάτω
 TURRET_H = 42           # ρίχνει αριστερά ή δεξιά
+# ΣΒΗΣΤΟΙ: ο διακόπτης τους κλείνει, όπως τραβάει τα αγκάθια. Χρειάζονται δικοί
+# τους τύποι και όχι σημαία, για τον ίδιο λόγο με εκείνα — ο πίνακας κελιών
+# είναι η ΜΟΝΗ μνήμη που έχει η αίθουσα, και ο άξονας πρέπει να επιβιώσει του
+# σβησίματος ώστε να ξέρουμε τι θα ξανανάψει.
+TURRET_V_OFF = 43
+TURRET_H_OFF = 44
 TURRETS = (TURRET_V, TURRET_H)
+TURRETS_OFF = (TURRET_V_OFF, TURRET_H_OFF)
+TURRET_ALL = TURRETS + TURRETS_OFF
 
 # Off -> on, and the reverse. The switch is a toggle: pressing it again turns
 # it back, so both directions are needed.
@@ -120,6 +128,9 @@ CHARS = {
     "u": SPIKE_U_OFF, "h": SPIKE_L_OFF, "j": SPIKE_D_OFF, "l": SPIKE_R_OFF,
     # Πυργίσκοι: το σχήμα του χαρακτήρα ΕΙΝΑΙ ο άξονας βολής.
     "I": TURRET_V, "=": TURRET_H,
+    # Σβηστοί: κανονικά τους σβήνει ο διακόπτης, όχι ο σχεδιαστής — τους
+    # ζωγραφίζεις μόνο όταν θέλεις να ΞΕΚΙΝΟΥΝ σβηστοί.
+    "i": TURRET_V_OFF, "o": TURRET_H_OFF,
 }
 NAMES = {v: k for k, v in CHARS.items()}
 TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
@@ -131,8 +142,8 @@ TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
               "SPIKE_U_OFF", "SPIKE_L_OFF", "SPIKE_D_OFF", "SPIKE_R_OFF",
               "SWITCH_L", "SWITCH_D", "SWITCH_R",
               "SWITCH_U_ON", "SWITCH_L_ON", "SWITCH_D_ON", "SWITCH_R_ON",
-              "TURRET_V", "TURRET_H"]
-NTYPES = 43
+              "TURRET_V", "TURRET_H", "TURRET_V_OFF", "TURRET_H_OFF"]
+NTYPES = 45
 
 # Ποιο αγκάθι αντιστοιχεί σε ποιο τραβηγμένο, και ανάποδα.
 SPIKE_OFF = {SPIKE_U: SPIKE_U_OFF, SPIKE_L: SPIKE_L_OFF,
@@ -197,7 +208,7 @@ WIRED_TYPES = SWITCHES | {
     GATE, GATE_OPEN, LOCK, LOCK_OPEN, KEY, PLATE, PLATE_DOWN,
     SPIKE_U, SPIKE_L, SPIKE_D, SPIKE_R,
     SPIKE_U_OFF, SPIKE_L_OFF, SPIKE_D_OFF, SPIKE_R_OFF,
-}
+} | set(TURRET_ALL)
 
 FACING = {SPIKE_U: 4, SPIKE_L: 2, SPIKE_D: 0, SPIKE_R: 6,
           ONEWAY_U: 4, ONEWAY_L: 2, ONEWAY_D: 0, ONEWAY_R: 6,
@@ -367,9 +378,12 @@ class Room:
         # ο έλεγχος βολής θα γινόταν σε κάθε ενημέρωση· σάρωση του πλέγματος
         # ανά καρέ είναι ό,τι ακριβώς δεν αντέχει ο Z80. Ο ίδιος πίνακας
         # χτίζεται εκεί στη φόρτωση της αίθουσας.
-        self.turrets = [(c, r, self.cells[r][c])
-                        for r in range(ROWS) for c in range(COLS)
-                        if self.cells[r][c] in TURRETS]
+        # ΟΛΟΙ, και οι σβηστοί: ο διακόπτης τους ανάβει και σβήνει μέσα στην
+        # παρτίδα, οπότε η λίστα δεν μπορεί να κρατά μόνο τους αναμμένους —
+        # θα ξαναχτιζόταν στη φόρτωση της αίθουσας και ποτέ ξανά. Το αν ρίχνει
+        # το κρίνει ο τύπος του κελιού τη στιγμή της βολής.
+        self.turrets = [(c, r) for r in range(ROWS) for c in range(COLS)
+                        if self.cells[r][c] in TURRET_ALL]
 
     def _groups_of(self, kind):
         """Συνιστώσες γειτονικών κελιών τύπου `kind` (γειτνίαση 4).
@@ -440,7 +454,7 @@ class Room:
     #: Ό,τι μπορεί να ελεγχθεί από ενεργοποιητή, σε όποια μορφή κι αν είναι.
     TARGETS = (GATE, GATE_OPEN, LOCK, LOCK_OPEN,
                SPIKE_U, SPIKE_L, SPIKE_D, SPIKE_R,
-               SPIKE_U_OFF, SPIKE_L_OFF, SPIKE_D_OFF, SPIKE_R_OFF)
+               SPIKE_U_OFF, SPIKE_L_OFF, SPIKE_D_OFF, SPIKE_R_OFF) + TURRET_ALL
 
     def target_cells(self, channel):
         """Τα κελιά-στόχους του καναλιού: πύλες, κλειδαριές, αγκάθια."""
@@ -948,9 +962,12 @@ class Hero:
     # δύο χωριστοί κόσμοι, οπότε ένας διακόπτης δεν μπορούσε να ανοίξει
     # κλειδαριά ούτε ένα κλειδί πύλη — και κάθε νέος συνδυασμός θα ήθελε νέο
     # είδος καλωδίωσης. Ένας κόσμος: κάθε ενεργοποιητής δρα σε κάθε στόχο.
+    # «Ανοιχτό» σημαίνει ΑΚΙΝΔΥΝΟ, όχι «περνάει»: η πύλη ανοίγει, τα αγκάθια
+    # τραβιούνται, ο πυργίσκος σβήνει. Ένας διακόπτης, ένα νόημα.
     OPEN_OF = {GATE: GATE_OPEN, LOCK: LOCK_OPEN,
                SPIKE_U: SPIKE_U_OFF, SPIKE_L: SPIKE_L_OFF,
-               SPIKE_D: SPIKE_D_OFF, SPIKE_R: SPIKE_R_OFF}
+               SPIKE_D: SPIKE_D_OFF, SPIKE_R: SPIKE_R_OFF,
+               TURRET_V: TURRET_V_OFF, TURRET_H: TURRET_H_OFF}
     SHUT_OF = {v: k for k, v in OPEN_OF.items()}
 
     def set_targets(self, channel, opened):
@@ -1198,13 +1215,38 @@ class Hero:
             y += dy
         return False
 
+    def turret_args(self, c, r):
+        """(φόρτιση, αυτόματο διάστημα) σε δευτερόλεπτα, για τον πυργίσκο (c,r).
+
+        Ο πυργίσκος που δεν δηλώνει τίποτα στο footer συμπεριφέρεται όπως πριν
+        υπάρξουν οι παράμετροι: πέντε δευτερόλεπτα, και μόνο όταν σε βλέπει.
+        """
+        return self.room.turret_arg.get((c, r), (TURRET_COOL, 0))
+
     def turret_step(self):
-        """Φόρτιση και βολή. Τα βέλη κινούνται στο arrows_step."""
+        """Φόρτιση και βολή. Τα βέλη κινούνται στο arrows_step.
+
+        ΔΥΟ ΤΡΟΠΟΙ, ΚΑΙ Ο ΑΡΙΘΜΟΣ ΕΠΙΛΕΓΕΙ:
+
+          αυτόματα = 0  ρίχνει ΜΟΝΟ όταν σε βλέπει, και όχι πιο συχνά από τη
+                        φόρτισή του. Το εμπόδιο αντιδρά σε σένα.
+          αυτόματα > 0  ρίχνει ΚΑΘΕ τόσα δευτερόλεπτα, χωρίς οπτική επαφή και
+                        χωρίς εμβέλεια. Δεν σε κυνηγά — φτιάχνει ρυθμό που
+                        πρέπει να συγχρονιστείς για να περάσεις, και η φόρτιση
+                        δεν χρησιμοποιείται γιατί το διάστημα ΕΙΝΑΙ ο ρυθμός.
+
+        Και στους δύο η φορά βγαίνει από τη μεριά που είσαι πάνω στον άξονα:
+        ένας πυργίσκος με ρυθμό εξακολουθεί να σημαδεύει, απλώς δεν περιμένει.
+        """
         if len(self.arrows) >= TURRET_MAX:
             return
-        for c, r, t in self.room.turrets:
+        for c, r in self.room.turrets:
+            t = self.room.cells[r][c]
+            if t in TURRETS_OFF:
+                continue                # ο διακόπτης τον έκλεισε
             if self.clock < self.turret_ready.get((c, r), 0):
                 continue
+            cool, auto = self.turret_args(c, r)
             cx = c * CELL + CELL // 2
             cy = GRID_Y0 + r * CELL + CELL // 2
             # ΤΟ «ΕΙΜΑΙ ΣΤΗΝ ΕΥΘΕΙΑ» ΤΟ ΑΠΑΝΤΑ Η ΟΠΤΙΚΗ ΕΠΑΦΗ, ΟΧΙ ΜΙΑ ΖΩΝΗ.
@@ -1220,18 +1262,24 @@ class Hero:
             else:
                 d = self.x - cx
                 dx, dy = (1 if d > 0 else -1), 0
-            if d == 0 or abs(d) > TURRET_RANGE:
-                continue
+            if d == 0:
+                dx, dy = (0, 1) if t == TURRET_V else (1, 0)
             sx = cx + dx * (CELL // 2 + 1)
             sy = cy + dy * (CELL // 2 + 1)
-            if not self.turret_los(sx, sy, dx, dy):
-                continue
+            if not auto:
+                # Τρόπος «σε βλέπω»: και τα δύο φίλτρα ισχύουν.
+                if d == 0 or abs(d) > TURRET_RANGE:
+                    continue
+                if not self.turret_los(sx, sy, dx, dy):
+                    continue
             # Ξεκινά στην ΑΚΡΗ του κελιού, όχι στο κέντρο: αλλιώς το πρώτο
             # βήμα θα το έβρισκε μέσα στον ίδιο του τον πυργίσκο, που είναι
             # στερεός, και το βέλος θα πέθαινε στη γέννα.
             self.arrows.append({"x": sx, "y": sy,
                                 "dx": dx, "dy": dy, "gone": 0})
-            self.turret_ready[(c, r)] = self.clock + TURRET_RELOAD
+            # Ο ρυθμός σε vsync. Το ένα ή το άλλο, ποτέ και τα δύο: δες το
+            # docstring παραπάνω.
+            self.turret_ready[(c, r)] = self.clock + (auto or cool) * 50
             if len(self.arrows) >= TURRET_MAX:
                 return
 

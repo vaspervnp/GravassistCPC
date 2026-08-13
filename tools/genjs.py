@@ -95,7 +95,8 @@ def build():
               # εξαρτάται από το πόσο ταξίδεψε το βέλος.
               "ARROW_STEP": P.ARROW_STEP, "TURRET_RANGE": P.TURRET_RANGE,
               "TURRET_RELOAD": P.TURRET_RELOAD, "TURRET_MAX": P.TURRET_MAX,
-              "ARROW_DMG": list(P.ARROW_DMG)},
+              "ARROW_DMG": list(P.ARROW_DMG),
+              "TURRET_COOL": P.TURRET_COOL},
 
         # Γραφικά: τιμές pen ανά pixel, ίδια πηγή με τα tiles του Amstrad.
         "PALETTE": ["#000080", "#FFFFFF", "#00FF00", "#FF8000"],

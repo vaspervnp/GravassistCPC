@@ -682,6 +682,17 @@
       for (const m of foot.matchAll(
              /(sw|gate|lock|key|plate|spikes)\s+(\d+)\s+(\d+)\s+(\d+)/gi))
         attrs[m[2] + "," + m[3]] = +m[4];
+      // Ο πυργίσκος θέλει ΤΡΕΙΣ αριθμούς: κανάλι, φόρτιση, αυτόματο διάστημα.
+      // Το κανάλι μπαίνει στον ίδιο πίνακα με όλα τα άλλα ώστε ο διακόπτης να
+      // δουλεύει αναλλοίωτος· οι δύο χρόνοι δεν χωράνε εκεί.
+      const turretArg = {};
+      for (const m of foot.matchAll(
+             /turret\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?(?:\s+(\d+))?/gi)) {
+        attrs[m[1] + "," + m[2]] = +m[3];
+        turretArg[m[1] + "," + m[2]] =
+          [m[4] === undefined ? D.K.TURRET_COOL : +m[4],
+           m[5] === undefined ? 0 : +m[5]];
+      }
       // Γειτονικά κελιά είναι ΕΝΑ αντικείμενο: ο προορισμός σε ΟΛΑ τα κελιά.
       spread(cells, exits, D.TYPE_NAMES.indexOf("EXIT"));
       spread(cells, teleports, D.TYPE_NAMES.indexOf("TELEPORT"));
@@ -705,8 +716,12 @@
       for (const n of ["SPIKE_U", "SPIKE_L", "SPIKE_D", "SPIKE_R",
                        "SPIKE_U_OFF", "SPIKE_L_OFF", "SPIKE_D_OFF", "SPIKE_R_OFF"])
         spreadKind(cells, attrs, D.TYPE_NAMES.indexOf(n));
+      // Και οι πυργίσκοι: στόχοι καλωδίωσης όπως τα αγκάθια.
+      for (const n of ["TURRET_V", "TURRET_H", "TURRET_V_OFF", "TURRET_H_OFF"])
+        spreadKind(cells, attrs, D.TYPE_NAMES.indexOf(n));
       rooms[name] = { cells, start, exits, teleports, twoWay, arrive, arriveG,
-                      attrs, pristine: cells.map(r => r.slice()) };
+                      attrs, turretArg,
+                      pristine: cells.map(r => r.slice()) };
       const o = document.createElement("option");
       o.value = name; o.textContent = name;
       sel.appendChild(o);

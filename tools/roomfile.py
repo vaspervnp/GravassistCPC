@@ -232,6 +232,16 @@ def room_record(room):
             out += bytes((cc, cr, v))
     out.append(0xFF)
 
+    # ΠΕΜΠΤΟΣ ΠΙΝΑΚΑΣ: οι δύο χρόνοι κάθε πυργίσκου, τετράδες (στήλη, γραμμή,
+    # φόρτιση, αυτόματο διάστημα) σε δευτερόλεπτα. Δικός του και όχι μέσα στις
+    # ιδιότητες, γιατί εκείνες είναι ΕΝΑ byte ανά κελί: τα 3 bits του καναλιού
+    # συν το bit του LOCK_AUTO δεν αφήνουν χώρο για δύο πραγματικούς αριθμούς.
+    # Γράφονται μόνο οι πυργίσκοι που δηλώνουν κάτι — οι υπόλοιποι παίρνουν την
+    # προεπιλογή από τον Z80 και δεν χρειάζεται να ταξιδέψουν.
+    for (cc, cr), (cool, auto) in sorted(room.turret_arg.items()):
+        out += bytes((cc, cr, cool & 0xFF, auto & 0xFF))
+    out.append(0xFF)
+
     flat = [v for row in room.cells for v in row]
     packed = rle_encode(flat)
     assert rle_decode(packed) == bytes(flat), "το RLE δεν κάνει round-trip"

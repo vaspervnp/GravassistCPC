@@ -24,14 +24,15 @@ def check(name, cond, detail=""):
         FAILS.append(name)
 
 
-def room(cells, gravity=0):
+def room(cells, gravity=0, footer=""):
     """Άδειο δωμάτιο με τοίχους, και ό,τι βάλεις: [(col, row, char), ...]"""
     rows = [list("#" * P.COLS)] \
         + [list("#" + "." * (P.COLS - 2) + "#") for _ in range(P.ROWS - 2)] \
         + [list("#" * P.COLS)]
     for c, r, ch in cells:
         rows[r][c] = ch
-    txt = ";\n" + "\n".join("".join(x) for x in rows) + f"\ngravity {gravity}\n"
+    txt = ";\n" + "\n".join("".join(x) for x in rows) \
+        + f"\ngravity {gravity}\n" + footer
     rm = P.Room(txt)
     rm.number, rm.path = 1, ""
     return rm
@@ -193,6 +194,79 @@ check("…και ο ίδιος χρόνος ενώ ο παίκτης τρέχε�
       gap_run is not None and abs(gap_run - P.TURRET_RELOAD) <= 2 * P.CPC_VSYNC_RUN,
       f"{gap_run} vsync = {gap_run / 50:.2f}s" if gap_run else "δεν ξαναέριξε")
 
+print("--- η φόρτιση είναι παράμετρος του κάθε πυργίσκου")
+
+
+def reload_gap(footer, col=10, trow=16):
+    """Πόσος χρόνος περνά ανάμεσα σε δύο βολές, σε vsync."""
+    rm = room([(col, trow, "I")], footer=footer)
+    h = settled(rm, col, 21)
+    h.arrows.clear()
+    h.turret_ready.clear()
+    h.update(0)
+    if not h.arrows:
+        return None
+    t0 = h.clock
+    h.arrows.clear()
+    for _ in range(900):
+        h.update(0)
+        if h.arrows:
+            return h.clock - t0
+    return None
+
+
+base = reload_gap("")
+check("χωρίς δήλωση: η προεπιλογή των 5 δευτερολέπτων",
+      base is not None and abs(base - 5 * 50) <= P.CPC_VSYNC_RUN,
+      f"{base} vsync = {base / 50:.2f}s" if base else "δεν ξαναέριξε")
+fast = reload_gap("turret 10 16 0 2 0\n")
+check("φόρτιση 2: ξαναρίχνει σε 2 δευτερόλεπτα",
+      fast is not None and abs(fast - 2 * 50) <= P.CPC_VSYNC_RUN,
+      f"{fast} vsync = {fast / 50:.2f}s" if fast else "δεν ξαναέριξε")
+slow = reload_gap("turret 10 16 0 7 0\n")
+check("φόρτιση 7: ξαναρίχνει σε 7 δευτερόλεπτα",
+      slow is not None and abs(slow - 7 * 50) <= P.CPC_VSYNC_RUN,
+      f"{slow} vsync = {slow / 50:.2f}s" if slow else "δεν ξαναέριξε")
+
+print("--- αυτόματη βολή: ρυθμός αντί για αντίδραση")
+# Ο ήρωας ΜΑΚΡΙΑ και εκτός εμβέλειας: με 0 δεν ρίχνει ποτέ, με ρυθμό ρίχνει.
+rm = room([(10, 4, "I")])
+h = settled(rm, 30, 21)
+for _ in range(200):
+    h.update(0)
+check("αυτόματα=0 και μακριά: σιωπή", not h.arrows, str(len(h.arrows)))
+
+rm = room([(10, 4, "I")], footer="turret 10 4 0 5 1\n")
+h = settled(rm, 30, 21)
+h.arrows.clear()
+h.turret_ready.clear()
+fired = 0
+for _ in range(200):
+    h.update(0)
+    if h.arrows:
+        fired += 1
+        h.arrows.clear()
+check("αυτόματα=1: ρίχνει χωρίς να με βλέπει και χωρίς εμβέλεια",
+      fired >= 3, f"{fired} βολές")
+
+# Και ο ρυθμός είναι όντως το δηλωμένο διάστημα.
+rm = room([(10, 4, "I")], footer="turret 10 4 0 5 2\n")
+h = settled(rm, 30, 21)
+h.arrows.clear()
+h.turret_ready.clear()
+h.update(0)
+t0 = h.clock
+h.arrows.clear()
+gap = None
+for _ in range(400):
+    h.update(0)
+    if h.arrows:
+        gap = h.clock - t0
+        break
+check("αυτόματα=2: ένα βέλος κάθε 2 δευτερόλεπτα",
+      gap is not None and abs(gap - 2 * 50) <= P.CPC_VSYNC_RUN,
+      f"{gap} vsync = {gap / 50:.2f}s" if gap else "δεν ξαναέριξε")
+
 print("--- το πολύ δύο βέλη στον αέρα")
 rm = room([(10, 16, "I"), (20, 16, "I"), (30, 16, "I")])
 h = settled(rm, 10, 21)
@@ -201,6 +275,44 @@ for _ in range(3):
     h.turret_ready.clear()
     h.turret_step()
 check(f"δεν ξεπερνά τα {P.TURRET_MAX}", len(h.arrows) <= P.TURRET_MAX,
+      str(len(h.arrows)))
+
+print("--- ο διακόπτης τον κλείνει")
+rm = room([(10, 16, "I")], footer="turret 10 16 3 5 0\n")
+h = settled(rm, 10, 21)
+h.arrows.clear()
+h.turret_ready.clear()
+h.update(0)
+check("πριν τον διακόπτη ρίχνει", bool(h.arrows), str(len(h.arrows)))
+
+# «Ανοιχτό» σημαίνει ΑΚΙΝΔΥΝΟ σε όλο το σύστημα: η πύλη ανοίγει, τα αγκάθια
+# τραβιούνται, ο πυργίσκος σβήνει. Ένας διακόπτης, ένα νόημα.
+h.set_targets(3, True)
+check("ο διακόπτης άλλαξε τον τύπο του κελιού",
+      rm.cells[16][10] == P.TURRET_V_OFF, P.TYPE_NAMES[rm.cells[16][10]])
+h.arrows.clear()
+h.turret_ready.clear()
+for _ in range(60):
+    h.update(0)
+check("σβηστός: δεν ρίχνει καθόλου", not h.arrows, str(len(h.arrows)))
+
+h.set_targets(3, False)
+check("και ξαναανάβει", rm.cells[16][10] == P.TURRET_V,
+      P.TYPE_NAMES[rm.cells[16][10]])
+h.turret_ready.clear()
+h.update(0)
+check("…και ξαναρίχνει", bool(h.arrows), str(len(h.arrows)))
+
+# Ο πυργίσκος που ΞΕΚΙΝΑ σβηστός πρέπει να μπορεί να ανάψει: η λίστα βολής
+# χτίζεται μία φορά στη φόρτωση, οπότε αν κρατούσε μόνο τους αναμμένους δεν θα
+# τον έβρισκε ποτέ.
+rm = room([(10, 16, "i")], footer="turret 10 16 3 5 0\n")
+h = settled(rm, 10, 21)
+h.set_targets(3, False)
+h.arrows.clear()
+h.turret_ready.clear()
+h.update(0)
+check("πυργίσκος που ξεκινά σβηστός ανάβει και ρίχνει", bool(h.arrows),
       str(len(h.arrows)))
 
 print("--- ο πυργίσκος ΔΕΝ είναι εμπόδιο")
@@ -230,8 +342,11 @@ print("--- ο ίδιος πυργίσκος, στον Z80")
 CLK = 0xB7FE                    # ελεύθερη μνήμη κάτω από το jumpblock
 
 
-def z80_room(cells):
-    """main.bin με πλέγμα και ρολόι — το firmware εδώ είναι σκέτο RET."""
+TARG = 0xB700           # ελεύθερη μνήμη για τον πέμπτο πίνακα, στα τεστ
+
+
+def z80_room(cells, targ=()):
+    """main.bin με πλέγμα, ρολόι και πίνακα χρόνων πυργίσκων."""
     from z80run import Z80Test
     t = Z80Test()
     # ΤΟ ΡΟΛΟΙ ΤΟΥ FIRMWARE, σε 11 bytes: χωρίς αυτό το KL_TIME_PLEASE γυρίζει
@@ -255,6 +370,10 @@ def z80_room(cells):
     t.poke(t.sym("HERO_ENERGY"), bytes([P.ENERGY_MAX]))
     t.poke(t.sym("HERO_HURT"), b"\x00")
     t.poke(t.sym("HERO_G"), b"\x00")
+    # Ο πέμπτος πίνακας του αρχείου αίθουσας: τετράδες, τέλος με #FF.
+    blob = b"".join(bytes(q) for q in targ) + b"\xFF"
+    t.poke(TARG, blob)
+    t.poke16(t.sym("ROOM_TARG"), TARG)
     return t
 
 
@@ -262,11 +381,14 @@ t = z80_room([(10, 16, "I"), (4, 21, "=")])
 t.call("TURRET_LOAD")
 check("ο πίνακας βρίσκει τους δύο πυργίσκους",
       t.peek(t.sym("TURRET_N"))[0] == 2, str(t.peek(t.sym("TURRET_N"))[0]))
-tab = t.peek(t.sym("TURRET_TAB"), 10)
+# ΤΟ ΒΗΜΑ ΑΠΟ ΤΟΝ ΚΩΔΙΚΑ: η εγγραφή μεγάλωσε από 5 σε 7 bytes όταν μπήκαν οι
+# δύο χρόνοι, και ένα καρφωμένο 5 εδώ διάβαζε τη μέση της επόμενης.
+TS = t.sym("TS_SIZE")
+tab = t.peek(t.sym("TURRET_TAB"), 2 * TS)
 check("…με τη σωστή στήλη, γραμμή και τύπο",
       tuple(tab[0:3]) == (10, 16, P.TURRET_V)
-      and tuple(tab[5:8]) == (4, 21, P.TURRET_H),
-      f"{list(tab[0:3])} {list(tab[5:8])}")
+      and tuple(tab[TS:TS + 3]) == (4, 21, P.TURRET_H),
+      f"{list(tab[0:3])} {list(tab[TS:TS + 3])}")
 
 # --- ρίχνει προς τον ήρωα και το βέλος κάνει 6 pixel ανά κλήση
 t = z80_room([(10, 16, "I")])
@@ -325,6 +447,56 @@ for _ in range(10):
 check("τοίχος ανάμεσα: δεν ρίχνει και δεν πονάει",
       t.peek(AR)[0] == 0 and t.peek(t.sym("HERO_ENERGY"))[0] == P.ENERGY_MAX,
       f"on={t.peek(AR)[0]} ενέργεια={t.peek(t.sym('HERO_ENERGY'))[0]}")
+
+# --- οι δύο χρόνοι, στον Z80 -----------------------------------------
+print("--- οι παράμετροι φτάνουν στον Z80")
+t = z80_room([(10, 16, "I")], targ=[(10, 16, 2, 0)])
+t.call("TURRET_LOAD")
+tab = t.peek(t.sym("TURRET_TAB"), 7)
+check("ο πίνακας κρατά φόρτιση και ρυθμό", (tab[5], tab[6]) == (2, 0),
+      f"cool={tab[5]} auto={tab[6]}")
+t = z80_room([(10, 16, "I")])
+t.call("TURRET_LOAD")
+tab = t.peek(t.sym("TURRET_TAB"), 7)
+check("αδήλωτος: η προεπιλογή των 5 δευτερολέπτων", tab[5] == 5, str(tab[5]))
+
+
+def z80_gap(targ):
+    """Πόσοι παλμοί ανάμεσα σε δύο βολές, στον Z80."""
+    t = z80_room([(10, 16, "I")], targ=targ)
+    t.call("TURRET_LOAD")
+    t.poke16(t.sym("HERO_X"), 10 * P.CELL + P.CELL // 2)
+    t.poke(t.sym("HERO_Y"), bytes([P.GRID_Y0 + 21 * P.CELL]))
+    t.call("TURRET_STEP")
+    return t.peek16(t.sym("TURRET_TAB") + 3) - t.peek16(CLK)
+
+
+check("φόρτιση 2 -> 600 παλμοί", abs(z80_gap([(10, 16, 2, 0)]) - 600) <= 60,
+      str(z80_gap([(10, 16, 2, 0)])))
+check("φόρτιση 7 -> 2100 παλμοί", abs(z80_gap([(10, 16, 7, 0)]) - 2100) <= 60,
+      str(z80_gap([(10, 16, 7, 0)])))
+check("ρυθμός 3 -> 900 παλμοί (η φόρτιση αγνοείται)",
+      abs(z80_gap([(10, 16, 7, 3)]) - 900) <= 60,
+      str(z80_gap([(10, 16, 7, 3)])))
+
+# ΡΥΘΜΟΣ: ρίχνει χωρίς εμβέλεια και χωρίς οπτική επαφή.
+t = z80_room([(10, 4, "I"), (10, 12, "#")], targ=[(10, 4, 5, 1)])
+t.call("TURRET_LOAD")
+t.poke16(t.sym("HERO_X"), 30 * P.CELL)
+t.poke(t.sym("HERO_Y"), bytes([P.GRID_Y0 + 21 * P.CELL]))
+t.call("TURRET_STEP")
+check("με ρυθμό ρίχνει και πίσω από τοίχο, και μακριά",
+      t.peek(t.sym("ARROW_TAB"))[0] == 1,
+      f"on={t.peek(t.sym('ARROW_TAB'))[0]}")
+
+t = z80_room([(10, 4, "I"), (10, 12, "#")])
+t.call("TURRET_LOAD")
+t.poke16(t.sym("HERO_X"), 30 * P.CELL)
+t.poke(t.sym("HERO_Y"), bytes([P.GRID_Y0 + 21 * P.CELL]))
+t.call("TURRET_STEP")
+check("χωρίς ρυθμό, στην ίδια θέση, σιωπή",
+      t.peek(t.sym("ARROW_TAB"))[0] == 0,
+      f"on={t.peek(t.sym('ARROW_TAB'))[0]}")
 
 # --- Η ΣΦΑΙΡΑ ΣΤΗΝ ΟΘΟΝΗ ---------------------------------------------
 #

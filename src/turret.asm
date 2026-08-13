@@ -21,7 +21,9 @@ TS_COL          equ  0
 TS_ROW          equ  1
 TS_TYPE         equ  2
 TS_READY        equ  3          ; dw: ρολόι από το οποίο ξαναρίχνει
-TS_SIZE         equ  5
+TS_COOL         equ  5          ; δευτερόλεπτα φόρτισης
+TS_AUTO         equ  6          ; 0 = μόνο όταν βλέπει· αλλιώς ρυθμός σε δευτ.
+TS_SIZE         equ  7
 
 ; --- βέλη στον αέρα --------------------------------------------------
 AR_ON           equ  0          ; 0 = ελεύθερη θέση
@@ -41,10 +43,18 @@ turret_load:    call turret_reset
                 ld   ix,turret_tab
                 ld   b,0                ; B = γραμμή
 tl_row:         ld   c,0                ; C = στήλη
+                ; ΚΑΙ ΟΙ ΣΒΗΣΤΟΙ ΜΠΑΙΝΟΥΝ ΣΤΟΝ ΠΙΝΑΚΑ. Ο διακόπτης τους ανάβει
+                ; και σβήνει μέσα στην παρτίδα, ενώ ο πίνακας χτίζεται μόνο στη
+                ; φόρτωση της αίθουσας — αν κρατούσε μόνο τους αναμμένους, ένας
+                ; πυργίσκος που ξεκινά σβηστός δεν θα ξανάριχνε ποτέ.
 tl_col:         ld   a,(hl)
                 cp   T_TURRET_V
                 jr   z,tl_add
                 cp   T_TURRET_H
+                jr   z,tl_add
+                cp   T_TURRET_V_OFF
+                jr   z,tl_add
+                cp   T_TURRET_H_OFF
                 jr   nz,tl_next
 tl_add:         ld   d,a
                 ld   a,(turret_n)
@@ -57,6 +67,20 @@ tl_add:         ld   d,a
                 ld   (ix+TS_TYPE),d
                 ld   (ix+TS_READY),0    ; φορτισμένος από την πρώτη στιγμή
                 ld   (ix+TS_READY+1),0
+                push hl                 ; οι δύο χρόνοι από τον πέμπτο πίνακα
+                push bc
+                ld   b,c                ; B = στήλη, C = γραμμή
+                ld   a,(ix+TS_ROW)
+                ld   c,a
+                call turret_arg         ; D = φόρτιση, E = ρυθμός
+                ld   a,d
+                or   a
+                jr   nz,tl_cool         ; αδήλωτος: η προεπιλογή
+                ld   a,TURRET_COOL_DEF
+tl_cool:        ld   (ix+TS_COOL),a
+                ld   (ix+TS_AUTO),e
+                pop  bc
+                pop  hl
                 ld   de,TS_SIZE
                 add  ix,de
 tl_next:        inc  hl
@@ -113,7 +137,17 @@ tu_lp:          push bc
                 ret
 
 ; --- ένας πυργίσκος -------------------------------------------------
-tf_one:         ld   l,(ix+TS_READY)    ; φορτισμένος;
+                ; ΣΒΗΣΤΟΣ ΤΩΡΑ; Ο τύπος του κελιού είναι η μόνη αλήθεια: ο
+                ; διακόπτης γράφει εκεί, όχι στον πίνακα.
+tf_one:         ld   b,(ix+TS_ROW)
+                ld   c,(ix+TS_COL)
+                call cell_rc
+                cp   T_TURRET_V_OFF
+                ret  z
+                cp   T_TURRET_H_OFF
+                ret  z
+                ld   (ix+TS_TYPE),a     ; μπορεί να άναψε ξανά
+                ld   l,(ix+TS_READY)    ; φορτισμένος;
                 ld   h,(ix+TS_READY+1)
                 ex   de,hl
                 ld   hl,(tu_now)
@@ -141,17 +175,16 @@ tf_one:         ld   l,(ix+TS_READY)    ; φορτισμένος;
                 cp   T_TURRET_V
                 jr   z,tf_vert
 
-                ; --- οριζόντιος: d = hero_x - cx ---
-                ld   hl,(hero_x)
+                ld   hl,(hero_x)        ; --- οριζόντιος: d = hero_x - cx ---
                 ld   de,(tu_cx)
                 or   a
                 sbc  hl,de
-                call tf_range           ; OUT: A = πρόσημο (1/-1), CF=0 αν άκυρο
-                ret  nc
+                ld   (tu_d),hl
+                call tf_sign
                 ld   (tu_dx),a
                 xor  a
                 ld   (tu_dy),a
-                jr   tf_shoot
+                jr   tf_muzzle
 
 tf_vert:        ld   a,(hero_y)         ; --- κατακόρυφος: d = hero_y - cy ---
                 ld   l,a
@@ -161,16 +194,16 @@ tf_vert:        ld   a,(hero_y)         ; --- κατακόρυφος: d = hero_y
                 ld   d,0
                 or   a
                 sbc  hl,de
-                call tf_range
-                ret  nc
+                ld   (tu_d),hl
+                call tf_sign
                 ld   (tu_dy),a
                 xor  a
                 ld   (tu_dx),a
 
                 ; --- στόμιο: κέντρο + φορά x (μισό κελί + 1) ---
-tf_shoot:       ld   a,(tu_dx)
+tf_muzzle:      ld   a,(tu_dx)
                 ld   e,a
-                call sign_ext           ; DE = προσημασμένο dx
+                call sign_ext
                 ld   hl,0
                 ld   b,LVL_CELL/2+1
 tf_sx:          add  hl,de
@@ -181,19 +214,28 @@ tf_sx:          add  hl,de
 
                 ld   a,(tu_dy)
                 ld   b,a
-                add  a,a                ; b*(CELL/2+1) χωρίς πολλαπλασιασμό:
-                add  a,a                ; το dy είναι -1, 0 ή +1
-                add  a,b                ; -> a = 5*dy  (LVL_CELL/2+1 = 5)
+                add  a,a                ; 5*dy, με το dy να είναι -1 ή +1
+                add  a,a
+                add  a,b
                 ld   b,a
                 ld   a,(tu_cy)
                 add  a,b
                 ld   (tu_sy),a
 
+                ; ΔΥΟ ΤΡΟΠΟΙ. Με ρυθμό ο πυργίσκος δεν ρωτάει τίποτα: ρίχνει
+                ; στην ώρα του, είτε τον βλέπεις είτε όχι, είτε είσαι κοντά
+                ; είτε στην άλλη άκρη. Φτιάχνει ρυθμό αντί να αντιδρά.
+                ld   a,(ix+TS_AUTO)
+                or   a
+                jr   nz,tf_fire
+                ld   hl,(tu_d)
+                call tf_inrange
+                ret  nc
                 call tu_los             ; βλέπει τον ήρωα;
                 ret  nc
 
                 ; --- βολή ---
-                call ar_free
+tf_fire:        call ar_free
                 ret  nc                 ; γέμισε ενδιάμεσα
                 ld   hl,(tu_sx)
                 ld   (iy+AR_X),l
@@ -207,47 +249,45 @@ tf_sx:          add  hl,de
                 ld   (iy+AR_GONE),0
                 ld   (iy+AR_ON),1
 
-                ld   hl,(tu_now)        ; ξαναφορτίζει σε 5 δευτερόλεπτα
-                ld   de,TURRET_RELOAD
+                ld   a,(ix+TS_AUTO)     ; ο ρυθμός αν υπάρχει, αλλιώς η φόρτιση
+                or   a
+                jr   nz,tf_secs
+                ld   a,(ix+TS_COOL)
+tf_secs:        call tf_ticks           ; HL = δευτερόλεπτα x 300
+                ld   de,(tu_now)
                 add  hl,de
                 ld   (ix+TS_READY),l
                 ld   (ix+TS_READY+1),h
                 ret
 
 ;---------------------------------------------------------------------
-; tf_range — HL = απόσταση με πρόσημο· είναι μέσα στην εμβέλεια;
-; OUT: CF=1 και A = +1/-1 (η φορά)· CF=0 αν 0 ή έξω από την εμβέλεια
+; tf_sign — HL προσημασμένο -> A = +1 ή -1 (το μηδέν μετράει θετικό)
+;
+;   ΧΩΡΙΣΤΑ ΑΠΟ ΤΟΝ ΕΛΕΓΧΟ ΕΜΒΕΛΕΙΑΣ: ο πυργίσκος με ρυθμό χρειάζεται τη φορά
+;   αλλά ΟΧΙ τα φίλτρα. Όσο ήταν μία ρουτίνα, το ένα δεν γινόταν χωρίς το άλλο.
 ;---------------------------------------------------------------------
-tf_range:       bit  7,h
-                jr   nz,tr_neg
-                ld   a,h                ; θετική: > 255 σημαίνει σίγουρα έξω
-                or   a
-                jr   nz,tr_no
-                ld   a,l
-                or   a
-                jr   z,tr_no            ; ακριβώς πάνω του
-                cp   TURRET_RANGE+1
-                jr   nc,tr_no
+tf_sign:        bit  7,h
                 ld   a,1
-                scf
+                ret  z
+                ld   a,-1
                 ret
-tr_neg:         ld   a,h                ; αρνητική: -HL
-                cpl
-                ld   h,a
-                ld   a,l
-                cpl
-                ld   l,a
-                inc  hl
+
+;---------------------------------------------------------------------
+; tf_inrange — HL προσημασμένο· 0 < |HL| <= TURRET_RANGE ;
+; OUT: CF=1 μέσα
+;---------------------------------------------------------------------
+tf_inrange:     call abs_hl
                 ld   a,h
                 or   a
-                jr   nz,tr_no
+                jr   nz,ti_no
                 ld   a,l
+                or   a
+                jr   z,ti_no            ; ακριβώς πάνω του
                 cp   TURRET_RANGE+1
-                jr   nc,tr_no
-                ld   a,-1
+                jr   nc,ti_no
                 scf
                 ret
-tr_no:          or   a
+ti_no:          or   a
                 ret
 
 ;---------------------------------------------------------------------
@@ -770,6 +810,16 @@ af_lp:          ld   a,(iy+AR_ON)
 af_yes:         scf
                 ret
 
+; tf_ticks — HL = A * 300, δηλαδή δευτερόλεπτα σε παλμούς του 1/300
+tf_ticks:       ld   hl,0
+                or   a
+                ret  z
+                ld   de,300
+tk_lp:          add  hl,de
+                dec  a
+                jr   nz,tk_lp
+                ret
+
 ; sign_ext — DE = προσημασμένη επέκταση του E
 sign_ext:       ld   d,0
                 bit  7,e
@@ -789,12 +839,34 @@ abs_hl:         bit  7,h
                 inc  hl
                 ret
 
+; cell_rc — ο τύπος του κελιού (B,C) = (γραμμή, στήλη)
+;   Απευθείας στο cell_buf: το cell_at θέλει pixel και θα ξανάκανε τη διαίρεση
+;   που μόλις κάναμε ανάποδα.
+cell_rc:        ld   l,b
+                ld   h,0
+                add  hl,hl              ; γραμμή * 40 = *32 + *8
+                add  hl,hl
+                add  hl,hl              ; HL = *8
+                ld   d,h
+                ld   e,l                ; DE = *8, κρατημένο
+                add  hl,hl              ; *16
+                add  hl,hl              ; *32
+                add  hl,de              ; *40
+                ld   e,c
+                ld   d,0
+                add  hl,de
+                ld   de,cell_buf
+                add  hl,de
+                ld   a,(hl)
+                ret
+
 ; clock_now — HL = χαμηλή λέξη του μετρητή 1/300 του firmware
 clock_now:      jp   KL_TIME_PLEASE
 
 ;--- κατάσταση --------------------------------------------------------
 turret_n        db   0          ; πόσοι πυργίσκοι στην αίθουσα
 tu_now          dw   0
+tu_d            dw   0
 tu_cx           dw   0
 tu_cy           db   0
 tu_sx           dw   0

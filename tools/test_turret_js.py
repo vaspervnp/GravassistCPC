@@ -27,7 +27,10 @@ FRAMES = 120
 
 # Πυργίσκος με καθαρή ευθεία προς τον ήρωα, και ένας οριζόντιος για να μπουν
 # και οι δύο άξονες στη σύγκριση.
-ROOM = [(10, 16, "I"), (4, 21, "=")]
+ROOM = [(10, 16, "I"), (4, 21, "="), (30, 6, "I")]
+# ΜΕ ΠΑΡΑΜΕΤΡΟΥΣ, αλλιώς η σύγκριση δοκιμάζει μόνο τις προεπιλογές: ένας
+# πυργίσκος με γρήγορη φόρτιση, ένας με ρυθμό που ρίχνει χωρίς να βλέπει.
+FOOTER = "turret 10 16 0 2 0\nturret 4 21 0 5 0\nturret 30 6 0 5 1\n"
 
 
 def build_room():
@@ -36,7 +39,8 @@ def build_room():
         + [list("#" * P.COLS)]
     for c, r, ch in ROOM:
         rows[r][c] = ch
-    return ";\n" + "\n".join("".join(x) for x in rows) + "\ngravity 0\n"
+    return (";\n" + "\n".join("".join(x) for x in rows)
+            + "\ngravity 0\n" + FOOTER)
 
 
 def python_trace():
@@ -60,7 +64,8 @@ global.window = {};
 eval(fs.readFileSync(process.argv[2], "utf8"));      // data.js -> window.GAME_DATA
 eval(fs.readFileSync(process.argv[3], "utf8"));      // physics.js -> window.GRAV
 const G = window.GRAV, D = window.GAME_DATA;
-const room = new G.Room(JSON.parse(fs.readFileSync(process.argv[4], "utf8")));
+const blob = JSON.parse(fs.readFileSync(process.argv[4], "utf8"));
+const room = new G.Room(blob.cells, {}, {}, blob.turretArg);
 // Η βαρύτητα ΡΗΤΑ: ο Hero της JavaScript δεν έχει προεπιλογή, ενώ το Python
 // έχει g=0 — και χωρίς αυτήν το g βγαίνει undefined και σκάει στους πίνακες.
 const h = new G.Hero(room, 10 * D.CELL + (D.CELL >> 1),
@@ -83,7 +88,9 @@ def js_trace(tmp):
     rm = P.Room(build_room())
     room_path = os.path.join(tmp, "room.json")
     with open(room_path, "w") as f:
-        json.dump(rm.cells, f)
+        json.dump({"cells": rm.cells,
+                   "turretArg": {f"{c},{r}": list(v)
+                                 for (c, r), v in rm.turret_arg.items()}}, f)
     js_path = os.path.join(tmp, "run.js")
     with open(js_path, "w") as f:
         f.write(JS)

@@ -37,7 +37,7 @@
   for (const k in OPEN_OF) SHUT_OF[OPEN_OF[k]] = +k;
 
   class Room {
-    constructor(cells, teleports, attrs) {
+    constructor(cells, teleports, attrs, turretArg) {
       this.cells = cells.map(r => r.slice());
       this.probeG = 0;
       // Ιδιότητα ανά κελί: κανάλι για διακόπτες/πόρτες, ταυτότητα για
@@ -45,6 +45,8 @@
       // κελί κρατά την κατάστασή του, όπως και στον Amstrad.
       this.attrs = attrs || {};           // "c,r" -> 0..ATTR_MAX-1
       this.teleports = teleports || {};   // "c,r" -> [dc, dr]
+      // Πυργίσκοι: "c,r" -> [φόρτιση, αυτόματο διάστημα] σε δευτερόλεπτα.
+      this.turretArg = turretArg || {};
     }
     // ΜΟΝΟ τα χαμηλά 3 bits: το bit 3 είναι η σημαία «ανοίγει μόνη της».
     attr(c, r) { return (this.attrs[c + "," + r] || 0) & 7; }
@@ -474,24 +476,35 @@
         for (let r = 0; r < D.ROWS; r++)
           for (let c = 0; c < D.COLS; c++) {
             const t = this.room.cells[r][c];
-            if (t === T.TURRET_V || t === T.TURRET_H)
-              this.room.turrets.push([c, r, t]);
+            // ΚΑΙ ΟΙ ΣΒΗΣΤΟΙ: ο διακόπτης τους ανάβει μέσα στην παρτίδα και
+            // η λίστα χτίζεται μία φορά.
+            if (t === T.TURRET_V || t === T.TURRET_H
+                || t === T.TURRET_V_OFF || t === T.TURRET_H_OFF)
+              this.room.turrets.push([c, r]);
           }
       }
-      for (const [c, r, t] of this.room.turrets) {
+      for (const [c, r] of this.room.turrets) {
+        const t = this.room.cells[r][c];
+        if (t === T.TURRET_V_OFF || t === T.TURRET_H_OFF) continue;
         const key = c + "," + r;
         if (this.clock < (this.turretReady[key] || 0)) continue;
+        // ΔΥΟ ΤΡΟΠΟΙ: αυτόματα=0 ρίχνει μόνο όταν σε βλέπει, με τη φόρτισή
+        // του· αυτόματα>0 ρίχνει με ρυθμό, χωρίς οπτική επαφή ή εμβέλεια.
+        const [cool, auto] = this.room.turretArg[key] || [K.TURRET_COOL, 0];
         const cx = c * D.CELL + (D.CELL >> 1);
         const cy = D.GRID_Y0 + r * D.CELL + (D.CELL >> 1);
         let d, dx, dy;
         if (t === T.TURRET_V) { d = this.y - cy; dx = 0; dy = d > 0 ? 1 : -1; }
         else { d = this.x - cx; dx = d > 0 ? 1 : -1; dy = 0; }
-        if (d === 0 || Math.abs(d) > K.TURRET_RANGE) continue;
+        if (d === 0) { dx = t === T.TURRET_V ? 0 : 1; dy = t === T.TURRET_V ? 1 : 0; }
         const sx = cx + dx * ((D.CELL >> 1) + 1);
         const sy = cy + dy * ((D.CELL >> 1) + 1);
-        if (!this.turretLos(sx, sy, dx, dy)) continue;
+        if (!auto) {
+          if (d === 0 || Math.abs(d) > K.TURRET_RANGE) continue;
+          if (!this.turretLos(sx, sy, dx, dy)) continue;
+        }
         this.arrows.push({ x: sx, y: sy, dx: dx, dy: dy, gone: 0 });
-        this.turretReady[key] = this.clock + K.TURRET_RELOAD;
+        this.turretReady[key] = this.clock + (auto || cool) * 50;
         if (this.arrows.length >= K.TURRET_MAX) return;
       }
     }

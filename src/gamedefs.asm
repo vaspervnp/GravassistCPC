@@ -47,6 +47,8 @@ T_SWITCH_D_ON    equ 39
 T_SWITCH_R_ON    equ 40
 T_TURRET_V       equ 41
 T_TURRET_H       equ 42
+T_TURRET_V_OFF   equ 43
+T_TURRET_H_OFF   equ 44
 
 ; Αίθουσα εκκίνησης. Ο editor τη γράφει με --start ώστε να δοκιμάζεις
 ; οποιαδήποτε αίθουσα χωρίς να πειράζεις τα αρχεία των πιστών.
@@ -104,7 +106,7 @@ TRAIL_MAX       equ 4    ; πόσα δωμάτια πίσω γυρνάς
 ; Ταβάνι μνήμης με ενεργό AMSDOS — δες την assert στο main.asm.
 MEM_CEIL        equ #A67B
 
-NTYPES          equ 43
+NTYPES          equ 45
 ATTR_MAX        equ 8   ; κανάλια διακοπτών / ταυτότητες κλειδιών
 T_LOCK_AUTO     equ 8    ; bit: η κλειδαριά ανοίγει μόλις την ακουμπήσεις
 SPIKE_TICKS     equ 10
@@ -124,6 +126,8 @@ TURRET_MAX      equ 2
 ; κάνει ο παίκτης, οπότε ένας μετρητής περασμάτων θα έδινε πέντε
 ; δευτερόλεπτα ακίνητος και έντεκα τρέχοντας.
 TURRET_RELOAD   equ 1500
+; Η προεπιλογή σε ΔΕΥΤΕΡΟΛΕΠΤΑ, για πυργίσκο που δεν δηλώνει τίποτα.
+TURRET_COOL_DEF equ 5
 ARROW_DMG_NEAR  equ 3
 ARROW_DMG_MID   equ 2
 ARROW_DMG_FAR   equ 1

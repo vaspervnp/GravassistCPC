@@ -618,6 +618,8 @@ rl_have:        pop  af
                 call skip_tab
                 ld   (room_attrs),hl    ; ο τέταρτος πίνακας: ιδιότητες κελιών
                 call skip_attr
+                ld   (room_targ),hl     ; ο πέμπτος: οι χρόνοι των πυργίσκων
+                call skip_targ
 
                 push hl                 ; HL -> τα RLE κελιά
                 pop  ix
