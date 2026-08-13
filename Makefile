@@ -167,7 +167,13 @@ test:
 # προς frame και δείχνει την πρώτη απόκλιση.
 editor-data: $(JSDATA) $(PARITY)
 
-$(JSDATA): tools/genjs.py tools/physics.py
+# ΚΑΙ ΤΟ genasm.py: από εκεί έρχονται τα pixel των πλακιδίων, των βελών και του
+# τίτλου (το genjs κάνει import tile_pixels/arrow_pixels). Χωρίς αυτή τη
+# γραμμή, μια διόρθωση στη ζωγραφιά ενός πλακιδίου έμπαινε στη δισκέτα αλλά ο
+# editor συνέχιζε να δείχνει το παλιό — και το test run του browser έλεγε ότι
+# όλα είναι εντάξει. Το ίδιο για τα sprites του ήρωα και του αλεξίπτωτου.
+$(JSDATA): tools/genjs.py tools/physics.py tools/genasm.py \
+           tools/stickman.py tools/parachute.py tools/cpcgfx.py
 	$(PY) tools/genjs.py
 
 # ΜΕΤΑ το data.js: το parity τρέχει την ίδια JavaScript που το διαβάζει.

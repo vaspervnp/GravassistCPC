@@ -281,41 +281,41 @@ tile_gfx:
                 db #FF,#FF
                 db #04,#02
                 ; 30 SPIKE_U_OFF
-                db #00,#00
-                db #00,#00
-                db #00,#00
-                db #00,#00
-                db #00,#00
-                db #22,#44
+                db #DD,#BB
                 db #FF,#FF
+                db #88,#11
+                db #88,#11
+                db #88,#11
+                db #88,#11
+                db #88,#11
                 db #FF,#FF
                 ; 31 SPIKE_L_OFF
-                db #00,#33
-                db #00,#33
-                db #00,#77
-                db #00,#33
-                db #00,#33
-                db #00,#77
-                db #00,#33
-                db #00,#33
+                db #FF,#FF
+                db #CC,#11
+                db #44,#11
+                db #CC,#11
+                db #CC,#11
+                db #44,#11
+                db #CC,#11
+                db #FF,#FF
                 ; 32 SPIKE_D_OFF
                 db #FF,#FF
+                db #88,#11
+                db #88,#11
+                db #88,#11
+                db #88,#11
+                db #88,#11
                 db #FF,#FF
-                db #22,#44
-                db #00,#00
-                db #00,#00
-                db #00,#00
-                db #00,#00
-                db #00,#00
+                db #DD,#BB
                 ; 33 SPIKE_R_OFF
-                db #CC,#00
-                db #CC,#00
-                db #EE,#00
-                db #CC,#00
-                db #CC,#00
-                db #EE,#00
-                db #CC,#00
-                db #CC,#00
+                db #FF,#FF
+                db #88,#33
+                db #88,#22
+                db #88,#33
+                db #88,#33
+                db #88,#22
+                db #88,#33
+                db #FF,#FF
                 ; 34 SWITCH_L
                 db #00,#00
                 db #00,#01

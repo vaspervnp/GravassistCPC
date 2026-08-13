@@ -692,18 +692,35 @@ def main():
         check(f"{P.TYPE_NAMES[ow]}: η μπάρα ΠΑΝΩ στη φορά",
               solid == want, f"μπάρα {solid}, περίμενα {want}")
 
-    # Και τα τραβηγμένα: η ίδια πλευρά με το αντίστοιχο βγαλμένο.
+    # ΤΑ ΤΡΑΒΗΓΜΕΝΑ ΕΙΝΑΙ ΠΑΤΩΜΑ, ΚΑΙ ΤΟ ΠΑΤΩΜΑ ΠΡΕΠΕΙ ΝΑ ΥΠΑΡΧΕΙ ΕΚΕΙ ΠΟΥ
+    # ΠΑΤΑΣ. Το κελί είναι στερεό ολόκληρο, άρα ο ήρωας στέκεται στην ΑΚΡΗ του
+    # — και το σχήμα είχε τη μπάρα στον πάτο και τα υπόλοιπα κενά, οπότε ο
+    # ήρωας αιωρούνταν έξι pixel, μισό σώμα, πάνω από ό,τι φαινόταν.
+    #
+    # Ο παλιός έλεγχος έψαχνε «τη βάση» ως την πλευρά με τα περισσότερα pixel.
+    # Σε θήκη με περίγραμμα όλες οι πλευρές είναι γεμάτες, οπότε η μέτρηση
+    # έδειχνε όποια τύχαινε πρώτη. Αυτό που έχει σημασία είναι δύο πράγματα:
     for on, off in P.SPIKE_OFF.items():
         pon, poff = GA.tile_pixels(on), GA.tile_pixels(off)
-        def base_of(px):
-            s = {"top": sum(1 for u in range(8) if px[0][u]),
-                 "bottom": sum(1 for u in range(8) if px[7][u]),
-                 "left": sum(1 for v in range(8) if px[v][0]),
-                 "right": sum(1 for v in range(8) if px[v][7])}
-            return max(s, key=s.get)
-        check(f"{P.TYPE_NAMES[off]}: ίδια πλευρά με το {P.TYPE_NAMES[on]}",
-              base_of(pon) == base_of(poff),
-              f"{base_of(pon)} vs {base_of(poff)}")
+        sides = lambda px: {"top": sum(1 for u in range(8) if px[0][u]),
+                            "bottom": sum(1 for u in range(8) if px[7][u]),
+                            "left": sum(1 for v in range(8) if px[v][0]),
+                            "right": sum(1 for v in range(8) if px[v][7])}
+
+        # 1. ΚΑΜΙΑ πλευρά κενή: όποια κι αν είναι η βαρύτητα, ο ήρωας πατάει
+        #    πάνω σε κάτι ζωγραφισμένο και όχι στον αέρα.
+        s = sides(poff)
+        check(f"{P.TYPE_NAMES[off]}: κάθε πλευρά είναι επιφάνεια",
+              min(s.values()) >= 6, f"λιγότερα pixel: {min(s, key=s.get)} "
+              f"{min(s.values())}")
+
+        # 2. Οι τρύπες κοιτούν εκεί που δείχνουν οι μύτες — δηλαδή απέναντι
+        #    από τη βάση του βγαλμένου. Έτσι διαβάζεται ΠΟΙΑ παγίδα είναι.
+        holes = min(s, key=s.get)
+        base = max(sides(pon), key=sides(pon).get)
+        check(f"{P.TYPE_NAMES[off]}: οι τρύπες απέναντι από τη βάση του "
+              f"{P.TYPE_NAMES[on]}",
+              holes == opposite[base], f"τρύπες {holes}, βάση {base}")
 
     # --- Κιβώτιο που ΠΕΦΤΕΙ πάνω σε πλάκα την πατάει.
     #     Σταματούσε ένα κελί πιο πάνω και η πλάκα έμενε ελεύθερη: έστηνες
