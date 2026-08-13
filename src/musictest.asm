@@ -242,7 +242,23 @@ chan_note:      ld   a,(ix+CH_LEFT)
                 or   a
                 jr   z,cn_rest
 
-                dec  a                  ; 1..N -> position in the table
+                ; PERCUSSION: an index at or above BOSS_NOISE is plain noise,
+                ; the remainder being the AY noise period. Without this branch
+                ; a snare (206) fell into the tone path, where `dec a` and
+                ; `add a,a` overflow eight bits and read whatever sits 154
+                ; bytes into the note table — a random period every twelve
+                ; hundredths of a second, which is exactly what continuous
+                ; noise sounds like.
+                cp   BOSS_NOISE
+                jr   c,cn_tone
+                sub  BOSS_NOISE
+                ld   (snd_noise),a
+                xor  a
+                ld   (snd_tone),a
+                ld   (snd_tone+1),a
+                jr   cn_emit
+
+cn_tone:        dec  a                  ; 1..N -> position in the table
                 add  a,a
                 ld   l,a
                 ld   h,0
@@ -255,8 +271,6 @@ chan_note:      ld   a,(ix+CH_LEFT)
                 ld   (snd_tone+1),a
                 xor  a
                 ld   (snd_noise),a
-                ; A drum is a noise index dressed as a very low note: the kick
-                ; is a tone, the snare is noise. One channel, both sounds.
                 jr   cn_emit
 cn_rest:        xor  a
                 ld   (snd_tone),a

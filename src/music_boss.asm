@@ -26,6 +26,9 @@ boss_notes:
                 dw   253      ; B4
 
 BOSS_TRACKS     equ 3
+; At or above this, a note index is percussion and the remainder
+; is the AY noise period. The player MUST branch on it.
+BOSS_NOISE      equ 200
 
 ; --- bass: 82 entries
 boss_bass:

@@ -121,6 +121,31 @@ def drums(table):
     return out, total
 
 
+def check_indices(table, tracks):
+    """No note index may fall outside the table unless it is a noise voice.
+
+    THE BUG THIS EXISTS FOR: the drum voices are borrowed from genmusic, where
+    an index at or above MUS_NOISE means percussion. A player that does not
+    implement that convention treats 206 as a table position, overflows eight
+    bits doubling it, and reads garbage as a tone period — continuous noise,
+    with nothing in the data to suggest anything is wrong.
+    """
+    # The player doubles the index to reach a word in the table. Past 127 that
+    # doubling overflows eight bits — the same failure, one table away.
+    if len(table) > 127:
+        raise SystemExit(f"note table has {len(table)} entries; the player's "
+                         "`add a,a` overflows above 127")
+    for label, notes in tracks:
+        for idx, _, _ in notes:
+            if idx == 0 or idx <= len(table):
+                continue
+            if idx >= GM.MUS_NOISE:
+                continue
+            raise SystemExit(
+                f"{label}: note index {idx} is outside the {len(table)} entry "
+                f"table and below MUS_NOISE ({GM.MUS_NOISE})")
+
+
 def main():
     table = collect()
     tracks = []
@@ -144,7 +169,12 @@ def main():
     for name in table:
         out.append(f"                dw {GM.period(name):5d}      ; {name}")
 
-    out += ["", f"BOSS_TRACKS     equ {len(tracks)}"]
+    check_indices(table, tracks)
+    out += ["",
+            f"BOSS_TRACKS     equ {len(tracks)}",
+            "; At or above this, a note index is percussion and the remainder",
+            "; is the AY noise period. The player MUST branch on it.",
+            f"BOSS_NOISE      equ {GM.MUS_NOISE}"]
     for i, (label, notes) in enumerate(tracks):
         out += ["",
                 f"; --- {label}: {len(notes)} entries",
