@@ -20,6 +20,11 @@ BAS   = src/loader.bas
 SPLASH = assets/revive8b.scr
 BIN   = build/main.bin
 BASD  = build/grav.bas
+# Standalone music audition: player + transcribed theme, org #8000 so it can
+# page the bank without paging itself out. Nothing here is linked into the
+# game — it exists to be heard before the music goes anywhere near it.
+MUSBIN  = build/music.bin
+MUSBAS  = build/music.bas
 DSK   = build/gravassist.dsk
 # Ένα ROOMSnn.BIN ανά 40 αίθουσες. Τα ονόματα προκύπτουν από τους αριθμούς
 # των αιθουσών, οπότε ρωτάμε το ίδιο εργαλείο που τα γράφει.
@@ -78,7 +83,17 @@ $(BASD): $(BAS) | build
 $(SETS): tools/roomfile.py tools/physics.py $(ROOMS) $(BIN) | build
 	$(PY) tools/roomfile.py
 
-$(DSK): $(BIN) $(BASD) $(SETS) $(SPLASH)
+$(MUSBIN): src/musictest.asm src/music_boss.asm | build
+	$(ASM) src/musictest.asm
+
+src/music_boss.asm: tools/genboss.py tools/genmusic.py
+	$(PY) tools/genboss.py
+
+$(MUSBAS): src/musicloader.bas | build
+	sed 's/$$/\r/' src/musicloader.bas > $(MUSBAS)
+	printf '\032' >> $(MUSBAS)
+
+$(DSK): $(BIN) $(BASD) $(SETS) $(SPLASH) $(MUSBIN) $(MUSBAS)
 	rm -f $(DSK)
 	$(DISK) $(DSK) -n
 	$(DISK) $(DSK) -i $(BIN)  -t 1 -c 4000 -e 4000 -f
@@ -86,6 +101,9 @@ $(DSK): $(BIN) $(BASD) $(SETS) $(SPLASH)
 	@# Η οθόνη υποδοχής: MODE 0 με δική της παλέτα, 16 KB ωμά pixel. Φορτώνεται
 	@# από τον BASIC loader στο #C000 πριν καν μπει το παιχνίδι στη μνήμη.
 	$(DISK) $(DSK) -i $(SPLASH) -t 1 -c C000 -e C000 -f
+	@# RUN"MUSIC" from BASIC plays the theme on its own.
+	$(DISK) $(DSK) -i $(MUSBIN) -t 1 -c 8000 -e 8000 -f
+	$(DISK) $(DSK) -i $(MUSBAS) -t 0 -f
 	@# ΤΑ ΣΕΤ ΞΑΝΑΠΑΡΑΓΟΝΤΑΙ ΕΔΩ, ΣΤΗΝ ΕΚΤΕΛΕΣΗ. Το $$(SETS) υπολογίζεται με
 	@# $$(shell) ΚΑΤΑ ΤΗΝ ΑΝΑΓΝΩΣΗ του Makefile και με το stderr κρυμμένο: αν
 	@# το roomfile.py αποτύχει — π.χ. οι αίθουσες δεν χωρούν στον buffer του

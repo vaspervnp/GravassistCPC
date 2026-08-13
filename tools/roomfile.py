@@ -349,6 +349,16 @@ if __name__ == "__main__":
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     build = os.path.join(root, "build")
     os.makedirs(build, exist_ok=True)
+    # ΣΚΟΥΠΙΔΙΑ ΑΠΟ ΠΡΟΗΓΟΥΜΕΝΟ BUILD ΦΕΥΓΟΥΝ. Το Makefile βάζει στη δισκέτα
+    # ό,τι ταιριάζει με build/ROOMS*.BIN, οπότε αρχεία από παλιότερο SET_ROOMS
+    # ταξίδευαν μαζί. Είναι έγκυρα αρχεία GRS με ΛΑΘΟΣ αίθουσες μέσα: περνούν
+    # και την υπογραφή και τον έλεγχο έκδοσης, και φορτώνονται σαν σωστά.
+    keep = {name for _, name, _ in all_sets()}
+    for old in sorted(os.listdir(build)):
+        if re.fullmatch(r"ROOMS\d\d\.BIN", old) and old not in keep:
+            os.remove(os.path.join(build, old))
+            print(f"  build/{old}: από παλιό build — διαγράφηκε")
+
     for index, name, data in all_sets():
         with open(os.path.join(build, name), "wb") as f:
             f.write(data)

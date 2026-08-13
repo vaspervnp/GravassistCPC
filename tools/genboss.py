@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""The Boss Time theme -> src/music_boss.asm, for the standalone MUSIC.BIN.
+
+WHERE IT CAME FROM: transcribed from
+musicsamples/15sec-2021-08-30_-_Boss_Time_-_www.FesliyanStudios.com.mp3 with an
+FFT analysis (chromagram for the key, spectral flux for the tempo, harmonic
+product spectrum for pitch). The numbers below are the OUTPUT of that analysis,
+pasted here on purpose: re-running it would make numpy and the mp3 a build
+dependency, and the mp3 is not in the repo's licence chain.
+
+WHAT IS TRANSCRIBED AND WHAT IS NOT, because the difference matters:
+
+  BASS   transcribed. A coherent C# minor riff, descending C#-C-B with jumps to
+         E and G#, repeating across the whole piece. This is the real line.
+
+  LEAD   transcribed, but it is the HARMONIC OUTLINE, not the tune you hear.
+         Harmonic product spectrum locks onto the strongest partial and the
+         real lead is buried in a dense mix. Useful as a second voice; do not
+         expect the melody.
+
+  DRUMS  NOT transcribed. Per-band onset detection found the hits but no
+         repeating bar — a real recording with fills. This is a plain driving
+         backbeat at the same tempo, written by hand.
+
+125 BPM and not the measured 126.2: durations are whole hundredths of a second,
+so a sixteenth is exactly 12 and the three channels stay in step. A 1% drift
+would be inaudible; three channels sliding apart would not.
+"""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import genmusic as GM
+
+STEP = 12                       # one sixteenth, in hundredths of a second
+BAR = 16 * STEP
+R = None
+
+BASS = [
+    ("C#2", 2), ("C2", 1), ("B1", 2), ("C#2", 1), ("C2", 1), ("B1", 1),
+    ("E3", 1), ("E2", 1), ("C#2", 2), ("G#2", 2), ("C#2", 4), ("C2", 1),
+    ("B1", 1), ("C#2", 1), ("C2", 1), ("A#1", 1), ("B1", 1), ("F#2", 1),
+    ("A1", 1), ("E2", 1), ("B1", 2), ("C#2", 4), ("C2", 1), ("B1", 2),
+    ("C#2", 1), ("C2", 1), ("B1", 1), ("E3", 1), ("E2", 1), ("C#2", 2),
+    ("G#2", 1), ("C#3", 1), ("C#2", 5), ("B1", 1), ("C#2", 1), ("C2", 1),
+    ("B1", 2), ("F#2", 1), ("E2", 2), ("B1", 2), ("C#2", 4),
+]
+
+LEAD = [
+    ("C#4", 4), ("B4", 1), ("C#4", 2), ("B4", 1), ("E4", 2), ("C#4", 2),
+    ("G#4", 1), ("C#4", 6), ("B4", 1), ("C#4", 3), ("B4", 1), ("F#4", 1),
+    ("E4", 2), ("B4", 2), ("C#4", 6), ("B4", 1), ("C#4", 2), ("B4", 1),
+    ("E4", 2), ("C#4", 2), ("G#4", 1), ("C#4", 6), ("B4", 1), ("C#4", 2),
+    ("B4", 1), ("F#4", 2), ("E4", 2), ("B4", 2), ("C#4", 4),
+]
+
+# Hand written, see the header. Kick on the beat, snare on the backbeat, with
+# the off-beat kick that gives a boss fight its push.
+DRUM_BARS = [
+    "K..kS...K..kS...",
+    "K..kS...K..kS.k.",
+    "K..kS...K..kS...",
+    "K..kS..kK.kkS.SS",
+]
+
+VOL_BASS, VOL_LEAD = 13, 10
+DRUM_HIT = 3                    # how long a drum crack lasts
+DRUM_VOICE = {"K": (GM.KICK, 13), "k": (GM.KICK, 8),
+              "S": (GM.SNARE, 12), "s": (GM.SNARE_S, 8)}
+
+
+def collect():
+    """Every distinct pitch, low to high — the note table for this piece."""
+    names = {n for n, _ in BASS + LEAD}
+    names.add(GM.KICK)
+    return sorted(names, key=GM.midi)
+
+
+def stream(track, table, volume):
+    """Note triples, with a short silence at the end of each note.
+
+    Without the gap two equal notes in a row merge into one long drone and the
+    riff loses its shape — the same reason genmusic.stream does it.
+    """
+    out, total = [], 0
+    for name, steps in track:
+        dur = steps * STEP
+        total += dur
+        if name is None:
+            out.append((0, 0, dur))
+            continue
+        gap = max(2, dur // 8)
+        out.append((table.index(name) + 1, volume, dur - gap))
+        out.append((0, 0, gap))
+    return out, total
+
+
+def drums(table):
+    out, total = [], 0
+
+    def rest(n):
+        if out and out[-1][0] == 0 and out[-1][2] + n <= 200:
+            v, vol, d = out[-1]
+            out[-1] = (v, vol, d + n)
+        else:
+            out.append((0, 0, n))
+
+    for bar in DRUM_BARS:
+        assert len(bar) == 16, bar
+        for cell in bar:
+            total += STEP
+            if cell == ".":
+                rest(STEP)
+                continue
+            voice, vol = DRUM_VOICE[cell]
+            idx = voice if isinstance(voice, int) else table.index(voice) + 1
+            out.append((idx, vol, DRUM_HIT))
+            rest(STEP - DRUM_HIT)
+    return out, total
+
+
+def main():
+    table = collect()
+    tracks = []
+    for label, data in (("bass", stream(BASS, table, VOL_BASS)),
+                        ("lead", stream(LEAD, table, VOL_LEAD)),
+                        ("drums", drums(table))):
+        notes, total = data
+        assert total == 4 * BAR, f"{label}: {total} instead of {4 * BAR}"
+        tracks.append((label, notes))
+
+    out = [";" + "=" * 69,
+           ";  GRAVASSIST - Boss Time theme, transcribed",
+           ";  GENERATED by tools/genboss.py - do not edit.",
+           ";",
+           ";  Four bars at 125 BPM = 7.68 seconds, three channels in step.",
+           ";  See the tool's header for what is transcribed and what is not.",
+           ";" + "=" * 69,
+           "",
+           "; AY tone periods: period = 125000 / frequency.",
+           "boss_notes:"]
+    for name in table:
+        out.append(f"                dw {GM.period(name):5d}      ; {name}")
+
+    out += ["", f"BOSS_TRACKS     equ {len(tracks)}"]
+    for i, (label, notes) in enumerate(tracks):
+        out += ["",
+                f"; --- {label}: {len(notes)} entries",
+                f"boss_{label}:"]
+        for note, vol, dur in notes:
+            out.append(f"                db {note},{vol},{dur}")
+        out.append(f"boss_{label}_end:")
+
+    out += ["",
+            "; Where each track sits and how long it is. The player streams",
+            "; them out of the bank, so it needs both.",
+            "boss_tab:"]
+    for label, _ in tracks:
+        out.append(f"                dw boss_{label}, "
+                   f"boss_{label}_end-boss_{label}")
+    out.append("")
+
+    text = "\n".join(out) + "\n"
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(root, "src", "music_boss.asm")
+    with open(path, "w") as f:
+        f.write(text)
+    size = sum(len(n) * 3 for _, n in tracks) + len(table) * 2
+    print(f"  src/music_boss.asm: {len(table)} notes, "
+          f"{sum(len(n) for _, n in tracks)} entries, {size} bytes of data")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
