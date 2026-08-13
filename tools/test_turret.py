@@ -326,5 +326,38 @@ check("τοίχος ανάμεσα: δεν ρίχνει και δεν πονάε
       t.peek(AR)[0] == 0 and t.peek(t.sym("HERO_ENERGY"))[0] == P.ENERGY_MAX,
       f"on={t.peek(AR)[0]} ενέργεια={t.peek(t.sym('HERO_ENERGY'))[0]}")
 
+# --- Η ΣΦΑΙΡΑ ΣΤΗΝ ΟΘΟΝΗ ---------------------------------------------
+#
+# Ως εδώ κανένα τεστ δεν ακούμπησε pixel: το βέλος μπορούσε να δουλεύει τέλεια
+# και να είναι αόρατο, που είναι ακριβώς η κατάσταση που παρέδωσα πριν.
+print("--- και φαίνεται;")
+t = z80_room([(10, 16, "I")])
+t.call("INIT_LINETAB")
+t.call("TURRET_LOAD")
+AR = t.sym("ARROW_TAB")
+t.poke(AR, bytes([1]))                      # ένα βέλος στο χέρι, προς τα κάτω
+t.poke16(AR + 1, 84)
+t.poke(AR + 3, bytes([150]))
+t.poke(AR + 4, bytes([0, 1, 0]))            # dx=0, dy=1, gone=0
+
+before = bytes(t.m.memory[a] for a in range(0xC000, 0x10000))
+t.call("ARROW_DRAW")
+after = bytes(t.m.memory[a] for a in range(0xC000, 0x10000))
+changed = [i for i in range(len(before)) if before[i] != after[i]]
+check("το arrow_draw γράφει στην οθόνη",
+      len(changed) > 0, f"{len(changed)} bytes")
+check("…και μόνο γύρω από το βέλος (7 pixel -> το πολύ 7 bytes)",
+      0 < len(changed) <= 7, f"{len(changed)}")
+# Pen 3 στο MODE 1 = bits και στα δύο επίπεδα· ο πίνακας είναι ο spr_pixtab.
+check("…με pen 3, το πορτοκαλί των κινδύνων",
+      all(after[i] & 0x88 or after[i] & 0x44 or after[i] & 0x22
+          or after[i] & 0x11 for i in changed))
+
+# Και το σβήσιμο επαναφέρει το φόντο.
+t.call("ARROW_ERASE")
+back = bytes(t.m.memory[a] for a in range(0xC000, 0x10000))
+check("το arrow_erase ξαναφέρνει το φόντο", back == before,
+      f"{sum(1 for i in range(len(back)) if back[i] != before[i])} bytes διαφορά")
+
 print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else f"ΑΠΕΤΥΧΑΝ {len(FAILS)}")
 sys.exit(1 if FAILS else 0)

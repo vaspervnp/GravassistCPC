@@ -485,6 +485,253 @@ as_no:          pop  de
                 or   a
                 ret
 
+;---------------------------------------------------------------------
+; arrow_erase / arrow_draw — τα βέλη στην οθόνη
+;
+;   ΔΥΟ ΞΕΧΩΡΙΣΤΕΣ ΦΑΣΕΙΣ, ΚΑΙ ΟΧΙ ΜΙΑ όπως στον ήρωα. Ο ήρωας σβήνεται και
+;   ζωγραφίζεται σε ένα πέρασμα γιατί η περιοχή του είναι μία και γνωστή· τα
+;   βέλη κινούνται 6 pixel ανά καρέ, οπότε η ένωση παλιάς και νέας θέσης είναι
+;   δύο ξεχωριστά ορθογώνια. Σβήνουμε ΠΡΙΝ την ενημέρωση, στην παλιά θέση, και
+;   ζωγραφίζουμε ΜΕΤΑ τον ήρωα, στη νέα.
+;
+;   Η σειρά μέσα στο καρέ είναι: arrow_erase, hero_update (που τα κινεί),
+;   draw_hero, arrow_draw. Έτσι ένα βέλος πάνω από τον ήρωα φαίνεται, και ένα
+;   βέλος που πέθανε μέσα στην ενημέρωση έχει ήδη σβηστεί.
+;
+;   ΤΟ ΣΧΗΜΑ: κοντάρι πέντε pixel και δύο αγκίδες στη μύτη, σε συντεταγμένες
+;   «κατά μήκος / εγκάρσια». Έτσι μια λίστα εξυπηρετεί και τις τέσσερις φορές —
+;   η φορά είναι το (dx,dy) και η εγκάρσια το (dy,dx).
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+ARROW_PIX       equ  7
+
+arrow_shape:    db   -2,0, -1,0, 0,0, 1,0, 2,0    ; κοντάρι
+                db    1,-1,  1,1                  ; αγκίδες στη μύτη
+
+arrow_erase:    ld   iy,arrow_tab
+                ld   c,TURRET_MAX
+ae_slot:        ld   a,(iy+AR_ON)
+                or   a
+                call nz,ae_one
+                ld   de,AR_SIZE
+                add  iy,de
+                dec  c
+                jr   nz,ae_slot
+                ret
+
+; --- ξαναζωγραφίζει τα κελιά που κάλυπτε ένα βέλος (το πολύ 2x2) ------
+ae_one:         push bc
+                ld   l,(iy+AR_X)        ; στήλες κελιών: (x-2)>>3 ως (x+2)>>3
+                ld   h,(iy+AR_X+1)
+                ld   de,-2
+                add  hl,de
+                bit  7,h                ; αριστερά από την οθόνη
+                jr   z,ae_c0ok
+                ld   hl,0
+ae_c0ok:        srl  h
+                rr   l
+                srl  l
+                srl  l
+                ld   a,l
+                ld   (ae_c0),a
+                ld   l,(iy+AR_X)
+                ld   h,(iy+AR_X+1)
+                ld   de,2
+                add  hl,de
+                srl  h
+                rr   l
+                srl  l
+                srl  l
+                ld   a,l
+                cp   LVL_COLS
+                jr   c,ae_c1ok
+                ld   a,LVL_COLS-1
+ae_c1ok:        ld   (ae_c1),a
+
+                ld   a,(iy+AR_Y)        ; γραμμές κελιών, με το HUD από πάνω
+                sub  LVL_Y0+2
+                jr   nc,ae_r0ok
+                xor  a
+ae_r0ok:        srl  a
+                srl  a
+                srl  a
+                ld   (ae_r0),a
+                ld   a,(iy+AR_Y)
+                add  a,2
+                sub  LVL_Y0
+                srl  a
+                srl  a
+                srl  a
+                cp   LVL_ROWS
+                jr   c,ae_r1ok
+                ld   a,LVL_ROWS-1
+ae_r1ok:        ld   (ae_r1),a
+
+ae_rlp:         ld   a,(ae_c0)
+                ld   (ae_c),a
+ae_clp:         ld   a,(ae_r0)
+                ld   b,a
+                ld   a,(ae_c)
+                ld   c,a
+                push iy
+                call draw_tile
+                pop  iy
+                ld   hl,ae_c
+                inc  (hl)
+                ld   a,(hl)
+                ld   hl,ae_c1
+                cp   (hl)
+                jr   c,ae_clp
+                jr   z,ae_clp
+                ld   hl,ae_r0
+                inc  (hl)
+                ld   a,(hl)
+                ld   hl,ae_r1
+                cp   (hl)
+                jr   c,ae_rlp
+                jr   z,ae_rlp
+                pop  bc
+                ret
+
+arrow_draw:     ld   iy,arrow_tab
+                ld   c,TURRET_MAX
+ad_slot:        ld   a,(iy+AR_ON)
+                or   a
+                call nz,ad_one
+                ld   de,AR_SIZE
+                add  iy,de
+                dec  c
+                jr   nz,ad_slot
+                ret
+
+ad_one:         push bc
+                ld   hl,arrow_shape
+                ld   b,ARROW_PIX
+ad_lp:          push bc
+                push hl
+                ld   a,(hl)             ; A = κατά μήκος
+                inc  hl
+                ld   b,(hl)             ; B = εγκάρσια
+                call ad_pix
+                pop  hl
+                inc  hl
+                inc  hl
+                pop  bc
+                djnz ad_lp
+                pop  bc
+                ret
+
+; --- ένα pixel: (x,y) = θέση + a*(dx,dy) + c*(dy,dx) -----------------
+;   Τα a και c ζουν σε μνήμη και όχι σε καταχωρητές: χρειάζονται και για το x
+;   και για το y, και το ad_mul χαλάει ό,τι βρει.
+ad_pix:         ld   (ad_a),a           ; κατά μήκος
+                ld   a,b
+                ld   (ad_c),a           ; εγκάρσια
+
+                ld   a,(ad_a)           ; x = AR_X + a*dx + c*dy
+                ld   e,(iy+AR_DX)
+                call ad_mul
+                push hl
+                ld   a,(ad_c)
+                ld   e,(iy+AR_DY)
+                call ad_mul
+                pop  de
+                add  hl,de
+                ld   e,(iy+AR_X)
+                ld   d,(iy+AR_X+1)
+                add  hl,de
+                ld   (ad_x),hl
+
+                ld   a,(ad_a)           ; y = AR_Y + a*dy + c*dx
+                ld   e,(iy+AR_DY)
+                call ad_mul
+                push hl
+                ld   a,(ad_c)
+                ld   e,(iy+AR_DX)
+                call ad_mul
+                pop  de
+                add  hl,de
+                ld   a,(iy+AR_Y)
+                add  a,l
+                ld   (ad_y),a
+
+                ld   hl,(ad_x)          ; έξω από το playfield;
+                bit  7,h
+                ret  nz
+                ld   de,LVL_COLS*LVL_CELL
+                or   a
+                sbc  hl,de
+                ret  nc
+                ld   a,(ad_y)
+                cp   LVL_Y0
+                ret  c
+                cp   LVL_Y0+LVL_ROWS*LVL_CELL
+                ret  nc
+
+                ld   hl,(ad_x)          ; byte και θέση pixel μέσα του
+                ld   a,l
+                and  3
+                ld   (ad_slot_i),a
+                srl  h
+                rr   l
+                srl  l
+                ld   c,l
+                ld   a,(ad_y)
+                ld   b,a
+                call scr_addr
+                push hl
+                ld   a,(ad_slot_i)      ; μάσκα: σβήσε τα δύο bits του pixel
+                ld   e,a
+                ld   d,0
+                ld   hl,spr_andtab
+                add  hl,de
+                ld   c,(hl)
+                ld   a,(ad_slot_i)      ; pen 3, το πορτοκαλί των κινδύνων
+                add  a,12               ; pixtab[3*4 + slot]
+                ld   e,a
+                ld   d,0
+                ld   hl,spr_pixtab
+                add  hl,de
+                ld   b,(hl)
+                pop  hl
+                ld   a,(hl)
+                and  c
+                or   b
+                ld   (hl),a
+                ret
+
+; ad_mul — HL = A * E, όπου το E είναι ΜΟΝΟ -1, 0 ή +1
+;   Δεν είναι γενικός πολλαπλασιασμός και δεν πρέπει να γίνει: οι φορές είναι
+;   τρεις τιμές, και ένας βρόχος πρόσθεσης εδώ έσπασε ήδη μια φορά επειδή
+;   χαλούσε τον καταχωρητή που κρατούσε τον έναν από τους δύο όρους.
+ad_mul:         ld   c,a
+                ld   a,e
+                or   a
+                jr   z,am_zero
+                bit  7,a
+                ld   a,c
+                jr   z,am_ext
+                neg
+am_ext:         ld   l,a
+                ld   h,0
+                bit  7,a
+                ret  z
+                dec  h
+                ret
+am_zero:        ld   hl,0
+                ret
+
+ad_a            db   0
+ad_c            db   0
+ae_c0           db   0
+ae_c1           db   0
+ae_r0           db   0
+ae_r1           db   0
+ae_c            db   0
+ad_x            dw   0
+ad_y            db   0
+ad_slot_i       db   0
+
 ;--- βοηθητικά --------------------------------------------------------
 ; ar_free — IY -> ελεύθερη θέση βέλους. OUT: CF=1 βρέθηκε
 ar_free:        ld   iy,arrow_tab

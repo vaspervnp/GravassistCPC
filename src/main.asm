@@ -260,6 +260,8 @@ ml_anim:        call music_step         ; ΠΡΙΝ το flyback: το SOUND QUEU
 
                 call MC_WAIT_FLYBACK
                 call draw_hero          ; μόνο εγγραφές στην οθόνη
+                call arrow_draw         ; ΜΕΤΑ τον ήρωα: ένα βέλος από πάνω του
+                                        ; πρέπει να φαίνεται
                 call draw_hud
                 call score_draw
                 call hint_msg
