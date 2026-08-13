@@ -149,8 +149,13 @@
 
   function start(name, cells, startPos, keep) {
     curName = name;
-    room = new G.Room(cells, (rooms[name] || {}).teleports,
-                     (rooms[name] || {}).attrs);
+    // ΟΛΑ ΤΑ ΠΕΔΙΑ ΤΗΣ ΕΓΓΡΑΦΗΣ, ΟΝΟΜΑΣΤΙΚΑ. Η κλήση έδινε τρία από τα
+    // τέσσερα ορίσματα και το turretArg έμενε undefined: το load() διάβαζε
+    // κανονικά τους δύο χρόνους κάθε πυργίσκου από την ουρά και τους κρατούσε
+    // στο rooms[name] — και μετά κανείς δεν τους έδινε στο δωμάτιο. Κάθε
+    // πυργίσκος έπαιζε με τις προεπιλογές, δηλαδή ο ρυθμός δεν υπήρχε.
+    const meta = rooms[name] || {};
+    room = new G.Room(cells, meta.teleports, meta.attrs, meta.turretArg);
     hero = new G.Hero(room, startPos[0], startPos[1], startPos[2]);
     // Ο ΠΑΙΚΤΗΣ ΚΡΑΤΑΕΙ Ο,ΤΙ ΚΟΥΒΑΛΑΕΙ. Ο νέος ήρωας ξεκινούσε με γεμάτη
     // ενέργεια και άδεια χέρια, οπότε κάθε πόρτα ήταν και μια δωρεάν γέμιση —

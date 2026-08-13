@@ -13,6 +13,7 @@ browser, και συγκρίνει καρέ προς καρέ: θέση κάθε
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -30,16 +31,20 @@ FRAMES = 120
 ROOM = [(10, 16, "I"), (4, 21, "="), (30, 6, "I")]
 # ΜΕ ΠΑΡΑΜΕΤΡΟΥΣ, αλλιώς η σύγκριση δοκιμάζει μόνο τις προεπιλογές: ένας
 # πυργίσκος με γρήγορη φόρτιση, ένας με ρυθμό που ρίχνει χωρίς να βλέπει.
-FOOTER = "turret 10 16 0 2 0\nturret 4 21 0 5 0\nturret 30 6 0 5 1\n"
+CHANNEL = 5
+FOOTER = ("turret 10 16 0 2 0\nturret 4 21 0 5 0\n"
+          f"turret 30 6 {CHANNEL} 5 1\n")
 
 # Ο ΔΙΑΚΟΠΤΗΣ ΜΕΣΑ ΣΤΗ ΣΥΓΚΡΙΣΗ. Ο ρυθμικός του (30,6) σβήνει στο καρέ 40 και
-# ξανανάβει στο 80: ο πυργίσκος με ρυθμό δεν ρωτάει ούτε εμβέλεια ούτε οπτική
-# επαφή, οπότε ο διακόπτης είναι το ΜΟΝΟ πράγμα που τον σταματά — και ήταν
-# ακριβώς το μόνο που δεν συγκρινόταν ποτέ με το μοντέλο.
+# ξανανάβει στο 80: δεν ρωτάει ούτε εμβέλεια ούτε οπτική επαφή, οπότε ο
+# διακόπτης είναι το ΜΟΝΟ πράγμα που τον σταματά.
 #
-# Γράφεται ο τύπος του κελιού κατευθείαν, όπως κάνει ο διακόπτης και στις δύο
-# υλοποιήσεις· η καλωδίωση δοκιμάζεται αλλού.
-SWITCH_CELL = (30, 6)
+# ΜΕΣΑ ΑΠΟ ΤΟ set_targets, ΟΧΙ ΓΡΑΦΟΝΤΑΣ ΤΟ ΚΕΛΙ. Η πρώτη μορφή αυτού του τεστ
+# άλλαζε τον τύπο του κελιού με το χέρι «γιατί αυτό κάνει ο διακόπτης», και
+# έτσι πηδούσε ακριβώς το κομμάτι που ήταν σπασμένο: το OPEN_OF της JavaScript
+# δεν είχε καθόλου πυργίσκους, οπότε το targetCells δεν επέστρεφε ποτέ κανέναν
+# και ο διακόπτης δεν έσβηνε τίποτα στον browser. 120 από 120 καρέ ίδια, και το
+# παιχνίδι χαλασμένο. Η σύγκριση περνάει τώρα από τον ΙΔΙΟ δρόμο με τον παίκτη.
 SWITCH_OFF, SWITCH_ON = 40, 80
 
 
@@ -61,11 +66,10 @@ def python_trace():
     for i in range(FRAMES):
         # Κινήσου λίγο, ώστε να αλλάζει και το κόστος του καρέ: εκεί κρύβεται
         # η διαφορά ανάμεσα σε «5 δευτερόλεπτα» και «τόσα περάσματα».
-        sc, sr = SWITCH_CELL
         if i == SWITCH_OFF:
-            rm.cells[sr][sc] = P.TURRET_V_OFF
+            h.set_targets(CHANNEL, True)        # «ανοιχτό» = ακίνδυνο
         elif i == SWITCH_ON:
-            rm.cells[sr][sc] = P.TURRET_V
+            h.set_targets(CHANNEL, False)
         walk = 1 if (i // 20) % 2 == 0 else -1
         h.update(walk, (i // 40) % 2 == 0)
         out.append([h.clock, h.energy,
@@ -80,16 +84,15 @@ eval(fs.readFileSync(process.argv[2], "utf8"));      // data.js -> window.GAME_D
 eval(fs.readFileSync(process.argv[3], "utf8"));      // physics.js -> window.GRAV
 const G = window.GRAV, D = window.GAME_DATA;
 const blob = JSON.parse(fs.readFileSync(process.argv[4], "utf8"));
-const room = new G.Room(blob.cells, {}, {}, blob.turretArg);
+const room = new G.Room(blob.cells, {}, blob.attrs, blob.turretArg);
 // Η βαρύτητα ΡΗΤΑ: ο Hero της JavaScript δεν έχει προεπιλογή, ενώ το Python
 // έχει g=0 — και χωρίς αυτήν το g βγαίνει undefined και σκάει στους πίνακες.
 const h = new G.Hero(room, 10 * D.CELL + (D.CELL >> 1),
                      D.GRID_Y0 + 18 * D.CELL, 0);
 const out = [];
-const [SC, SR] = blob.switchCell;
 for (let i = 0; i < __N__; i++) {
-  if (i === blob.switchOff) room.cells[SR][SC] = D.TYPE_NAMES.indexOf("TURRET_V_OFF");
-  else if (i === blob.switchOn) room.cells[SR][SC] = D.TYPE_NAMES.indexOf("TURRET_V");
+  if (i === blob.switchOff) h.setTargets(blob.channel, true);
+  else if (i === blob.switchOn) h.setTargets(blob.channel, false);
   const walk = ((i / 20) | 0) % 2 === 0 ? 1 : -1;
   h.update(walk, ((i / 40) | 0) % 2 === 0);
   out.push([h.clock, h.energy,
@@ -124,7 +127,11 @@ def js_trace(tmp):
         json.dump({"cells": rm.cells,
                    "turretArg": {f"{c},{r}": list(v)
                                  for (c, r), v in rm.turret_arg.items()},
-                   "switchCell": list(SWITCH_CELL),
+                   # ΚΑΙ ΟΙ ΙΔΙΟΤΗΤΕΣ: χωρίς αυτές το targetCells δεν έχει πού
+                   # να ψάξει και ο διακόπτης δεν αγγίζει τίποτα — και στις δύο
+                   # πλευρές, οπότε η σύγκριση θα έμενε πράσινη χωρίς λόγο.
+                   "attrs": {f"{c},{r}": v for (c, r), v in rm.attrs.items()},
+                   "channel": CHANNEL,
                    "switchOff": SWITCH_OFF, "switchOn": SWITCH_ON}, f)
     js_path = os.path.join(tmp, "run.js")
     with open(js_path, "w") as f:
@@ -138,7 +145,55 @@ def js_trace(tmp):
     return json.loads(r.stdout)
 
 
+def check_room_wiring(fail):
+    """Ο,τι διαβάζει το run.js από την ουρά πρέπει να ΦΤΑΝΕΙ στο δωμάτιο.
+
+    ΤΟ ΣΦΑΛΜΑ ΠΟΥ ΕΦΤΑΣΕ ΣΤΟΝ ΧΡΗΣΤΗ: το run.js διάβαζε τους δύο χρόνους κάθε
+    πυργίσκου, τους κρατούσε στο rooms[name].turretArg — και μετά έφτιαχνε το
+    δωμάτιο με ΤΡΙΑ από τα τέσσερα ορίσματα. Το turretArg έμενε undefined, ο
+    Room έπεφτε στο {}, και κάθε πυργίσκος έπαιζε με τις προεπιλογές: ο ρυθμός
+    απλώς δεν υπήρχε μέσα στο παιχνίδι.
+
+    Η σύγκριση με το μοντέλο ΔΕΝ μπορεί να το πιάσει, γιατί φτιάχνει μόνη της
+    το δωμάτιο και παρακάμπτει ακριβώς αυτή τη γραμμή. Ο έλεγχος είναι λοιπόν
+    στο κείμενο: κάθε παράμετρος του constructor πρέπει να αναφέρεται στην
+    κλήση του start(). Προσθέτεις έκτο πεδίο στο Room; Κοκκινίζει ώσπου να το
+    περάσεις κι εδώ.
+    """
+    with open(os.path.join(GAME, "physics.js"), encoding="utf-8") as f:
+        physics = f.read()
+    with open(os.path.join(GAME, "run.js"), encoding="utf-8") as f:
+        run = f.read()
+
+    m = re.search(r"class Room\b.*?constructor\s*\(([^)]*)\)", physics, re.S)
+    if not m:
+        return fail("δεν βρέθηκε ο constructor του Room στο physics.js")
+    params = [p.strip() for p in m.group(1).split(",") if p.strip()]
+
+    body = re.search(r"function start\s*\(.*?\n  \}", run, re.S)
+    if not body:
+        return fail("δεν βρέθηκε η start() στο run.js")
+    call = re.search(r"new G\.Room\((.*?)\);", body.group(0), re.S)
+    if not call:
+        return fail("η start() δεν φτιάχνει δωμάτιο;")
+
+    missing = [p for p in params[1:] if p not in call.group(1)]
+    return fail(f"η start() του run.js δεν περνά: {', '.join(missing)}") \
+        if missing else None
+
+
 def main():
+    ok = True
+
+    def fail(msg):
+        nonlocal ok
+        print(f"  ΛΑΘΟΣ {msg}")
+        ok = False
+
+    check_room_wiring(fail)
+    if ok:
+        print("  ΟΚ   το run.js περνά ΟΛΑ τα πεδία του δωματίου στο Room")
+
     if not have_node():
         # ΔΥΝΑΤΑ, ΟΧΙ ΜΙΑ ΓΡΑΜΜΗ. Χωρίς node αυτό το αρχείο δεν ελέγχει
         # ΤΙΠΟΤΑ, και μια διακριτική «ΠΑΡΑΛΕΙΨΗ» ανάμεσα σε εκατοντάδες ΟΚ
@@ -149,7 +204,7 @@ def main():
         print("  !! Το editor/wwwroot/game/physics.js ΔΕΝ συγκρίθηκε με το "
               "μοντέλο.")
         print("  " + "!" * 66)
-        return 0
+        return 0 if ok else 1
     tmp = os.path.join(ROOT, "build", "turretjs")
     os.makedirs(tmp, exist_ok=True)
     py, js = python_trace(), js_trace(tmp)
@@ -167,6 +222,8 @@ def main():
             return 1
     print(f"  ΟΚ   {FRAMES} καρέ ίδια σε Python και JavaScript "
           f"({fired} με βέλος στον αέρα)")
+    if not ok:
+        return 1
     print("ΟΛΑ ΣΩΣΤΑ")
     return 0
 

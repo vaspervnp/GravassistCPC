@@ -32,6 +32,11 @@
     [T.LOCK]: T.LOCK_OPEN,
     [T.SPIKE_U]: T.SPIKE_U_OFF, [T.SPIKE_L]: T.SPIKE_L_OFF,
     [T.SPIKE_D]: T.SPIKE_D_OFF, [T.SPIKE_R]: T.SPIKE_R_OFF,
+    // Ο ΠΥΡΓΙΣΚΟΣ ΕΛΕΙΠΕ ΑΠΟ ΕΔΩ. Το targetCells κρατά μόνο κελιά που
+    // υπάρχουν σε αυτόν τον πίνακα, οπότε ο διακόπτης δεν έβρισκε ΠΟΤΕ
+    // πυργίσκο και δεν τον έσβηνε — μόνο στον browser· το tools/physics.py
+    // (OPEN_OF) και το src/roomfile.asm (tgt_tab) τον είχαν από την αρχή.
+    [T.TURRET_V]: T.TURRET_V_OFF, [T.TURRET_H]: T.TURRET_H_OFF,
   };
   const SHUT_OF = {};
   for (const k in OPEN_OF) SHUT_OF[OPEN_OF[k]] = +k;
