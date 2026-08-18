@@ -83,6 +83,22 @@
       if (c < 0 || r < 0 || c >= D.COLS || r >= D.ROWS) return T.SOLID;
       return this.cells[r][c];
     }
+    /// Οι πυργίσκοι της αίθουσας, μία φορά: το πλέγμα είναι 960 κελιά και ο
+    /// έλεγχος βολής γίνεται σε κάθε ενημέρωση. ΚΑΙ ΟΙ ΣΒΗΣΤΟΙ — ο διακόπτης
+    /// τους ανάβει μέσα στην παρτίδα και η λίστα δεν ξαναχτίζεται.
+    turretList() {
+      if (!this.turrets) {
+        this.turrets = [];
+        for (let r = 0; r < D.ROWS; r++)
+          for (let c = 0; c < D.COLS; c++) {
+            const t = this.cells[r][c];
+            if (t === T.TURRET_V || t === T.TURRET_H
+                || t === T.TURRET_V_OFF || t === T.TURRET_H_OFF)
+              this.turrets.push([c, r]);
+          }
+      }
+      return this.turrets;
+    }
     solidAt(px, py) {
       py -= D.GRID_Y0;
       if (py < 0) return true;
@@ -112,6 +128,14 @@
       this.clock = 0;
       this.arrows = [];                 // {x, y, dx, dy, gone}
       this.turretReady = {};            // "c,r" -> ρολόι από το οποίο ξαναρίχνει
+      // Ο ΡΥΘΜΙΚΟΣ ΞΕΚΙΝΑ ΦΟΡΤΙΖΟΝΤΑΣ, ΟΧΙ ΦΟΡΤΙΣΜΕΝΟΣ — αλλιώς ρίχνει στο
+      // πρώτο κιόλας πέρασμα και σε βρίσκει πριν προλάβεις να δεις το δωμάτιο.
+      // ΕΔΩ και όχι στο turretStep: εκεί το ρολόι έχει ήδη προχωρήσει και οι
+      // δύο υλοποιήσεις θα έβγαζαν διαφορετικούς αριθμούς.
+      for (const [c, r] of this.room.turretList()) {
+        const auto = (this.room.turretArg[c + "," + r] || [K.TURRET_COOL, 0])[1];
+        if (auto) this.turretReady[c + "," + r] = this.clock + auto * 50;
+      }
       this.keyAutoMsg = false;
       this.parachute = 0; this.paraOpen = 0; this.won = false;
       this.crateTick = 0; this.walkAcc = 0; this.worldG = g; this.cratesOn = false;
@@ -474,21 +498,7 @@
 
     turretStep() {
       if (this.arrows.length >= K.TURRET_MAX) return;
-      // Ο πίνακας χτίζεται ΜΙΑ φορά ανά αίθουσα: το πλέγμα είναι 960 κελιά και
-      // ο έλεγχος γίνεται σε κάθε ενημέρωση.
-      if (!this.room.turrets) {
-        this.room.turrets = [];
-        for (let r = 0; r < D.ROWS; r++)
-          for (let c = 0; c < D.COLS; c++) {
-            const t = this.room.cells[r][c];
-            // ΚΑΙ ΟΙ ΣΒΗΣΤΟΙ: ο διακόπτης τους ανάβει μέσα στην παρτίδα και
-            // η λίστα χτίζεται μία φορά.
-            if (t === T.TURRET_V || t === T.TURRET_H
-                || t === T.TURRET_V_OFF || t === T.TURRET_H_OFF)
-              this.room.turrets.push([c, r]);
-          }
-      }
-      for (const [c, r] of this.room.turrets) {
+      for (const [c, r] of this.room.turretList()) {
         const t = this.room.cells[r][c];
         if (t === T.TURRET_V_OFF || t === T.TURRET_H_OFF) continue;
         const key = c + "," + r;

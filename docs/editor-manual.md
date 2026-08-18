@@ -362,7 +362,7 @@ A turret row has three fields instead of one. Beside the channel:
 | | |
 |---|---|
 | **reload** | Seconds between two shots **when it sees you**. Default 5, range 1–60. |
-| **rhythm** | `0` = shoots only when it sees you. Above 0, it shoots **every N seconds** with no line of sight and no range check — and then **reload is not used at all**. |
+| **rhythm** | `0` = shoots only when it sees you. Above 0, it shoots **every N seconds** with no line of sight and no range check — and then **reload is not used at all**. The first shot comes one full interval after the player enters the room, never on the way in. |
 
 The two modes are different puzzles. With `rhythm 0` the turret reacts to you: stay out of
 its line, or cross it fast enough. With a rhythm it is a metronome you have to time,

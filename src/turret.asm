@@ -79,7 +79,22 @@ tl_add:         ld   d,a
                 ld   a,TURRET_COOL_DEF
 tl_cool:        ld   (ix+TS_COOL),a
                 ld   (ix+TS_AUTO),e
-                pop  bc
+                ; Ο ΡΥΘΜΙΚΟΣ ΞΕΚΙΝΑ ΦΟΡΤΙΖΟΝΤΑΣ: η πρώτη βολή έρχεται ένα
+                ; διάστημα μετά την είσοδο στην αίθουσα, όχι στο πρώτο πέρασμα.
+                ; Αλλιώς περνάς την πόρτα και σε βρίσκει βέλος πριν προλάβεις να
+                ; δεις πού είσαι — και δεν είναι δική σου επιλογή, όπως είναι με
+                ; τον πυργίσκο που περιμένει να μπεις στην ευθεία του.
+                ld   a,e
+                or   a
+                jr   z,tl_done
+                call tf_ticks           ; HL = δευτερόλεπτα x 300
+                push hl
+                call clock_now          ; HL = τώρα (χαλάει AF, DE)
+                pop  de
+                add  hl,de
+                ld   (ix+TS_READY),l
+                ld   (ix+TS_READY+1),h
+tl_done:        pop  bc
                 pop  hl
                 ld   de,TS_SIZE
                 add  ix,de

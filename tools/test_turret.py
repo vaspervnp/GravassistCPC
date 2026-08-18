@@ -267,6 +267,37 @@ check("αυτόματα=2: ένα βέλος κάθε 2 δευτερόλεπτα
       gap is not None and abs(gap - 2 * 50) <= P.CPC_VSYNC_RUN,
       f"{gap} vsync = {gap / 50:.2f}s" if gap else "δεν ξαναέριξε")
 
+print("--- ο ρυθμικός δεν ρίχνει με το που μπαίνεις")
+#
+# ΜΠΑΙΝΕΙΣ ΑΠΟ ΤΗΝ ΠΟΡΤΑ ΚΑΙ ΣΕ ΒΡΙΣΚΕΙ ΒΕΛΟΣ. Με ρολόι 0 και turret_ready 0 ο
+# ρυθμικός ήταν φορτισμένος από την πρώτη στιγμή και έριχνε στο πρώτο κιόλας
+# πέρασμα — πριν προλάβεις να δεις πού είσαι. Η πρώτη βολή έρχεται τώρα ένα
+# ΔΙΑΣΤΗΜΑ μετά την είσοδο.
+# ΦΡΕΣΚΟΣ ΗΡΩΑΣ, ΧΩΡΙΣ settled(): εκείνο καθαρίζει το turret_ready και θα
+# έσβηνε ακριβώς ό,τι ελέγχεται εδώ — τη φόρτιση που βάζει ο constructor.
+rm = room([(10, 4, "I")], footer="turret 10 4 0 5 2\n")
+h = P.Hero(rm, 30 * P.CELL + P.CELL // 2, P.GRID_Y0 + 21 * P.CELL)
+check("ο ρυθμικός ξεκινά ΑΦΟΡΤΙΣΤΟΣ", h.turret_ready.get((10, 4)) == 2 * 50,
+      str(h.turret_ready))
+first = None
+for _ in range(400):
+    h.update(0)
+    if h.arrows:
+        first = h.clock
+        break
+check("ρυθμός 2: η πρώτη βολή έρχεται μετά από 2 δευτερόλεπτα",
+      first is not None and abs(first - 2 * 50) <= P.CPC_VSYNC_RUN,
+      f"{first} vsync = {first / 50:.2f}s" if first else "δεν έριξε ποτέ")
+
+# Ο πυργίσκος «σε βλέπω» ΔΕΝ περιμένει: ρίχνει όταν μπεις στην ευθεία του, που
+# είναι δική σου κίνηση και όχι έκπληξη της εισόδου.
+rm = room([(10, 16, "I")], footer="turret 10 16 0 5 0\n")
+h = P.Hero(rm, 10 * P.CELL + P.CELL // 2, P.GRID_Y0 + 21 * P.CELL)
+check("χωρίς ρυθμό: κανένας χρόνος αναμονής", (10, 16) not in h.turret_ready,
+      str(h.turret_ready))
+h.update(0)
+check("…και ρίχνει αμέσως μόλις σε δει", bool(h.arrows), str(len(h.arrows)))
+
 print("--- το πολύ δύο βέλη στον αέρα")
 rm = room([(10, 16, "I"), (20, 16, "I"), (30, 16, "I")])
 h = settled(rm, 10, 21)
@@ -492,11 +523,38 @@ t.call("TURRET_LOAD")
 tab = t.peek(t.sym("TURRET_TAB"), 7)
 check("αδήλωτος: η προεπιλογή των 5 δευτερολέπτων", tab[5] == 5, str(tab[5]))
 
+# ΚΑΙ Η ΑΡΧΙΚΗ ΦΟΡΤΙΣΗ, ΣΤΟΝ Z80. Το ρολόι εδώ είναι το ψεύτικο των τεστ και
+# προχωράει 30 παλμούς ανά κλήση του firmware, οπότε συγκρίνουμε με αυτό.
+t = z80_room([(10, 16, "I")], targ=[(10, 16, 5, 2)])
+t.call("TURRET_LOAD")
+ready = t.peek16(t.sym("TURRET_TAB") + 3)
+check("ρυθμικός: φορτώνεται με 2 δευτερόλεπτα μπροστά",
+      abs(ready - (t.peek16(CLK) + 2 * 300)) <= 60, f"ready={ready}")
+t.poke16(t.sym("HERO_X"), 10 * P.CELL + P.CELL // 2)
+t.poke(t.sym("HERO_Y"), bytes([P.GRID_Y0 + 21 * P.CELL]))
+t.call("TURRET_STEP")
+check("…και ΔΕΝ ρίχνει στο πρώτο πέρασμα της αίθουσας",
+      t.peek(t.sym("ARROW_TAB"))[0] == 0,
+      f"on={t.peek(t.sym('ARROW_TAB'))[0]}")
+
+t = z80_room([(10, 16, "I")], targ=[(10, 16, 5, 0)])
+t.call("TURRET_LOAD")
+check("χωρίς ρυθμό: φορτισμένος από την πρώτη στιγμή",
+      t.peek16(t.sym("TURRET_TAB") + 3) == 0,
+      str(t.peek16(t.sym("TURRET_TAB") + 3)))
+
 
 def z80_gap(targ):
-    """Πόσοι παλμοί ανάμεσα σε δύο βολές, στον Z80."""
+    """Πόσοι παλμοί ανάμεσα σε δύο βολές, στον Z80.
+
+    ΜΕΤΑ ΤΗΝ ΑΡΧΙΚΗ ΦΟΡΤΙΣΗ: ο ρυθμικός φορτώνεται πια άδειος και η πρώτη του
+    βολή έρχεται ένα διάστημα αργότερα. Χωρίς το μηδένισμα εδώ, το τεστ θα
+    μετρούσε την ΑΡΧΙΚΗ φόρτιση αντί για το διάστημα ανάμεσα σε δύο βολές —
+    ίδιος αριθμός, εντελώς άλλο πράγμα.
+    """
     t = z80_room([(10, 16, "I")], targ=targ)
     t.call("TURRET_LOAD")
+    t.poke16(t.sym("TURRET_TAB") + 3, 0)        # TS_READY: φορτισμένος τώρα
     t.poke16(t.sym("HERO_X"), 10 * P.CELL + P.CELL // 2)
     t.poke(t.sym("HERO_Y"), bytes([P.GRID_Y0 + 21 * P.CELL]))
     t.call("TURRET_STEP")
@@ -514,6 +572,7 @@ check("ρυθμός 3 -> 900 παλμοί (η φόρτιση αγνοείται)
 # ΡΥΘΜΟΣ: ρίχνει χωρίς εμβέλεια και χωρίς οπτική επαφή.
 t = z80_room([(10, 4, "I"), (10, 12, "#")], targ=[(10, 4, 5, 1)])
 t.call("TURRET_LOAD")
+t.poke16(t.sym("TURRET_TAB") + 3, 0)        # η αρχική φόρτιση πέρασε
 t.poke16(t.sym("HERO_X"), 30 * P.CELL)
 t.poke(t.sym("HERO_Y"), bytes([P.GRID_Y0 + 21 * P.CELL]))
 t.call("TURRET_STEP")
