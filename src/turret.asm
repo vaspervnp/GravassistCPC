@@ -199,14 +199,21 @@ tf_one:         ld   b,(ix+TS_ROW)
                 sbc  hl,de
                 ret  c                  ; τώρα < ready -> ακόμα φορτίζει
 
-                ; κέντρο του κελιού σε pixel
+                ; ΚΕΝΤΡΟ ΤΟΥ ΚΕΛΙΟΥ ΣΕ PIXEL, ΣΕ 16 BIT.
+                ;
+                ; Ο πολλαπλασιασμός γινόταν με τρία `add a,a` σε ΟΚΤΩ bit: από
+                ; τη στήλη 32 και πέρα το col*8 ξεπερνά το 255 και το ψηλό bit
+                ; χανόταν. Ένας πυργίσκος στη στήλη 36 έβγαζε κέντρο 36 αντί για
+                ; 292, δηλαδή τα βέλη του γεννιόντουσαν στην ΑΡΙΣΤΕΡΗ άκρη της
+                ; οθόνης. Η γραμμή είναι 320 pixel και δεν χωράει σε byte.
                 ld   a,(ix+TS_COL)
-                add  a,a
-                add  a,a
-                add  a,a
-                add  a,LVL_CELL/2
                 ld   l,a
                 ld   h,0
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl              ; HL = στήλη x 8
+                ld   de,LVL_CELL/2
+                add  hl,de
                 ld   (tu_cx),hl
                 ld   a,(ix+TS_ROW)
                 add  a,a
