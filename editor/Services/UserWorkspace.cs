@@ -25,6 +25,24 @@ public sealed class UserWorkspace(RepoLayout layout)
     public string SharedRoot { get; } = layout.LevelsRoot;
 
     /// <summary>
+    /// Η διαδρομή κάτω από τη ρίζα των πιστών, με το όνομά της μπροστά:
+    /// <c>/levels/kapoios_at_example.com</c>. Αν για οποιονδήποτε λόγο η ρίζα
+    /// δεν είναι πρόγονος, γυρνά το όνομα του φακέλου σκέτο — ποτέ ολόκληρη
+    /// την απόλυτη διαδρομή.
+    /// </summary>
+    public string Display(string path)
+    {
+        var root = Path.GetFullPath(SharedRoot).TrimEnd(Path.DirectorySeparatorChar);
+        var full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar);
+        var name = "/" + (Path.GetFileName(root) is { Length: > 0 } n ? n : "levels");
+        if (string.Equals(full, root, StringComparison.Ordinal)) return name;
+        if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            return name + "/" + Path.GetFileName(full);
+        return name + "/" + full[(root.Length + 1)..]
+            .Replace(Path.DirectorySeparatorChar, '/');
+    }
+
+    /// <summary>
     /// Μετατρέπει έναν λογαριασμό σε ασφαλές όνομα φακέλου.
     /// Κρατά μόνο γράμματα, ψηφία, τελεία, παύλα και κάτω παύλα.
     /// </summary>

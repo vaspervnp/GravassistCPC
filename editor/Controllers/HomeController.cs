@@ -20,7 +20,7 @@ public sealed class HomeController(LevelStore store, AccountStore accounts) : Co
         {
             Tiles = TileCatalog.All,
             Files = store.List(),
-            LevelsPath = store.RootPath,
+            LevelsPath = store.DisplayPath,
         });
     }
 

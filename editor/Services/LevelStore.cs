@@ -16,11 +16,22 @@ public sealed class LevelStore
 
     public string RootPath { get; }
 
+    /// <summary>
+    /// Ο ΙΔΙΟΣ φάκελος, όπως τον δείχνουμε στην κεφαλίδα: <c>/levels/&lt;λογαριασμός&gt;</c>.
+    ///
+    /// ΓΙΑΤΙ ΟΧΙ Ο ΠΛΗΡΗΣ: η απόλυτη διαδρομή είναι μισή οθόνη μηχανήματος που
+    /// δεν λέει τίποτα σε όποιον κοιτάζει, και σε κοινό μηχάνημα δείχνει και
+    /// το home του διπλανού. Ό,τι χρειάζεται ο χρήστης είναι σε ποιου
+    /// λογαριασμού τα αρχεία δουλεύει.
+    /// </summary>
+    public string DisplayPath { get; }
+
     public LevelStore(UserWorkspace workspace, IHttpContextAccessor http)
     {
         var user = http.HttpContext?.User
             ?? throw new InvalidOperationException("Χωρίς αίτημα δεν υπάρχει χρήστης.");
         RootPath = workspace.PathFor(user);
+        DisplayPath = workspace.Display(RootPath);
     }
 
     /// <summary>

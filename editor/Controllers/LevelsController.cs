@@ -16,7 +16,9 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
 {
     /// <summary>GET /api/levels — τα αρχεία στον φάκελο levels/ (αίθουσες πρώτα, αριθμητικά).</summary>
     [HttpGet]
-    public IActionResult Index() => Ok(new { path = store.RootPath, files = store.List() });
+    // Η ΔΕΙΚΤΙΚΗ διαδρομή και όχι η απόλυτη: ό,τι φεύγει για τον browser το
+    // βλέπει και όποιος κοιτάζει την οθόνη ή το network tab.
+    public IActionResult Index() => Ok(new { path = store.DisplayPath, files = store.List() });
 
     /// <summary>GET /api/levels/{name} — φόρτωση πίστας μαζί με τις ομάδες εξόδου.</summary>
     [HttpGet("{name}")]

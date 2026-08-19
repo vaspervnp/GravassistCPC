@@ -7,8 +7,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 // Δουλεύει σε ΔΙΚΟ ΤΟΥ προσωρινό φάκελο: τα τεστ δεν αγγίζουν ποτέ
 // τα πραγματικά levels/ του repo.
-var root = Path.Combine(Path.GetTempPath(), "gravassist-ws-test");
-if (Directory.Exists(root)) Directory.Delete(root, true);
+// Ο κοινός φάκελος λέγεται «levels» ΚΑΙ ΕΔΩ: η κεφαλίδα δείχνει το πραγματικό
+// του όνομα, οπότε μια προσωρινή ρίζα με άλλο όνομα θα έλεγχε άλλο πράγμα.
+var sandbox = Path.Combine(Path.GetTempPath(), "gravassist-ws-test");
+if (Directory.Exists(sandbox)) Directory.Delete(sandbox, true);
+var root = Path.Combine(sandbox, "levels");
 Directory.CreateDirectory(root);
 File.WriteAllText(Path.Combine(root, "room_1.txt"), "ένα");
 File.WriteAllText(Path.Combine(root, "room_2.txt"), "δύο");
@@ -67,6 +70,23 @@ Check("…και ΔΕΝ βλέπει τα αρχεία του πρώτου",
     File.ReadAllText(Path.Combine(dir2, "room_1.txt")) == "ένα");
 Check("οι φάκελοι χρηστών δεν αντιγράφονται σε νέους",
     !Directory.Exists(Path.Combine(dir2, "a_at_b.com")));
+
+// --- τι ΔΕΙΧΝΕΙ η κεφαλίδα
+// Η απόλυτη διαδρομή ήταν μισή οθόνη μηχανήματος — και σε κοινό μηχάνημα
+// έδειχνε και το home του διπλανού. Φαίνεται μόνο το /levels/<λογαριασμός>.
+Check("η κεφαλίδα δείχνει /levels/<λογαριασμός>",
+    ws.Display(dir) == "/levels/a_at_b.com",
+    ws.Display(dir));
+Check("…χωρίς ίχνος από την απόλυτη διαδρομή",
+    !ws.Display(dir).Contains(Path.GetTempPath().TrimEnd(
+        Path.DirectorySeparatorChar)));
+Check("η ίδια η ρίζα δείχνεται σκέτη",
+    ws.Display(ws.SharedRoot) == "/levels",
+    ws.Display(ws.SharedRoot));
+Check("φάκελος εκτός ρίζας δίνει ΜΟΝΟ το όνομά του",
+    ws.Display(Path.Combine(Path.GetTempPath(), "alloy"))
+        == "/levels/alloy",
+    ws.Display(Path.Combine(Path.GetTempPath(), "alloy")));
 
 // ------------------------------------------------------------ ρίζα του repo
 // ΤΟ BUG ΠΟΥ ΕΦΤΑΣΕ ΣΕ DEPLOYMENT: η ρίζα υπολογιζόταν ως «τρέχων κατάλογος
