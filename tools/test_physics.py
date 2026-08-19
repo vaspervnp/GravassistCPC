@@ -649,6 +649,37 @@ def main():
               a == off and b == on,
               f"{P.TYPE_NAMES[a]} -> {P.TYPE_NAMES[b]}")
 
+    # ΚΑΙ ΜΕ ΤΟΝ ΗΡΩΑ ΠΑΝΩ ΣΤΟΝ ΔΙΑΚΟΠΤΗ, ΟΧΙ ΜΕ ΚΛΗΣΗ ΤΟΥ set_targets.
+    #
+    # Ό,τι παραπάνω καλεί κατευθείαν το set_targets/toggle_targets παρακάμπτει
+    # ακριβώς το κομμάτι που μπορεί να λείπει: την αφή, το κανάλι, τη σάρωση
+    # στόχων. Σφάλμα αυτού του σχήματος έζησε στη JavaScript ενώ 120 καρέ
+    # έβγαιναν ίδια, γιατί και η σύγκριση έγραφε το κελί με το χέρι.
+    #
+    # Οι τέσσερις περιπτώσεις καρφώνουν και ΠΟΙΑ επιφάνεια θέλει κάθε φορά — το
+    # 'Q' κοιτάζει αριστερά, άρα πατιέται από τον ΔΕΞΙΟ τοίχο.
+    for ch, g, (sc, sr), (hc, hr), spike, where in (
+            ("S", 0, (10, 22), (10, 21), "^", "δαπέδου"),
+            ("A", 4, (10,  1), (10,  2), "v", "ταβανιού"),
+            ("Q", 6, (38, 12), (37, 12), "<", "δεξιού τοίχου"),
+            ("E", 2, ( 1, 12), ( 2, 12), ">", "αριστερού τοίχου")):
+        rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+            + [list("#" * 40)]
+        rows[sr][sc] = ch
+        rows[12][20] = spike
+        rm = P.Room(";\n" + "\n".join("".join(r) for r in rows)
+                    + f"\ngravity {g}\nsw {sc} {sr} 1\nspikes 20 12 1\n")
+        h = P.Hero(rm, hc * P.CELL + P.CELL // 2,
+                   P.GRID_Y0 + hr * P.CELL + P.CELL // 2, g)
+        before = rm.cells[12][20]
+        for _ in range(60):
+            h.update(0)
+            if rm.cells[12][20] != before:
+                break
+        check(f"ο διακόπτης {where} τραβάει τα αγκάθια του",
+              rm.cells[12][20] == P.SPIKE_OFF[before],
+              f"{P.TYPE_NAMES[before]} -> {P.TYPE_NAMES[rm.cells[12][20]]}")
+
     check("τα τραβηγμένα αγκάθια είναι στερεά αλλά ΑΚΙΝΔΥΝΑ",
           not (P.PROPS[P.SPIKE_U_OFF] & P.F_DEADLY)
           and (P.PROPS[P.SPIKE_U_OFF] & P.F_SOLID))

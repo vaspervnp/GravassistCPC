@@ -1216,6 +1216,22 @@ def check_switch_facing():
     got = run(P.SWITCH_D, 0)
     check("…and ignored with gravity down", got == P.SWITCH_D, P.TYPE_NAMES[got])
 
+    # WALL SWITCHES: the pair nobody checked. The letter is the FACING, not the
+    # wall — 'Q' is SWITCH_L, it faces left, so it is bolted to the RIGHT wall
+    # and answers with gravity pulling right. The editor's palette drew these
+    # two mirrored for a long time and no test disagreed with it.
+    got = run(P.SWITCH_L, 6)
+    check("right-wall switch pressed with gravity right",
+          got == P.SWITCH_L_ON, P.TYPE_NAMES[got])
+    got = run(P.SWITCH_L, 2)
+    check("…and ignored with gravity left", got == P.SWITCH_L, P.TYPE_NAMES[got])
+
+    got = run(P.SWITCH_R, 2)
+    check("left-wall switch pressed with gravity left",
+          got == P.SWITCH_R_ON, P.TYPE_NAMES[got])
+    got = run(P.SWITCH_R, 6)
+    check("…and ignored with gravity right", got == P.SWITCH_R, P.TYPE_NAMES[got])
+
     # Pressing again turns it back: a toggle, not a one-shot.
     got = run(P.SWITCH_U_ON, 0)
     check("a pressed switch turns back off", got == P.SWITCH_U,
@@ -1242,6 +1258,62 @@ def check_switch_facing():
             t2.call("CELL_ATTR", bc=(c << 8) | r)
             check(f"room {room.number}: switch ({c},{r}) keeps its channel",
                   t2.m.a == want, f"{t2.m.a} vs {want}")
+
+    # A SWITCH PULLING SPIKES IN, ALL FOUR FACINGS, THROUGH HERO_UPDATE.
+    #
+    # Every wiring test above drives the targets by calling set_targets or
+    # toggle_targets directly — which is exactly the step that skips the wiring.
+    # The browser had a fault of that shape and 120 identical frames said
+    # nothing, because the comparison also poked the cell by hand. Here the hero
+    # stands on the switch and the game does the rest: touch, channel lookup,
+    # target scan, cell rewrite.
+    #
+    # The four cases also pin down which surface each facing needs — the thing
+    # the editor's palette got backwards for the two wall switches.
+    CLK, ATTR = 0xB7FE, 0xB600
+    for ch, gravity, (sc, sr), (hc, hr), spike, where in (
+            ("S", 0, (10, 22), (10, 21), "^", "floor"),
+            ("A", 4, (10,  1), (10,  2), "v", "ceiling"),
+            ("Q", 6, (38, 12), (37, 12), "<", "right wall"),
+            ("E", 2, ( 1, 12), ( 2, 12), ">", "left wall")):
+        t3 = Z80Test()
+        # Το ρολόι του firmware σε 11 bytes· χωρίς αυτό το KL_TIME_PLEASE
+        # γυρίζει ό,τι έτυχε και ο πυργίσκος μέσα στο hero_update παραληρεί.
+        code = bytes([0x2A, CLK & 0xFF, CLK >> 8, 0x11, 30, 0, 0x19,
+                      0x22, CLK & 0xFF, CLK >> 8, 0xC9])
+        for i, b in enumerate(code):
+            t3.m.memory[0xBD0D + i] = b
+        t3.poke16(CLK, 0)
+
+        grid = [[P.EMPTY] * P.COLS for _ in range(P.ROWS)]
+        for c in range(P.COLS):
+            grid[0][c] = grid[P.ROWS - 1][c] = P.SOLID
+        for r in range(P.ROWS):
+            grid[r][0] = grid[r][P.COLS - 1] = P.SOLID
+        grid[sr][sc] = P.CHARS[ch]
+        grid[12][20] = P.CHARS[spike]
+        t3.poke(t3.sym("CELL_BUF"), bytes(v for row in grid for v in row))
+        t3.poke16(t3.sym("LEVEL_PTR"), t3.sym("CELL_BUF"))
+        t3.poke(t3.sym("HERO_ENERGY"), bytes([P.ENERGY_MAX]))
+        t3.poke(t3.sym("HERO_HURT"), b"\x00")
+        t3.poke(t3.sym("HERO_G"), bytes([gravity]))
+        t3.poke(ATTR, bytes((sc, sr, 1)) + bytes((20, 12, 1)) + b"\xFF")
+        t3.poke16(t3.sym("ROOM_ATTRS"), ATTR)
+        t3.call("TURRET_LOAD")          # άδειος πίνακας βελών
+        t3.poke16(t3.sym("HERO_X"), hc * P.CELL + P.CELL // 2)
+        t3.poke(t3.sym("HERO_Y"),
+                bytes([P.GRID_Y0 + hr * P.CELL + P.CELL // 2]))
+
+        at = t3.sym("CELL_BUF") + 12 * P.COLS + 20
+        before = t3.peek(at)[0]
+        for _ in range(60):
+            t3.m.a = 0
+            t3.call("HERO_UPDATE")
+            if t3.peek(at)[0] != before:
+                break
+        check(f"{where} switch pulls its spikes in",
+              t3.peek(at)[0] == P.SPIKE_OFF[before],
+              f"{P.TYPE_NAMES[before]} -> {P.TYPE_NAMES[t3.peek(at)[0]]}")
 
     # Every variant carries the flag, so nothing is reachable only by number.
     missing = [P.TYPE_NAMES[x] for x in sorted(P.SWITCHES)
