@@ -43,6 +43,15 @@ def build():
         "TYPE_NAMES": P.TYPE_NAMES,
         "CHARS": P.CHARS,
         "PROPS": P.PROPS,
+        # ΠΟΙΟΙ ΤΥΠΟΙ ΚΟΥΒΑΛΑΝΕ ΑΡΙΘΜΟ ΚΑΛΩΔΙΩΣΗΣ, από το μοντέλο.
+        #
+        # Το run.js είχε ΧΕΙΡΟΓΡΑΦΗ λίστα και δύο τύποι είχαν πέσει έξω: η
+        # ΑΝΟΙΓΜΕΝΗ πύλη και η ΞΕΚΛΕΙΔΩΤΗ κλειδαριά. Το κανάλι απλώνεται σε όλα
+        # τα κελιά μιας ομάδας, οπότε μια πύλη δύο κελιών ζωγραφισμένη ήδη
+        # ανοιχτή είχε κανάλι μόνο στο πρώτο της κελί — και ο διακόπτης έκλεινε
+        # το μισό μισό. Με τη λίστα να βγαίνει από εδώ, ο επόμενος τύπος δεν
+        # μπορεί να ξεχαστεί.
+        "WIRED": sorted(P.WIRED_TYPES),
         "FACING": {str(k): v for k, v in P.FACING.items()},
         "RAMP_GRAVITY": {str(k): v for k, v in P.RAMP_GRAVITY.items()},
         "F": {"SOLID": P.F_SOLID, "DEADLY": P.F_DEADLY, "PICKUP": P.F_PICKUP,
@@ -93,7 +102,12 @@ def build():
               "SCORE_STEP": P.SCORE_STEP, "SCORE_GRAV": P.SCORE_GRAV,
               # Πυργίσκοι. Το ARROW_DMG είναι τριάδα και όχι αριθμός: η ζημιά
               # εξαρτάται από το πόσο ταξίδεψε το βέλος.
-              "ARROW_STEP": P.ARROW_STEP, "TURRET_RANGE": P.TURRET_RANGE,
+              "ARROW_STEP": P.ARROW_STEP,
+               "PLAT_SPEED": P.PLAT_SPEED,
+               "PLAT_SPEED_MAX": P.PLAT_SPEED_MAX,
+               "PLAT_MAX": P.PLAT_MAX,
+               "PLAT_FACING": P.PLAT_FACING,
+               "PLAT_PAUSE": P.PLAT_PAUSE, "TURRET_RANGE": P.TURRET_RANGE,
               "TURRET_RELOAD": P.TURRET_RELOAD, "TURRET_MAX": P.TURRET_MAX,
               "ARROW_DMG": list(P.ARROW_DMG),
               "TURRET_COOL": P.TURRET_COOL},

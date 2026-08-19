@@ -689,6 +689,211 @@ def main():
     check("το κανάλι 0 είναι ακαλωδίωτο και δεν το ελέγχει κανείς",
           rm.cells[22][20] == P.GATE)
 
+    # ΟΛΟΚΛΗΡΗ Η ΟΜΑΔΑ ΥΠΑΚΟΥΕΙ, ΚΑΙ ΣΤΙΣ ΔΥΟ ΚΑΤΑΣΤΑΣΕΙΣ. Το κανάλι απλώνεται
+    # σε κάθε κελί της ομάδας, αλλιώς ο διακόπτης πιάνει μόνο το κελί που
+    # ονομάζει η ουρά. Ο browser το είχε αυτό ακριβώς για τις ΗΔΗ ΑΝΟΙΧΤΕΣ
+    # πύλες: έκλεινε το ένα κομμάτι και άφηνε τα υπόλοιπα ανοιχτά.
+    for ch, shut, opened in (("G", P.GATE, P.GATE_OPEN),
+                             ("g", P.GATE_OPEN, P.GATE),
+                             ("K", P.LOCK, P.LOCK_OPEN),
+                             ("|", P.LOCK_OPEN, P.LOCK)):
+        rm = wroom([(20, 12, ch), (20, 13, ch), (20, 14, ch)],
+                   [f"gate 20 12 1" if ch in "Gg" else "lock 20 12 1"])
+        h = whero(rm)
+        h.set_targets(1, ch in "Gg" and ch == "G" or ch == "K")
+        got = [rm.cells[r][20] for r in (12, 13, 14)]
+        check(f"«{ch}»: και τα τρία κελιά της ομάδας υπακούν",
+              len(set(got)) == 1 and got[0] != shut,
+              ", ".join(P.TYPE_NAMES[v] for v in got))
+
+    # ================= ΚΙΝΟΥΜΕΝΕΣ ΠΛΑΤΦΟΡΜΕΣ =================
+    #
+    # Το μόνο υλικό που δεν ζει στο πλέγμα. Ό,τι ελέγχεται εδώ είναι ακριβώς τα
+    # σημεία όπου αυτό το κάνει να διαφέρει από κάθε άλλο αντικείμενο.
+    print("--- κινούμενες πλατφόρμες")
+
+    def proom(path, speed=50, chan=1, ch="M", cells=2):
+        rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+            + [list("#" * 40)]
+        for i in range(cells):
+            rows[14][10 + i] = ch
+        return P.Room(";\n" + "\n".join("".join(r) for r in rows)
+                      + f"\ngravity 0\nplat 10 14 {path} {chan} {speed}\n")
+
+    rm = proom("24 14")
+    pl = rm.platforms[0]
+    check("το μέγεθος βγαίνει από το ΠΛΕΓΜΑ, όχι από αριθμό",
+          (pl["w"], pl["h"]) == (2 * P.CELL, P.CELL), f'{pl["w"]}x{pl["h"]}')
+    check("τα κελιά της σβήνονται — δείχνουν πού ξεκινάει, δεν είναι υλικό",
+          rm.cells[14][10] == P.EMPTY and rm.cells[14][11] == P.EMPTY)
+    check("…αλλά ΕΙΝΑΙ στερεή εκεί που στέκεται",
+          rm.solid_at(pl["x"] + 4, pl["y"] + 4)
+          and not rm.solid_at(pl["x"] - 4, pl["y"] + 4))
+
+    # ΟΙ ΤΡΕΙΣ ΔΙΑΔΡΟΜΕΣ, ΚΑΙ Ο ΗΡΩΑΣ ΠΑΝΩ ΤΟΥΣ. Η μεταφορά είναι όλο το νόημα:
+    # πλατφόρμα που φεύγει από κάτω σου δεν είναι πλατφόρμα, είναι παγίδα.
+    for path, label in (("24 14", "οριζόντια"), ("10 20", "κατακόρυφα"),
+                        ("16 20", "διαγώνια")):
+        rm = proom(path, cells=3)
+        pl = rm.platforms[0]
+        pl["moving"] = False                    # άσε τον να προσγειωθεί πρώτα
+        h = P.Hero(rm, 11 * P.CELL + 4, P.GRID_Y0 + 13 * P.CELL)
+        for _ in range(40):
+            h.update(0)
+        pl["moving"] = True
+        p0, h0 = (pl["x"], pl["y"]), (h.x, h.y)
+        for _ in range(10):
+            h.update(0)
+        moved = (pl["x"] - p0[0], pl["y"] - p0[1])
+        check(f"{label}: ο ήρωας ταξιδεύει ΜΑΖΙ της",
+              moved == (h.x - h0[0], h.y - h0[1]) and moved != (0, 0),
+              f'πλατφόρμα {moved}, ήρωας {(h.x - h0[0], h.y - h0[1])}')
+
+    # Η ΤΑΧΥΤΗΤΑ ΕΙΝΑΙ ΣΕ PIXEL/ΔΕΥΤΕΡΟΛΕΠΤΟ, ΟΧΙ ΑΝΑ ΠΕΡΑΣΜΑ. Ένα πέρασμα
+    # κοστίζει 3 vsync ακίνητος και 7 τρέχοντας· με μέτρημα περασμάτων η
+    # πλατφόρμα θα διπλασίαζε ταχύτητα μόλις έτρεχε ο παίκτης, δηλαδή ο γρίφος
+    # θα άλλαζε ανάλογα με το πώς περπατάς.
+    #
+    # ΔΙΑΝΥΘΕΙΣΑ ΑΠΟΣΤΑΣΗ ΚΑΙ ΟΧΙ ΜΕΤΑΤΟΠΙΣΗ: η πλατφόρμα γυρίζει στα άκρα, οπότε
+    # το «πού είναι» δεν λέει πόσο ταξίδεψε. Η πρώτη μορφή του τεστ κοκκίνιζε
+    # ενώ ο κώδικας ήταν σωστός — μετρούσε δύο διαφορετικές φάσεις της διαδρομής.
+    #
+    # ΜΕΣΑ ΣΤΟ ΠΡΩΤΟ ΣΚΕΛΟΣ, ΠΡΙΝ ΦΤΑΣΕΙ ΣΤΟ ΑΚΡΟ. Με την παύση των δύο
+    # δευτερολέπτων, ένα παράθυρο που περιλαμβάνει άκρο μετράει και τον χρόνο
+    # ακινησίας — και οι δύο δρόμοι φτάνουν εκεί σε διαφορετική στιγμή, οπότε
+    # το τεστ κοκκίνιζε ενώ η ταχύτητα ήταν ίδια.
+    dist = {}
+    for running, label in ((False, "ακίνητος"), (True, "τρέχοντας")):
+        rm = proom("30 14", speed=25)
+        pl = rm.platforms[0]
+        h = P.Hero(rm, 30 * P.CELL, P.GRID_Y0 + 21 * P.CELL)
+        travelled, last = 0, pl["x"]
+        for _ in range(40):
+            h.update(1 if running else 0, running)
+            travelled += abs(pl["x"] - last)
+            last = pl["x"]
+        assert pl["wait"] == 0 and pl["dir"] == 1, "το παράθυρο έφτασε στο άκρο"
+        dist[label] = travelled / h.clock       # pixel ανά vsync
+    check("η ταχύτητα δεν εξαρτάται από το τι κάνει ο παίκτης",
+          abs(dist["ακίνητος"] - dist["τρέχοντας"]) < 0.02,
+          f'{dist["ακίνητος"]:.3f} vs {dist["τρέχοντας"]:.3f} px/vsync')
+
+    # Στα άκρα γυρίζει: πάει κι έρχεται για πάντα.
+    rm = proom("14 14", speed=100)
+    pl = rm.platforms[0]
+    h = P.Hero(rm, 30 * P.CELL, P.GRID_Y0 + 21 * P.CELL)
+    seen = set()
+    for _ in range(120):
+        h.update(0)
+        seen.add(pl["x"])
+    check("φτάνει και στα δύο άκρα και γυρίζει",
+          min(seen) == 10 * P.CELL and max(seen) == 14 * P.CELL,
+          f"{min(seen)}..{max(seen)}")
+
+    # Ο ΔΙΑΚΟΠΤΗΣ ΤΗ ΣΤΑΜΑΤΑΕΙ, μέσα από τον ΠΙΝΑΚΑ. Το target_cells σαρώνει
+    # κελιά και η πλατφόρμα έχει φύγει από το δικό της με το πρώτο βήμα.
+    rm = proom("24 14")
+    pl = rm.platforms[0]
+    h = P.Hero(rm, 30 * P.CELL, P.GRID_Y0 + 21 * P.CELL)
+    for _ in range(10):
+        h.update(0)
+    h.set_targets(1, True)
+    stopped = pl["x"]
+    for _ in range(20):
+        h.update(0)
+    check("ο διακόπτης τη σταματάει ΑΦΟΥ έχει φύγει από το κελί της",
+          pl["x"] == stopped and stopped != pl["ax"], f'x={pl["x"]}')
+    h.set_targets(1, False)
+    for _ in range(10):
+        h.update(0)
+    check("…και την ξαναξεκινάει", pl["x"] != stopped, f'x={pl["x"]}')
+
+    # ΣΤΕΡΕΗ ΜΟΝΟ ΑΠΟ ΠΑΝΩ. Είναι ανελκυστήρας, όχι κουτί: από κάτω περνάς.
+    # Ο κανόνας είναι ο ΙΔΙΟΣ με τις μονόδρομες πλατφόρμες, γι' αυτό και
+    # ελέγχεται με τις τέσσερις ορθές φορές — μία ξεχασμένη θα ήταν πλατφόρμα
+    # που σε σταματά από το πλάι, δηλαδή αόρατος τοίχος.
+    rm = proom("24 14")
+    pl = rm.platforms[0]
+    mid = (pl["x"] + 4, pl["y"] + 4)
+    for g, want in ((0, True), (4, False), (2, False), (6, False)):
+        rm.probe_g = g
+        check(f"βαρύτητα {g}: στερεή = {want}", rm.solid_at(*mid) == want)
+
+    # Και στην πράξη: με βαρύτητα ΠΑΝΩ ο ήρωας τη διασχίζει και δεν κολλάει.
+    rm = proom("24 14", cells=3)
+    pl = rm.platforms[0]
+    h = P.Hero(rm, 11 * P.CELL + 4, P.GRID_Y0 + 17 * P.CELL, 4)
+    for _ in range(60):
+        h.update(0)
+    check("από κάτω, με βαρύτητα πάνω, περνάει από μέσα της",
+          h.y < pl["y"], f'ήρωας y={h.y}, πλατφόρμα y={pl["y"]}')
+
+    # ΠΑΥΣΗ ΣΤΑ ΑΚΡΑ. Χωρίς αυτήν γύριζε ακαριαία και το παράθυρο για να
+    # ανέβεις ή να κατέβεις ήταν ένα καρέ.
+    rm = proom("14 14", speed=100)
+    pl = rm.platforms[0]
+    h = P.Hero(rm, 30 * P.CELL, P.GRID_Y0 + 21 * P.CELL)
+    still, worst, prev = 0, 0, pl["x"]
+    for _ in range(200):
+        h.update(0)
+        if pl["x"] == prev:
+            still += P.CPC_VSYNC_IDLE
+            worst = max(worst, still)
+        else:
+            still = 0
+        prev = pl["x"]
+    check(f"στα άκρα περιμένει {P.PLAT_PAUSE} δευτερόλεπτα",
+          abs(worst - P.PLAT_PAUSE * 50) <= 2 * P.CPC_VSYNC_RUN,
+          f"{worst} vsync = {worst / 50:.2f}s")
+
+    # Ο ΕΠΙΒΑΤΗΣ: διακόπτης ζωγραφισμένος ΠΑΝΩ της, που ταξιδεύει μαζί της.
+    # Χωρίς αυτό θα έμενε καρφωμένος στο κελί του ενώ η πλατφόρμα φεύγει.
+    rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    for i in range(3):
+        rows[14][10 + i] = "M"
+    rows[13][11] = "S"
+    rows[18][25] = "G"
+    rm = P.Room(";\n" + "\n".join("".join(r) for r in rows)
+                + "\ngravity 0\nplat 10 14 20 14 0 40\nsw 11 13 2\ngate 25 18 2\n")
+    pl = rm.platforms[0]
+    check("ο διακόπτης από πάνω γίνεται επιβάτης",
+          pl["rider"] == P.SWITCH_U and pl["rchan"] == 2 and pl["rdx"] == P.CELL,
+          f'rider={pl["rider"]} chan={pl["rchan"]} dx={pl["rdx"]}')
+    check("…και το κελί του αδειάζει", rm.cells[13][11] == P.EMPTY)
+
+    x0 = rm.rider_box(pl)[0]
+    h = P.Hero(rm, 30 * P.CELL, P.GRID_Y0 + 21 * P.CELL)
+    for _ in range(20):
+        h.update(0)
+    check("ο επιβάτης ταξιδεύει ΜΑΖΙ της",
+          rm.rider_box(pl)[0] - x0 == pl["x"] - pl["ax"],
+          f'επιβάτης +{rm.rider_box(pl)[0] - x0}, πλατφόρμα +{pl["x"] - pl["ax"]}')
+
+    # Και πατιέται: ο ήρωας στέκεται πάνω του και η πύλη του ανοίγει.
+    rm = P.Room(";\n" + "\n".join("".join(r) for r in rows)
+                + "\ngravity 0\nplat 10 14 20 14 0 40\nsw 11 13 2\ngate 25 18 2\n")
+    pl = rm.platforms[0]
+    pl["moving"] = False
+    h = P.Hero(rm, 11 * P.CELL + 4, P.GRID_Y0 + 13 * P.CELL)
+    for _ in range(30):
+        h.update(0)
+    check("πατώντας τον επιβάτη ανοίγει η πύλη του",
+          rm.cells[18][25] == P.GATE_OPEN and pl["rider"] == P.SWITCH_U_ON,
+          P.TYPE_NAMES[rm.cells[18][25]])
+
+    # Το 'm' ξεκινά ακίνητη: ο παίκτης πρέπει να τη βρει και να την ανάψει.
+    rm = proom("24 14", ch="m")
+    check("το «m» ξεκινά σταματημένη", not rm.platforms[0]["moving"])
+
+    # Διαδρομή που δεν είναι ούτε ίσια ούτε στις 45 μοίρες δεν παρακολουθείται
+    # με το μάτι — και σιωπηλά στραβή θα ήταν χειρότερη από άκυρη.
+    try:
+        proom("17 20")
+        check("λοξή διαδρομή απορρίπτεται", False, "δεν πέταξε σφάλμα")
+    except ValueError:
+        check("λοξή διαδρομή απορρίπτεται", True)
+
     # --- ΤΟ ΣΧΗΜΑ ΠΡΕΠΕΙ ΝΑ ΣΥΜΦΩΝΕΙ ΜΕ ΤΗ ΦΥΣΙΚΗ.
     #     Το αγκάθι είναι θανατηφόρο από τη μεριά των ΜΥΤΩΝ και ακίνδυνο από
     #     τη ΒΑΣΗ. Αν το γραφικό δείχνει ανάποδα, ο παίκτης πατάει με

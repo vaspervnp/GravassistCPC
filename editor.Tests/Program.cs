@@ -572,6 +572,126 @@ Check("δεύτερη αποθήκευση δεν διπλασιάζει τη γ
       twice.Footer.Count(TurretGraph.IsTurretLine) == 1,
       string.Join(" | ", twice.Footer.Where(TurretGraph.IsTurretLine)));
 
+// ============================================================ πλατφόρμες
+//
+// Η κινούμενη πλατφόρμα είναι το μόνο αντικείμενο που ΦΕΥΓΕΙ από το κελί του.
+// Ό,τι ελέγχεται εδώ είναι τα σημεία όπου αυτό αλλάζει τους κανόνες.
+
+Console.WriteLine("--- κινούμενες πλατφόρμες");
+
+string PlatLevel(params (int Col, int Row, char Sym)[] cells)
+{
+    var rows = new List<string> { new('#', 40) };
+    for (var i = 0; i < 22; i++) rows.Add("#" + new string('.', 38) + "#");
+    rows.Add(new string('#', 40));
+    foreach (var (c, r, sym) in cells)
+    {
+        var line = rows[r].ToCharArray();
+        line[c] = sym;
+        rows[r] = new string(line);
+    }
+
+    return "; platforms\n" + string.Join("\n", rows) + "\ngravity 0\n";
+}
+
+var pl = PlatformGraph.ParseLines(["plat 10 14 20 14 3 40"]).Single();
+Check("η γραμμή διαβάζεται πλήρης",
+      pl is { Col: 10, Row: 14, DestCol: 20, DestRow: 14, Channel: 3, Speed: 40 },
+      pl.ToString());
+Check("χωρίς ταχύτητα ισχύει η προεπιλογή",
+      PlatformGraph.ParseLines(["plat 10 14 20 14 3"]).Single().Speed
+          == PlatformGraph.DefaultSpeed);
+
+// ΤΟ «plat» ΔΕΝ ΕΙΝΑΙ «plate». Τα δύο διαφέρουν σε ένα γράμμα και το ένα είναι
+// πλάκα πίεσης: αν το ένα pattern έπιανε το άλλο, ο editor θα έσβηνε τη γραμμή
+// της πλατφόρμας σε κάθε αποθήκευση.
+Check("ο AttrGraph ΔΕΝ μπερδεύει το «plat» με το «plate»",
+      !AttrGraph.IsAttrLine("plat 10 14 20 14 3 40")
+      && !AttrGraph.IsAttrLine("plat 10 14 20"));
+Check("…και ο PlatformGraph δεν πιάνει γραμμή πλάκας",
+      !PlatformGraph.IsPlatformLine("plate 10 14 3"));
+
+// Ίσια, κατακόρυφα και στις 45 μοίρες περνάνε· οτιδήποτε άλλο το απορρίπτει
+// το μοντέλο με εξαίρεση, δηλαδή σπάει το χτίσιμο της δισκέτας.
+foreach (var (dc, dr, ok, what) in new[]
+         { (20, 14, true, "οριζόντια"), (10, 20, true, "κατακόρυφα"),
+           (16, 20, true, "διαγώνια"), (17, 20, false, "λοξή") })
+{
+    Check($"διαδρομή {what}: {(ok ? "δεκτή" : "απορρίπτεται")}",
+          PlatformGraph.PathOk(new PlatformLink(10, 14, dc, dr, 0, 24)) == ok);
+}
+
+var pdoc = LevelDocument.Parse(PlatLevel((10, 14, 'M'), (11, 14, 'M'), (12, 14, 'M')));
+Check("γειτονικά κελιά είναι ΜΙΑ πλατφόρμα",
+      pdoc.PlatformGroups().Single().Cells.Count == 3);
+pdoc.SetPlatformLinks([new PlatformLink(10, 14, 20, 14, 3, 40)]);
+Check("γράφεται ΜΙΑ γραμμή, στο πάνω-αριστερό κελί",
+      pdoc.Footer.Count(PlatformGraph.IsPlatformLine) == 1
+      && pdoc.Footer.Contains("plat 10 14 20 14 3 40"),
+      string.Join(" | ", pdoc.Footer.Where(PlatformGraph.IsPlatformLine)));
+
+// Δεύτερη αποθήκευση χωρίς αλλαγή δεν διπλασιάζει τη γραμμή.
+var back = pdoc.PlatformLinks().Single();
+pdoc.SetPlatformLinks([back]);
+Check("δεύτερη αποθήκευση δεν διπλασιάζει",
+      pdoc.Footer.Count(PlatformGraph.IsPlatformLine) == 1);
+
+var pdef = LevelDocument.Parse(PlatLevel((10, 14, 'M')));
+pdef.SetPlatformLinks([new PlatformLink(10, 14, 10, 14, 0, PlatformGraph.DefaultSpeed)]);
+Check("αδήλωτη πλατφόρμα δεν αφήνει γραμμή", 
+      !pdef.Footer.Any(PlatformGraph.IsPlatformLine),
+      string.Join(" | ", pdef.Footer));
+Check("…αλλά προειδοποιεί ότι δεν πάει πουθενά",
+      pdef.ValidateContent(_ => true).Warnings.Any(w => w.Contains("no declared path")),
+      string.Join(" | ", pdef.ValidateContent(_ => true).Warnings));
+
+var pbad = LevelDocument.Parse(PlatLevel((10, 14, 'M')));
+pbad.Footer.Add("plat 10 14 17 20 0 24");
+var rep = pbad.ValidateContent(_ => true);
+Check("λοξή διαδρομή είναι ΣΦΑΛΜΑ, όχι προειδοποίηση",
+      rep.Errors.Any(e => e.Contains("45-degree")), string.Join(" | ", rep.Errors));
+
+var poff = LevelDocument.Parse(PlatLevel((10, 14, 'm')));
+Check("το «m» είναι κι αυτό πλατφόρμα, σταματημένη",
+      poff.PlatformGroups().Count == 1);
+
+var porph = LevelDocument.Parse(PlatLevel((10, 14, 'M')));
+porph.SetPlatformLinks([new PlatformLink(3, 3, 9, 9, 1, 24)]);
+Check("δήλωση χωρίς πλατφόρμα στο πλέγμα πετιέται",
+      !porph.Footer.Any(PlatformGraph.IsPlatformLine));
+
+var pclamp = LevelDocument.Parse(PlatLevel((10, 14, 'M')));
+pclamp.SetPlatformLinks([new PlatformLink(10, 14, 20, 14, 9, 999)]);
+Check("κανάλι και ταχύτητα μπαίνουν στα όρια",
+      pclamp.Footer.Contains($"plat 10 14 20 14 7 {PlatformGraph.MaxSpeed}"),
+      string.Join(" | ", pclamp.Footer));
+
+// ΤΙ ΚΑΘΕΤΑΙ ΠΑΝΩ ΤΗΣ. Ο διακόπτης ΤΑΞΙΔΕΥΕΙ μαζί της· κάθε άλλο αντικείμενο
+// θα έμενε καρφωμένο στο κελί του και θα κρεμόταν στον αέρα.
+var pride = LevelDocument.Parse(PlatLevel((10, 14, 'M'), (11, 14, 'M'), (11, 13, 'S')));
+pride.Footer.Add("plat 10 14 20 14 0 24");
+Check("διακόπτης πάνω στην πλατφόρμα επιτρέπεται",
+      !pride.ValidateContent(_ => true).Errors.Any(e => e.Contains("sits on top")),
+      string.Join(" | ", pride.ValidateContent(_ => true).Errors));
+
+foreach (var (sym, what) in new[] { ('k', "κλειδί"), ('B', "κιβώτιο"),
+                                    ('^', "αγκάθι"), ('#', "στερεό") })
+{
+    var onTop = LevelDocument.Parse(PlatLevel((10, 14, 'M'), (11, 14, 'M'),
+                                              (11, 13, sym)));
+    onTop.Footer.Add("plat 10 14 20 14 0 24");
+    Check($"{what} πάνω στην πλατφόρμα απορρίπτεται",
+          onTop.ValidateContent(_ => true).Errors.Any(e => e.Contains("sits on top")),
+          string.Join(" | ", onTop.ValidateContent(_ => true).Errors));
+}
+
+var two = LevelDocument.Parse(PlatLevel((10, 14, 'M'), (11, 14, 'M'),
+                                        (10, 13, 'S'), (11, 13, 'S')));
+two.Footer.Add("plat 10 14 20 14 0 24");
+Check("δύο διακόπτες πάνω της απορρίπτονται",
+      two.ValidateContent(_ => true).Errors.Any(e => e.Contains("carries 2")),
+      string.Join(" | ", two.ValidateContent(_ => true).Errors));
+
 Console.WriteLine(fails == 0 ? "ΟΛΑ ΣΩΣΤΑ" : $"{fails} ΑΠΟΤΥΧΙΕΣ");
 Environment.Exit(fails);
 

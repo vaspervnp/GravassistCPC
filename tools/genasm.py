@@ -109,6 +109,9 @@ PLACEHOLDER = {
     P.SWITCH_U_ON: ("SWITCH", 0, True), P.SWITCH_L_ON: ("SWITCH", 3, True),
     P.SWITCH_D_ON: ("SWITCH", 2, True), P.SWITCH_R_ON: ("SWITCH", 1, True),
     P.CRATE: ("CRATE", 0), P.CRUMBLE: ("CRUMBLE", 0), P.GRAVLOCK: ("GRAVLOCK", 0),
+    # Κινούμενη πλατφόρμα: ΕΝΑ σχήμα, δύο καταστάσεις. Τα κελιά της
+    # σβήνονται στη φόρτωση — το πλακίδιο το ζωγραφίζει ο πίνακάς της.
+    P.PLATFORM: ("PLATFORM", 0), P.PLATFORM_OFF: ("PLATFORM", 0, True),
     # Η ΒΑΣΗ ΚΑΘΕΤΑΙ ΑΠΕΝΑΝΤΙ ΑΠΟ ΤΙΣ ΜΥΤΕΣ. Το αριστερό και το δεξί ήταν
     # ανταλλαγμένα: το SPIKE_L (δείχνει αριστερά, FACING 2) ζωγραφιζόταν με τη
     # βάση ΑΡΙΣΤΕΡΑ, δηλαδή έδειχνε δεξιά — και το ανάποδο. Το σχήμα έλεγε
@@ -631,6 +634,13 @@ def defs_asm(rooms=()):
             "; Πόσους πυργίσκους κρατά ο πίνακας μιας αίθουσας. Ό,τι περισσεύει",
             "; αγνοείται σιωπηλά — το tools/roomfile.py σπάει το build αντ' αυτού.",
             f"TURRET_SLOTS    equ {P.TURRET_SLOTS}",
+            "; Κινούμενες πλατφόρμες: πόσες χωράνε, και οι δύο χρόνοι τους.",
+            f"PLAT_MAX        equ {P.PLAT_MAX}",
+            f"PLAT_SPEED_DEF  equ {P.PLAT_SPEED}",
+            "; Η παύση στα άκρα, σε παλμούς του ρολογιού 1/300.",
+            f"PLAT_PAUSE      equ {P.PLAT_PAUSE * 300}",
+            "; Στερεή μόνο από πάνω: η βαρύτητα που την κάνει πάτωμα.",
+            f"PLAT_GRAV       equ {(P.PLAT_FACING + 4) % 8}",
             f"CRATE_TICKS     equ {P.CRATE_TICKS}",
             f"FALL_SAFE       equ {P.FALL_SAFE}",
             f"FALL_V0         equ {P.FALL_V0}",

@@ -13,7 +13,7 @@ SRC   = src/main.asm
 ROOMS = $(wildcard levels/room_*.txt)
 DEPS  = src/rotate.asm src/level.asm src/hero.asm src/tables.asm src/rooms.asm \
         src/gamedefs.asm src/roomfile.asm src/menu.asm src/musicplay.asm src/tune.asm \
-        src/sfx.asm src/endings.asm
+        src/sfx.asm src/endings.asm src/turret.asm src/platform.asm
 GFX   = src/gfx_hero.asm src/gfx_objects.asm
 PNG   = assets/hero.png assets/objects.png
 BAS   = src/loader.bas
@@ -161,6 +161,8 @@ test: $(JSDATA)
 	$(PY) tools/test_physics.py
 	$(PY) tools/test_turret.py
 	$(PY) tools/test_turret_js.py
+	$(PY) tools/test_platform_js.py
+	$(PY) tools/test_platform_z80.py
 	$(PY) tools/test_z80.py
 	$(PY) tools/test_music.py
 	@# Ο έλεγχος του προσωπικού φακέλου θέλει .NET, που δεν είναι στο PATH.

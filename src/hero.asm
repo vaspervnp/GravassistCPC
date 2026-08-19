@@ -77,7 +77,13 @@ hu_td:          ld   (h_td),a
                 ; αμέσως μετά το MC_WAIT_FLYBACK.
                 call arrow_save
                 call turret_step
+                ; ΠΡΙΝ ΑΠΟ ΤΗ ΦΥΣΙΚΗ ΤΟΥ ΗΡΩΑ: η πλατφόρμα είναι το έδαφος.
+                ; Αν κινιόταν μετά, το βήμα του θα κρινόταν πάνω στην
+                ; προηγούμενη θέση της.
+                call plat_save          ; πού είναι ΤΩΡΑ, για το σβήσιμο
+                call plat_step
                 call h_touch            ; και στον αέρα: μαζεύεις πέφτοντας
+                call plat_touch         ; ο επιβάτης δεν είναι κελί
 
                 xor  a
                 call h_ground
@@ -132,6 +138,33 @@ hu_done:        call h_support
                 jp   h_track
 
 ;---------------------------------------------------------------------
+; sw_pair — A = switch type, out A = its other face, CF=1 if it was a switch
+;
+;   ΞΕΧΩΡΙΣΤΑ ΑΠΟ ΤΟ ΓΡΑΨΙΜΟ: ο διακόπτης που ταξιδεύει πάνω σε κινούμενη
+;   πλατφόρμα δεν έχει κελί, οπότε θέλει το ζευγάρι χωρίς το cell_set — που
+;   αλλιώς έγραφε τον νέο τύπο σε όποιο κελί έτυχε να δείχνει το cell_col.
+; ΑΛΛΟΙΩΝΕΙ: HL, D
+;---------------------------------------------------------------------
+sw_pair:        ld   hl,sw_tab
+                ld   d,SW_PAIRS
+sp_lp:          cp   (hl)
+                jr   z,sp_on            ; off -> on
+                inc  hl
+                cp   (hl)
+                jr   z,sp_off           ; on -> off
+                inc  hl
+                dec  d
+                jr   nz,sp_lp
+                or   a                  ; CF=0: not a switch
+                ret
+sp_on:          inc  hl
+                jr   sp_put
+sp_off:         dec  hl
+sp_put:         ld   a,(hl)
+                scf
+                ret
+
+;---------------------------------------------------------------------
 ; sw_flip — turn the switch under (B,C) to its other face
 ;
 ;   A PAIR TABLE and not arithmetic: SWITCH_U kept its old type number when
@@ -149,21 +182,8 @@ sw_tab:         db   T_SWITCH_U, T_SWITCH_U_ON
                 db   T_SWITCH_R, T_SWITCH_R_ON
 
 sw_flip:        ld   a,(h_cell)         ; the type we are standing on
-                ld   hl,sw_tab
-                ld   d,SW_PAIRS
-sf_lp:          cp   (hl)
-                jr   z,sf_on            ; off -> on
-                inc  hl
-                cp   (hl)
-                jr   z,sf_off           ; on -> off
-                inc  hl
-                dec  d
-                jr   nz,sf_lp
-                ret                     ; not a switch: nothing to turn
-sf_on:          inc  hl
-                jr   sf_put
-sf_off:         dec  hl
-sf_put:         ld   a,(hl)
+                call sw_pair
+                ret  nc                 ; not a switch: nothing to turn
                 push af
                 ld   a,(cell_col)       ; cell_addr wants C = column, B = row
                 ld   c,a
@@ -621,6 +641,8 @@ rl_have:        pop  af
                 call skip_attr
                 ld   (room_targ),hl     ; ο πέμπτος: οι χρόνοι των πυργίσκων
                 call skip_targ
+                ld   (room_plat),hl     ; ο έκτος: οι κινούμενες πλατφόρμες
+                call skip_plat
 
                 push hl                 ; HL -> τα RLE κελιά
                 pop  ix
@@ -632,6 +654,7 @@ rl_have:        pop  af
                 ; ΜΕΤΑ το jr_apply: το ημερολόγιο μπορεί να έχει αλλάξει κελιά,
                 ; και ο πίνακας πυργίσκων πρέπει να δει την ΤΕΛΙΚΗ αίθουσα.
                 call turret_load
+                call plat_load
                 ld   a,(cur_room)
                 call trail_enter        ; πόσο πίσω μπορείς ακόμα να γυρίσεις
                 call seal_doors         ; …και ποιες πόρτες έγιναν μπλοκ

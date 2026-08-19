@@ -176,6 +176,8 @@ geometry the hero will actually meet.
 | `v` | Spikes ↓ | Points down, base at the top. |
 | `<` | Spikes ← | Points left, base on the right. |
 | `>` | Spikes → | Points right, base on the left. |
+| `M` | Moving platform | Solid from **above** only; carries whatever stands on it. |
+| `m` | Moving platform, parked | The same, starting still until a switch sets it going. |
 | `I` | Turret ↕ | Shoots up or down, towards whichever side you are on. |
 | `=` | Turret ↔ | Shoots left or right. |
 | `i` `o` | Turret, off | The same two, drawn already switched off. |
@@ -348,6 +350,7 @@ does.
 | **Lock (`K`)** | Unlocked — you pass through. |
 | **Spikes (`^ v < >`)** | Retracted into the floor: still solid, but harmless. |
 | **Turret (`I` `=`)** | Switched off: it stops shooting. |
+| **Moving platform (`M`)** | Switched off: it stops where it is. |
 
 A switch has **four mountings**, and the mounting is a rule rather than decoration: you
 can only press it from the surface it is bolted to. `S` sits on a floor, `A` hangs from a
@@ -584,6 +587,11 @@ identity. **A value of 0 is never written** — 0 is the default and a line for 
 noise. For a lock, `auto` adds 8 to the value, so `lock 12 4 11` is identity 3 with auto
 opening.
 
+**`plat <col> <row> <destCol> <destRow> <channel> [<speed>]`** — one line per
+platform, at its top-left cell. The size is not written down: adjacent `M` cells are
+one platform and the grid says how big it is. The trip must be straight or an exact
+45-degree diagonal — anything else refuses to build. Speed is pixels per second.
+
 **`turret <col> <row> <channel> [<reload> [<rhythm>]]`** — a turret needs three numbers,
 so it gets its own line instead of a wiring one. The two times are optional and
 positional; left out, they mean 5 and 0. Unlike every other object, a line is written for
@@ -605,6 +613,9 @@ from its own state on every save; your comments survive untouched.
 | Start markers | at most one `@` per room |
 | Channels / identities | 1–7 (0 = unwired) |
 | Gravity directions | 0–7 |
+| Moving platforms per room | 2 |
+| Platform speed | 1–120 pixels per second (default 24) |
+| Platform pause at each end | 2 seconds |
 | Turrets per room | 8 |
 | Turret reload / rhythm | 1–60 and 0–60 seconds |
 | Arrows in the air | 2, across the whole room |

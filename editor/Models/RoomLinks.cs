@@ -55,6 +55,96 @@ public sealed record TeleportLink(int Col, int Row, int DestCol, int DestRow);
 public sealed record AttrLink(string Kind, int Col, int Row, int Value);
 
 /// <summary>
+/// Μία γραμμή footer «plat &lt;col&gt; &lt;row&gt; &lt;dcol&gt; &lt;drow&gt; &lt;κανάλι&gt; [ταχύτητα]».
+/// </summary>
+/// <param name="Col">Στήλη του πάνω-αριστερού κελιού της πλατφόρμας.</param>
+/// <param name="DestCol">Στήλη του δεύτερου άκρου της διαδρομής, σε κελιά.</param>
+/// <param name="Channel">Κανάλι διακόπτη 0..7· 0 = δεν τη σταματά κανείς.</param>
+/// <param name="Speed">Pixel ανά δευτερόλεπτο.</param>
+public sealed record PlatformLink(int Col, int Row, int DestCol, int DestRow,
+    int Channel, int Speed);
+
+/// <summary>
+/// Ανάγνωση και γραφή των γραμμών «plat» του footer.
+///
+/// ΓΙΑΤΙ ΔΙΚΗ ΤΗΣ ΓΡΑΜΜΗ ΚΑΙ ΟΧΙ ΚΑΛΩΔΙΩΣΗ: η πλατφόρμα κουβαλά τέσσερις
+/// αριθμούς πέρα από το κανάλι, και — το κρίσιμο — ΦΕΥΓΕΙ από το κελί της. Το
+/// κανάλι κάθε άλλου αντικειμένου ζει καρφωμένο σε κελί· ένα κανάλι κλειδωμένο
+/// στην αφετηρία της θα έχανε την πλατφόρμα με το πρώτο της βήμα.
+///
+/// ΜΙΑ ΓΡΑΜΜΗ ΑΝΑ ΟΜΑΔΑ, όχι ανά κελί: το μέγεθος βγαίνει από το πλέγμα, όπως
+/// το ύψος μιας ψηλής πύλης, και το tools/physics.py διαβάζει τη δήλωση από το
+/// πάνω-αριστερό κελί.
+/// </summary>
+public static class PlatformGraph
+{
+    /// <summary>Pixel ανά δευτερόλεπτο, όταν δεν δηλώνεται — <c>PLAT_SPEED</c>.</summary>
+    public const int DefaultSpeed = 24;
+    public const int MaxSpeed = 120;
+
+    /// <summary>Κινούμενη και σταματημένη.</summary>
+    public static readonly char[] Symbols = ['M', 'm'];
+
+    private static readonly Regex LinePattern = new(
+        @"^\s*plat\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    public static bool IsPlatformLine(string line) => LinePattern.IsMatch(line);
+
+    /// <summary>
+    /// Είναι η διαδρομή ίσια ή ακριβώς στις 45 μοίρες;
+    ///
+    /// Οτιδήποτε άλλο το ΑΠΟΡΡΙΠΤΕΙ το μοντέλο με σφάλμα, δηλαδή σπάει το
+    /// χτίσιμο της δισκέτας. Καλύτερα να το πει ο editor τη στιγμή που το
+    /// φτιάχνεις παρά το make μισή ώρα αργότερα.
+    /// </summary>
+    public static bool PathOk(PlatformLink p)
+    {
+        var dc = Math.Abs(p.DestCol - p.Col);
+        var dr = Math.Abs(p.DestRow - p.Row);
+        return dc == 0 || dr == 0 || dc == dr;
+    }
+
+    public static PlatformLink Clamp(PlatformLink p) => p with
+    {
+        Channel = Math.Clamp(p.Channel, 0, 7),
+        Speed = Math.Clamp(p.Speed, 1, MaxSpeed),
+    };
+
+    /// <summary>Είναι όλα προεπιλογή και η διαδρομή μηδενική, άρα η γραμμή περιττή;</summary>
+    public static bool IsDefault(PlatformLink p) =>
+        p.Col == p.DestCol && p.Row == p.DestRow
+        && p.Channel == 0 && p.Speed == DefaultSpeed;
+
+    public static string FormatLine(PlatformLink p) => string.Create(
+        CultureInfo.InvariantCulture,
+        $"plat {p.Col} {p.Row} {p.DestCol} {p.DestRow} {p.Channel} {p.Speed}");
+
+    public static List<PlatformLink> ParseLines(IEnumerable<string> lines)
+    {
+        var links = new List<PlatformLink>();
+        foreach (var line in lines)
+        {
+            var m = LinePattern.Match(line);
+            if (!m.Success) continue;
+            int N(int i) => int.Parse(m.Groups[i].Value, CultureInfo.InvariantCulture);
+            links.Add(new PlatformLink(N(1), N(2), N(3), N(4), N(5),
+                m.Groups[6].Success ? N(6) : DefaultSpeed));
+        }
+
+        return links;
+    }
+
+    /// <summary>Οι ομάδες κελιών πλατφόρμας, σε σειρά σάρωσης κατά γραμμές.</summary>
+    public static List<CellGroup> FindGroups(IReadOnlyList<string> rows)
+    {
+        var groups = Symbols.SelectMany(s => CellGroups.Find(rows, s)).ToList();
+        groups.Sort((a, b) => a.Row != b.Row ? a.Row - b.Row : a.Col - b.Col);
+        return groups;
+    }
+}
+
+/// <summary>
 /// Μία γραμμή footer «turret &lt;col&gt; &lt;row&gt; &lt;κανάλι&gt; [φόρτιση] [αυτόματα]».
 ///
 /// WHY ITS OWN LINE, and not one more entry in <see cref="AttrGraph"/>: a turret

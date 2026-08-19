@@ -155,7 +155,8 @@
     // στο rooms[name] — και μετά κανείς δεν τους έδινε στο δωμάτιο. Κάθε
     // πυργίσκος έπαιζε με τις προεπιλογές, δηλαδή ο ρυθμός δεν υπήρχε.
     const meta = rooms[name] || {};
-    room = new G.Room(cells, meta.teleports, meta.attrs, meta.turretArg);
+    room = new G.Room(cells, meta.teleports, meta.attrs, meta.turretArg,
+                      meta.platSpec);
     hero = new G.Hero(room, startPos[0], startPos[1], startPos[2]);
     // Ο ΠΑΙΚΤΗΣ ΚΡΑΤΑΕΙ Ο,ΤΙ ΚΟΥΒΑΛΑΕΙ. Ο νέος ήρωας ξεκινούσε με γεμάτη
     // ενέργεια και άδεια χέρια, οπότε κάθε πόρτα ήταν και μια δωρεάν γέμιση —
@@ -504,6 +505,9 @@
 
     screen.clear();
     screen.tiles(room);
+    // ΟΙ ΠΛΑΤΦΟΡΜΕΣ ΜΕΤΑ ΤΑ ΠΛΑΚΙΔΙΑ ΚΑΙ ΠΡΙΝ ΤΟΝ ΗΡΩΑ: κινούνται ανά pixel και
+    // δεν ζουν στο πλέγμα, άρα δεν τις ζωγραφίζει το screen.tiles.
+    for (const p of room.platforms) screen.platform(p);
     // ΑΝΑΒΟΣΒΗΝΕΙ ΟΣΟ ΕΙΝΑΙ ΑΤΡΩΤΟΣ — 4 καρέ μέσα, 4 έξω, ίδιος ρυθμός με
     // τον Amstrad (bit 2 του μετρητή). Παραλείπεται μόνο ο ήρωας· η αίθουσα
     // ζωγραφίζεται κανονικά.
@@ -698,6 +702,15 @@
           [m[4] === undefined ? D.K.TURRET_COOL : +m[4],
            m[5] === undefined ? 0 : +m[5]];
       }
+      // ΚΙΝΟΥΜΕΝΕΣ ΠΛΑΤΦΟΡΜΕΣ: το δεύτερο άκρο, το κανάλι και η ταχύτητα.
+      // Δεν περνάνε από τον πίνακα ιδιοτήτων όπως ο πυργίσκος — η πλατφόρμα
+      // φεύγει από το κελί της, οπότε το κανάλι ζει στον δικό της πίνακα.
+      const platSpec = {};
+      for (const m of foot.matchAll(
+             /plat\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?/gi))
+        platSpec[m[1] + "," + m[2]] =
+          [+m[3], +m[4], +m[5], m[6] === undefined ? D.K.PLAT_SPEED : +m[6]];
+
       // Γειτονικά κελιά είναι ΕΝΑ αντικείμενο: ο προορισμός σε ΟΛΑ τα κελιά.
       spread(cells, exits, D.TYPE_NAMES.indexOf("EXIT"));
       spread(cells, teleports, D.TYPE_NAMES.indexOf("TELEPORT"));
@@ -709,23 +722,16 @@
       // πάνω-αριστερό κελί της ομάδας, που είναι το κλειδί της δήλωσης.
       // Κάθε όψη και κάθε κατάσταση: ο ίδιος διακόπτης μπορεί να είναι
       // ζωγραφισμένος πατημένος ή σε οποιαδήποτε από τις τέσσερις φορές.
-      for (let t = 0; t < D.NTYPES; t++)
-        if (D.PROPS[t] & D.F.SWITCH) spreadKind(cells, attrs, t);
-      spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("GATE"));
-      spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("LOCK"));
-      spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("KEY"));
-      spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("PLATE"));
-      spreadKind(cells, attrs, D.TYPE_NAMES.indexOf("PLATE_DOWN"));
-      // Και τα αγκάθια: είναι στόχοι καλωδίωσης όπως οι πύλες, και στις οκτώ
-      // μορφές τους (τέσσερις φορές x βγαλμένα/τραβηγμένα).
-      for (const n of ["SPIKE_U", "SPIKE_L", "SPIKE_D", "SPIKE_R",
-                       "SPIKE_U_OFF", "SPIKE_L_OFF", "SPIKE_D_OFF", "SPIKE_R_OFF"])
-        spreadKind(cells, attrs, D.TYPE_NAMES.indexOf(n));
-      // Και οι πυργίσκοι: στόχοι καλωδίωσης όπως τα αγκάθια.
-      for (const n of ["TURRET_V", "TURRET_H", "TURRET_V_OFF", "TURRET_H_OFF"])
-        spreadKind(cells, attrs, D.TYPE_NAMES.indexOf(n));
+      // ΑΠΟ ΤΟ ΜΟΝΤΕΛΟ, ΟΧΙ ΜΕ ΤΟ ΧΕΡΙ. Εδώ ήταν γραμμένη λίστα τύπων και δύο
+      // είχαν πέσει έξω — η ανοιγμένη πύλη και η ξεκλείδωτη κλειδαριά. Το
+      // κανάλι απλώνεται σε ΟΛΑ τα κελιά της ομάδας· χωρίς το άπλωμα, μια
+      // πύλη δύο κελιών ζωγραφισμένη ήδη ανοιχτή είχε κανάλι μόνο στο πρώτο
+      // της κελί, και ο διακόπτης έκλεινε το ένα κομμάτι και άφηνε τα άλλα.
+      // Καλύπτει διακόπτες, πύλες, κλειδαριές, κλειδιά, πλάκες, αγκάθια και
+      // πυργίσκους — και στις δύο καταστάσεις του καθενός.
+      for (const t of D.WIRED) spreadKind(cells, attrs, t);
       rooms[name] = { cells, start, exits, teleports, twoWay, arrive, arriveG,
-                      attrs, turretArg,
+                      attrs, turretArg, platSpec,
                       pristine: cells.map(r => r.slice()) };
       const o = document.createElement("option");
       o.value = name; o.textContent = name;

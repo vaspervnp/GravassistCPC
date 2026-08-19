@@ -267,7 +267,13 @@ ml_anim:        call music_step         ; ΠΡΙΝ το flyback: το SOUND QUEU
                 ; αυτό ήταν το τρεμόπαιγμα. Πρώτα το σβήσιμο και μετά ο ήρωας,
                 ; ώστε βέλος που τον ακουμπά να μη σβήνει κομμάτι του.
                 call arrow_erase
+                call plat_erase         ; τα κελιά κάτω από την ΠΑΛΙΑ της θέση
                 call draw_hero          ; μόνο εγγραφές στην οθόνη
+                ; Η ΠΛΑΤΦΟΡΜΑ ΜΕΤΑ ΤΟΝ ΗΡΩΑ, όπως και το βέλος: το draw_hero
+                ; συνθέτει το φόντο του από τα δεδομένα της ΠΙΣΤΑΣ, όπου η
+                ; πλατφόρμα δεν υπάρχει — ζωγραφισμένη πριν, θα σβηνόταν σε
+                ; όλο το ορθογώνιο του ήρωα.
+                call plat_draw
                 call arrow_draw         ; ΜΕΤΑ τον ήρωα: ένα βέλος από πάνω του
                                         ; πρέπει να φαίνεται
                 call draw_hud
@@ -1855,6 +1861,7 @@ linetab         ds   400, 0
                 ; έγιναν τα animation προσγείωσης και θανάτου.
                 include "rooms.asm"
                 include "turret.asm"
+                include "platform.asm"
                 include "tune.asm"      ; note table + where the tune sits in the bank
 
 ;--- κώδικας που ΠΡΕΠΕΙ να ζει πάνω από το #8000 ----------------------
@@ -1884,6 +1891,8 @@ arrow_tab       ds   AR_SIZE*TURRET_MAX
 ; σβήσιμο να μπορεί να φύγει από το hero_update και να κολλήσει δίπλα στο
 ; σχέδιο, μετά το flyback — δες arrow_save στο src/turret.asm.
 arrow_old       ds   AR_SIZE*TURRET_MAX
+; Οι κινούμενες πλατφόρμες: θέση σε PIXEL, γι' αυτό δεν χωράνε στο πλέγμα.
+plat_tab        ds   PL_SIZE*PLAT_MAX
 
 cell_buf        ds   LVL_CELLS          ; το ξεδιπλωμένο πλέγμα που παίζεται
 journal         ds   JOURNAL_MAX*4      ; (αίθουσα, offset lo, offset hi, τύπος)

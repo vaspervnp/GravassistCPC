@@ -75,6 +75,10 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             doc.SetTurretLinks(request.Turrets
                 .Select(t => new TurretLink(t.Col, t.Row, t.Channel, t.Reload, t.Auto)));
 
+            doc.SetPlatformLinks(request.Platforms
+                .Select(p => new PlatformLink(p.Col, p.Row, p.DestCol, p.DestRow,
+                                              p.Channel, p.Speed)));
+
             doc.StartGravity = request.Gravity;
 
             var warnings = store.Save(request.Name, doc);
@@ -326,8 +330,23 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
             })
             .ToList();
 
+        // Η πλατφόρμα δηλώνεται ΑΝΑ ΟΜΑΔΑ, στο πάνω-αριστερό της κελί. Χωρίς
+        // δήλωση, το δεύτερο άκρο είναι ο εαυτός της: μένει ακίνητη εκεί που
+        // τη ζωγράφισες, που είναι και το πιο ήσυχο προεπιλεγμένο.
+        var platByAnchor = doc.PlatformLinks()
+            .GroupBy(l => (l.Col, l.Row))
+            .ToDictionary(g => g.Key, g => g.Last());
+
+        var platforms = doc.PlatformGroups()
+            .Select(g => platByAnchor.TryGetValue((g.Col, g.Row), out var l)
+                ? new PlatformDto(g.Col, g.Row, l.DestCol, l.DestRow,
+                                  l.Channel, l.Speed, g.Cells.Count)
+                : new PlatformDto(g.Col, g.Row, g.Col, g.Row, 0,
+                                  PlatformGraph.DefaultSpeed, g.Cells.Count))
+            .ToList();
+
         return new LevelDto(name, doc.Rows, doc.Header, doc.Footer,
             exits, teleports, RoomNaming.NumberOf(name), doc.StartGravity, attrs,
-            turrets);
+            turrets, platforms);
     }
 }

@@ -1,14 +1,14 @@
 ;=====================================================================
 ;  GRAVASSIST - sprites αντικειμένων (PLACEHOLDERS)
 ;  ΠΑΡΑΓΕΤΑΙ ΑΥΤΟΜΑΤΑ από tools/sprites.py — ΜΗΝ το επεξεργάζεσαι.
-;  30 frames, 8x8, 4 pixels ανά byte
+;  32 frames, 8x8, 4 pixels ανά byte
 ;  (2 bytes ανά γραμμή), κανονική φορά βαρύτητας DOWN.
 ;  Ξεπακετάρισμα + περιστροφή: src/rotate.asm
 ;=====================================================================
 
 obj_gfx_w       equ 8
 obj_gfx_h       equ 8
-obj_gfx_frames  equ 30
+obj_gfx_frames  equ 32
 obj_gfx_stride  equ 2
 obj_gfx_size    equ 16
 
@@ -283,6 +283,24 @@ obj_gfx:
                 db 85,85
                 db 85,85
                 db 85,85
+                ; --- frame 30 ---
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                ; --- frame 31 ---
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
+                db 85,85
 
 ; --- δείκτες frame του obj_gfx ---
 obj_gfx_EXIT_0     equ 0
@@ -291,27 +309,29 @@ obj_gfx_GATE_0     equ 2
 obj_gfx_GATE_1     equ 3
 obj_gfx_SWITCH_0   equ 4
 obj_gfx_SWITCH_1   equ 5
-obj_gfx_ENERGY_0   equ 6
-obj_gfx_ENERGY_1   equ 7
-obj_gfx_CRATE_0    equ 8
-obj_gfx_CRATE_1    equ 9
-obj_gfx_PLATE_0    equ 10
-obj_gfx_PLATE_1    equ 11
-obj_gfx_LOCK_0     equ 12
-obj_gfx_LOCK_1     equ 13
-obj_gfx_ONEWAY_0   equ 14
-obj_gfx_ONEWAY_1   equ 15
-obj_gfx_GRAVLOCK_0 equ 16
-obj_gfx_GRAVLOCK_1 equ 17
-obj_gfx_CRUMBLE_0  equ 18
-obj_gfx_CRUMBLE_1  equ 19
-obj_gfx_SPIKES_0   equ 20
-obj_gfx_SPIKES_1   equ 21
-obj_gfx_TELEPORT_0 equ 22
-obj_gfx_TELEPORT_1 equ 23
-obj_gfx_KEY_0      equ 24
-obj_gfx_KEY_1      equ 25
-obj_gfx_PARACHUTE_0 equ 26
-obj_gfx_PARACHUTE_1 equ 27
-obj_gfx_TURRET_0   equ 28
-obj_gfx_TURRET_1   equ 29
+obj_gfx_PLATFORM_0 equ 6
+obj_gfx_PLATFORM_1 equ 7
+obj_gfx_ENERGY_0   equ 8
+obj_gfx_ENERGY_1   equ 9
+obj_gfx_CRATE_0    equ 10
+obj_gfx_CRATE_1    equ 11
+obj_gfx_PLATE_0    equ 12
+obj_gfx_PLATE_1    equ 13
+obj_gfx_LOCK_0     equ 14
+obj_gfx_LOCK_1     equ 15
+obj_gfx_ONEWAY_0   equ 16
+obj_gfx_ONEWAY_1   equ 17
+obj_gfx_GRAVLOCK_0 equ 18
+obj_gfx_GRAVLOCK_1 equ 19
+obj_gfx_CRUMBLE_0  equ 20
+obj_gfx_CRUMBLE_1  equ 21
+obj_gfx_SPIKES_0   equ 22
+obj_gfx_SPIKES_1   equ 23
+obj_gfx_TELEPORT_0 equ 24
+obj_gfx_TELEPORT_1 equ 25
+obj_gfx_KEY_0      equ 26
+obj_gfx_KEY_1      equ 27
+obj_gfx_PARACHUTE_0 equ 28
+obj_gfx_PARACHUTE_1 equ 29
+obj_gfx_TURRET_0   equ 30
+obj_gfx_TURRET_1   equ 31

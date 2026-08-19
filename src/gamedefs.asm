@@ -49,6 +49,8 @@ T_TURRET_V       equ 41
 T_TURRET_H       equ 42
 T_TURRET_V_OFF   equ 43
 T_TURRET_H_OFF   equ 44
+T_PLATFORM       equ 45
+T_PLATFORM_OFF   equ 46
 
 ; Αίθουσα εκκίνησης. Ο editor τη γράφει με --start ώστε να δοκιμάζεις
 ; οποιαδήποτε αίθουσα χωρίς να πειράζεις τα αρχεία των πιστών.
@@ -61,7 +63,7 @@ GTAB_OFF        equ 15
 
 ; --- σετ αιθουσών σε αρχείο (tools/roomfile.py) --------------
 SET_ROOMS       equ 4
-SET_VERSION     equ 3          ; ο φορτωτής απορρίπτει ό,τι άλλο
+SET_VERSION     equ 4          ; ο φορτωτής απορρίπτει ό,τι άλλο
 ; Οι θέσεις των σετ μέσα στις τράπεζες του 6128 (src/bank.asm).
 ; Ο Z80 βρίσκει τη θέση με ολισθήσεις, οπότε τα δύο μεγέθη ΠΡΕΠΕΙ
 ; να είναι δυνάμεις του 2 — το assert από κάτω το επιβάλλει.
@@ -106,7 +108,7 @@ TRAIL_MAX       equ 4    ; πόσα δωμάτια πίσω γυρνάς
 ; Ταβάνι μνήμης με ενεργό AMSDOS — δες την assert στο main.asm.
 MEM_CEIL        equ #A67B
 
-NTYPES          equ 45
+NTYPES          equ 47
 ATTR_MAX        equ 8   ; κανάλια διακοπτών / ταυτότητες κλειδιών
 T_LOCK_AUTO     equ 8    ; bit: η κλειδαριά ανοίγει μόλις την ακουμπήσεις
 SPIKE_TICKS     equ 10
@@ -134,6 +136,13 @@ ARROW_DMG_FAR   equ 1
 ; Πόσους πυργίσκους κρατά ο πίνακας μιας αίθουσας. Ό,τι περισσεύει
 ; αγνοείται σιωπηλά — το tools/roomfile.py σπάει το build αντ' αυτού.
 TURRET_SLOTS    equ 8
+; Κινούμενες πλατφόρμες: πόσες χωράνε, και οι δύο χρόνοι τους.
+PLAT_MAX        equ 2
+PLAT_SPEED_DEF  equ 24
+; Η παύση στα άκρα, σε παλμούς του ρολογιού 1/300.
+PLAT_PAUSE      equ 600
+; Στερεή μόνο από πάνω: η βαρύτητα που την κάνει πάτωμα.
+PLAT_GRAV       equ 0
 CRATE_TICKS     equ 4
 FALL_SAFE       equ 36
 FALL_V0         equ 256

@@ -92,6 +92,26 @@
               this.px(c * D.CELL + u, D.GRID_Y0 + r * D.CELL + v, px[v][u]);
         }
     }
+    /// Κινούμενη πλατφόρμα: το πλακίδιό της, επαναλαμβανόμενο σε όλο το
+    /// ορθογώνιο. ΘΕΣΗ ΣΕ PIXEL και όχι σε κελιά — εκεί είναι η διαφορά της
+    /// από κάθε άλλο υλικό, και γι' αυτό δεν την πιάνει το tiles().
+    platform(p) {
+      const px = D.TILE_PX[p.moving ? D.TYPE_NAMES.indexOf("PLATFORM")
+                                    : D.TYPE_NAMES.indexOf("PLATFORM_OFF")];
+      for (let v = 0; v < p.h; v++)
+        for (let u = 0; u < p.w; u++)
+          this.px(p.x + u, p.y + v, px[v % D.CELL][u % D.CELL]);
+
+      // Ο ΕΠΙΒΑΤΗΣ ΜΑΖΙ ΤΗΣ. Ο διακόπτης που ταξιδεύει πάνω στην πλατφόρμα
+      // έχει φύγει από το πλέγμα στη φόρτωση, ώστε να κινείται ανά pixel —
+      // οπότε το tiles() δεν τον ζωγραφίζει πια και χωρίς αυτό εδώ δούλευε
+      // κανονικά αλλά ήταν ΑΟΡΑΤΟΣ.
+      if (p.rider === null || p.rider === undefined) return;
+      const rp = D.TILE_PX[p.rider];
+      for (let v = 0; v < D.CELL; v++)
+        for (let u = 0; u < D.CELL; u++)
+          if (rp[v][u]) this.px(p.x + p.rdx + u, p.y - D.CELL + v, rp[v][u]);
+    }
     sprite(px, cx, cy) {                 // κεντραρισμένο, pen 0 = διαφανές
       const h = px.length, w = px[0].length;
       const x0 = Math.round(cx - w / 2), y0 = Math.round(cy - h / 2);

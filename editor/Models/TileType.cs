@@ -576,6 +576,35 @@ public static class TileCatalog
             </g>
             """),
 
+        // ================= Κινούμενες πλατφόρμες =================
+        // ΤΟ ΜΟΝΟ ΑΝΤΙΚΕΙΜΕΝΟ ΠΟΥ ΔΕΝ ΜΕΝΕΙ ΣΤΟ ΚΕΛΙ ΤΟΥ. Τα κελιά δείχνουν πού
+        // ΞΕΚΙΝΑΕΙ και πόσο μεγάλη είναι — γειτονικά κελιά είναι ΜΙΑ πλατφόρμα,
+        // όπως μια ψηλή πύλη. Στη φόρτωση σβήνονται από το πλέγμα και τη
+        // δουλειά την αναλαμβάνει ο πίνακας πλατφορμών, με θέση σε pixel.
+        new TileType('M', "platform", MechGroup, "Moving platform",
+            "Solid from ABOVE only — you land on it, you pass through from below — and it carries you. Adjacent cells are ONE platform. It pauses two seconds at each end. Set its trip and speed in the Moving platforms panel; a switch on its channel stops and starts it.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <g >
+            <rect x="0" y="0" width="8" height="1" fill="var(--edge)"/>
+            <rect x="0" y="1" width="8" height="6" fill="var(--fill)"/>
+            <rect x="0" y="7" width="1" height="1" fill="var(--edge)"/>
+            <rect x="2" y="7" width="1" height="1" fill="var(--edge)"/>
+            <rect x="4" y="7" width="1" height="1" fill="var(--edge)"/>
+            <rect x="6" y="7" width="1" height="1" fill="var(--edge)"/>
+            </g>
+            """),
+        new TileType('m', "platform_off", MechGroup, "Moving platform (parked)",
+            "The same platform, starting still. A switch on its channel sets it going — paint this one when the player should have to start it.",
+            Palette.Material, Palette.EdgeColor,
+            """
+            <g >
+            <rect x="0" y="0" width="8" height="1" fill="var(--edge)"/>
+            <rect x="0" y="1" width="8" height="6" fill="var(--fill)"/>
+            <rect x="0" y="7" width="8" height="1" fill="var(--edge)"/>
+            </g>
+            """),
+
         new TileType('p', "plate", MechGroup, "Pressure plate",
             "Active only while pressed by the hero or a crate.",
             Palette.Material, Palette.EdgeColor,
@@ -588,6 +617,12 @@ public static class TileCatalog
 
     private static readonly Dictionary<char, TileType> BySymbol =
         All.ToDictionary(t => t.Symbol);
+
+    /// <summary>
+    /// Είναι διακόπτης, σε οποιαδήποτε από τις οκτώ μορφές του;
+    /// Οι μόνοι που επιτρέπεται να ταξιδεύουν πάνω σε κινούμενη πλατφόρμα.
+    /// </summary>
+    public static bool IsSwitch(char c) => "SQAEsqae".Contains(c);
 
     /// <summary>Είναι ο χαρακτήρας έγκυρος τύπος κελιού;</summary>
     public static bool IsValid(char symbol) => BySymbol.ContainsKey(symbol);

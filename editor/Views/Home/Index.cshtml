@@ -38,6 +38,8 @@
         },
         turretReload = TurretGraph.DefaultReload,
         turretMax = TurretGraph.MaxSeconds,
+        platSpeed = PlatformGraph.DefaultSpeed,
+        platSpeedMax = PlatformGraph.MaxSpeed,
         start = Model.StartSymbol.ToString(),
         tiles = Model.Tiles.Select(t => new
         {
@@ -456,6 +458,22 @@
         </div>
 
         <div class="panel">
+            <h2>Moving platforms</h2>
+            <div id="plat-list"></div>
+            <div class="hintline">
+                Adjacent <code>M</code> cells count as ONE platform and its size
+                comes from the grid. Give it the far end of its trip: the path
+                must be straight or an exact 45&deg; diagonal. "Set" = pick the
+                cell by clicking on the grid (<kbd>Esc</kbd> cancels).
+                <b>channel</b> lets a switch stop and start it; <b>speed</b> is
+                pixels per second. Paint <code>m</code> instead to have it start
+                parked. Each platform writes one
+                <code>plat &lt;col&gt; &lt;row&gt; &lt;dcol&gt; &lt;drow&gt;
+                &lt;channel&gt; &lt;speed&gt;</code> line.
+            </div>
+        </div>
+
+        <div class="panel">
             <h2>Tools</h2>
             <div class="toolbar">
                 <button type="button" class="tool-btn" data-tool="brush">Brush</button>
@@ -653,6 +671,7 @@
         const exitListEl = document.getElementById("exit-list");
         const exitNoteEl = document.getElementById("exit-note");
         const teleListEl = document.getElementById("tp-list");
+        const platListEl = document.getElementById("plat-list");
         const teleNoteEl = document.getElementById("tp-note");
 
         // --- Κατάσταση -------------------------------------------------
@@ -703,6 +722,14 @@
 
         let teleDests = new Map();
         let teleGroups = [];              // [{col,row,cells:[[c,r],…],dest:[c,r]|null}]
+
+        // ΚΙΝΟΥΜΕΝΕΣ ΠΛΑΤΦΟΡΜΕΣ. Κλειδί ανά ΚΕΛΙ, όπως και οι προορισμοί των
+        // εξόδων: η τιμή επιβιώνει όταν η ομάδα μεγαλώσει ή μετακινηθεί και
+        // αλλάξει το πάνω-αριστερό της κελί.
+        let platVals = new Map();         // cellKey -> [dcol, drow, κανάλι, ταχύτητα]
+        let platGroups = [];              // [{col,row,cells,dest,chan,speed}]
+        const PLAT_SPEED = DATA.platSpeed;
+        const PLAT_SPEED_MAX = DATA.platSpeedMax;
 
         // Κατάσταση «διάλεξε κελί στο πλέγμα». Δύο πίνακες τη χρησιμοποιούν —
         // ο προορισμός τηλεμεταφοράς και το σημείο άφιξης πόρτας — γι' αυτό
@@ -814,6 +841,7 @@
             syncExits();
             syncTeleports();
             syncAttrs();
+            syncPlatforms();
         }
 
         function attrKey(kind, c, r) { return kind + ":" + c + "," + r; }
@@ -1486,6 +1514,118 @@
             teleLinks.appendChild(frag);
         }
 
+        /// Ξαναϋπολογίζει τις ομάδες πλατφόρμας. Ίδιος κανόνας με παντού:
+        /// γειτονικά κελιά του ΙΔΙΟΥ χαρακτήρα είναι ΕΝΑ αντικείμενο.
+        function syncPlatforms() {
+            let groups = [];
+            for (const sym of "Mm") groups = groups.concat(findGroups(sym));
+            groups.sort((a, b) => a.row !== b.row ? a.row - b.row : a.col - b.col);
+            const next = new Map();
+            groups.forEach(function (g) {
+                let v = null;
+                for (const cell of g.cells) {
+                    const got = platVals.get(cellKey(cell[0], cell[1]));
+                    if (got) { v = got; break; }
+                }
+                // Χωρίς δήλωση: δεύτερο άκρο ο εαυτός της, δηλαδή ακίνητη εκεί
+                // που τη ζωγράφισες. Το ήσυχο προεπιλεγμένο.
+                if (!v) v = [g.col, g.row, 0, PLAT_SPEED];
+                g.dest = [v[0], v[1]];
+                g.chan = v[2];
+                g.speed = v[3];
+                g.cells.forEach(cell => next.set(cellKey(cell[0], cell[1]), v));
+            });
+            platVals = next;
+            platGroups = groups;
+            if (pickKind === "plat" && pickIndex >= groups.length) cancelPick(true);
+            renderPlatPanel();
+        }
+
+        function setPlatValue(index, dest, chan, speed) {
+            const g = platGroups[index];
+            if (!g) return;
+            const v = [dest[0], dest[1], chan, speed];
+            g.dest = dest; g.chan = chan; g.speed = speed;
+            g.cells.forEach(cell => platVals.set(cellKey(cell[0], cell[1]), v));
+            dirty = true;
+            renderPlatPanel();
+        }
+
+        /// ΙΣΙΑ Ή ΑΚΡΙΒΩΣ 45 ΜΟΙΡΕΣ. Το μοντέλο απορρίπτει οτιδήποτε άλλο με
+        /// σφάλμα, δηλαδή σπάει το χτίσιμο της δισκέτας· καλύτερα να φαίνεται
+        /// εδώ, τη στιγμή που το φτιάχνεις.
+        function platPathOk(g) {
+            const dc = Math.abs(g.dest[0] - g.col), dr = Math.abs(g.dest[1] - g.row);
+            return dc === 0 || dr === 0 || dc === dr;
+        }
+
+        function renderPlatPanel() {
+            platListEl.textContent = "";
+            if (!platGroups.length) {
+                const p = document.createElement("div");
+                p.className = "hintline";
+                p.style.marginTop = "0";
+                p.textContent = "No moving platforms. Paint \"Moving platform\" "
+                              + "(M) cells on the grid.";
+                platListEl.appendChild(p);
+                return;
+            }
+
+            platGroups.forEach(function (g, i) {
+                const row = document.createElement("div");
+                row.className = "link-row";
+                if (g.dest[0] === g.col && g.dest[1] === g.row) row.classList.add("pending");
+                else if (!platPathOk(g) || !inGrid(g.dest[0], g.dest[1]))
+                    row.classList.add("missing");
+                if (pickKind === "plat" && pickIndex === i) row.classList.add("picking");
+
+                const tag = document.createElement("span");
+                tag.className = "link-tag";
+                tag.textContent = "#" + (i + 1);
+
+                const pos = document.createElement("span");
+                pos.className = "link-pos";
+                pos.textContent = "col " + g.col + " row " + g.row
+                                + " · " + g.cells.length + " cells";
+
+                const dcol = coordInput("far end column (0.." + (COLS - 1) + ")",
+                                        String(g.dest[0]), COLS - 1);
+                const drow = coordInput("far end row (0.." + (ROWS - 1) + ")",
+                                        String(g.dest[1]), ROWS - 1);
+                const chan = coordInput("channel (0 = nothing stops it)",
+                                        g.chan ? String(g.chan) : "", 7);
+                const speed = coordInput("speed in pixels per second",
+                                         String(g.speed), PLAT_SPEED_MAX);
+
+                function commit() {
+                    const c = parseCoord(dcol.value), r = parseCoord(drow.value);
+                    const ch = parseCoord(chan.value), sp = parseCoord(speed.value);
+                    setPlatValue(i,
+                        [c === null ? g.col : c, r === null ? g.row : r],
+                        (ch === null || ch < 0) ? 0 : (ch & 7),
+                        sp === null ? PLAT_SPEED
+                                    : Math.min(Math.max(sp, 1), PLAT_SPEED_MAX));
+                }
+                for (const el of [dcol, drow, chan, speed])
+                    el.addEventListener("change", commit);
+
+                const pick = document.createElement("button");
+                pick.type = "button";
+                pick.className = "pick";
+                const picking = pickKind === "plat" && pickIndex === i;
+                pick.textContent = picking ? "Cancel" : "Set";
+                pick.title = "Click on the grid to pick the far end (Esc cancels)";
+                pick.addEventListener("click", function () {
+                    if (picking) cancelPick(); else startPick("plat", i);
+                });
+
+                row.append(tag, pos, dcol, drow, pick,
+                           document.createTextNode("ch"), chan,
+                           document.createTextNode("px/s"), speed);
+                platListEl.appendChild(row);
+            });
+        }
+
         function renderTelePanel() {
             teleListEl.textContent = "";
             if (!teleGroups.length) {
@@ -1595,6 +1735,13 @@
             pickKind = kind;
             pickIndex = index;
             svg.classList.add("picking");
+            if (kind === "plat") {
+                const g = platGroups[index];
+                setStatus("Pick the far end of platform #" + (index + 1) +
+                    " (col " + g.col + " row " + g.row + "). Esc to cancel.", "warn");
+                renderPlatPanel();
+                return;
+            }
             if (kind === "tp") {
                 teleHighlight = index;
                 const g = teleGroups[index];
@@ -1617,7 +1764,12 @@
             const was = pickKind;
             pickKind = null;
             pickIndex = null;
-            if (was === "tp") teleHighlight = null; else exitHighlight = null;
+            if (was === "tp") teleHighlight = null;
+            else if (was === "exit") exitHighlight = null;
+            svg.classList.remove("picking");
+            if (!quiet) setStatus("Cell selection cancelled.", "info");
+            renderPlatPanel();
+            if (was === "plat") { renderTelePanel(); renderExitPanel(); return; }
             svg.classList.remove("picking");
             if (!quiet) setStatus("Cell selection cancelled.", "info");
             renderTelePanel();
@@ -1695,7 +1847,7 @@
                 rooms: new Map(exitRooms), two: new Map(exitTwo),
                 arrive: new Map(exitArrive), arriveG: new Map(exitArriveG),
                 tele: new Map(teleDests), attrs: new Map(attrVals),
-                times: new Map(turretTimes),
+                times: new Map(turretTimes), plats: new Map(platVals),
                 gravity: startGravity,
             };
         }
@@ -1709,6 +1861,7 @@
             teleDests = new Map(s.tele);
             attrVals = new Map(s.attrs);
             turretTimes = new Map(s.times);
+            platVals = new Map(s.plats);
             startGravity = s.gravity;
             gravSel.value = String(startGravity);
             renderGravHint();
@@ -1796,6 +1949,24 @@
             teleDests = moveMap(teleDests, true);
             attrVals = moveMap(attrVals, false);
             turretTimes = moveMap(turretTimes, false);
+            // Η ΤΙΜΗ ΤΗΣ ΠΛΑΤΦΟΡΜΑΣ ΕΙΝΑΙ ΚΑΙ ΣΥΝΤΕΤΑΓΜΕΝΗ: τα δύο πρώτα
+            // πεδία είναι το δεύτερο άκρο της διαδρομής, οπότε πρέπει να
+            // μετακινηθεί μαζί της — αλλιώς η μετακίνηση αλλάζει τη διαδρομή.
+            platVals = movePlat(platVals);
+
+            // Η πλατφόρμα κουβαλά ΣΥΝΤΕΤΑΓΜΕΝΗ μέσα στην τιμή της.
+            function movePlat(m) {
+                const out = new Map();
+                for (const [k, v] of m) {
+                    const [c, r] = k.split(",").map(Number);
+                    const inside = selInside(c, r);
+                    const key = inside ? (c + dx) + "," + (r + dy) : k;
+                    out.set(key, selInside(v[0], v[1])
+                        ? [v[0] + dx, v[1] + dy, v[2], v[3]] : v);
+                }
+                return out;
+            }
+            platVals = movePlat(platVals);
 
             sel = { c0: sel.c0 + dx, r0: sel.r0 + dy,
                     c1: sel.c1 + dx, r1: sel.r1 + dy };
@@ -1858,6 +2029,15 @@
                             pairValue && v ? [v[0] + dx, v[1] + dy] : v);
                 return out;
             };
+            const shiftPlat = m => {
+                const out = new Map();
+                for (const [k, v] of m) {
+                    const [c, r] = k.split(",").map(Number);
+                    out.set((c + dx) + "," + (r + dy),
+                            [v[0] + dx, v[1] + dy, v[2], v[3]]);
+                }
+                return out;
+            };
             exitRooms = shiftMap(exitRooms, false);
             exitTwo = shiftMap(exitTwo, false);
             exitArrive = shiftMap(exitArrive, true);
@@ -1865,6 +2045,7 @@
             teleDests = shiftMap(teleDests, true);
             attrVals = shiftMap(attrVals, false);
             turretTimes = shiftMap(turretTimes, false);
+            platVals = shiftPlat(platVals);
 
             dirty = true;
             // drawAll και ΟΧΙ refreshSource: το δεύτερο ενημερώνει μόνο το
@@ -1974,7 +2155,12 @@
                 const kind = pickKind, i = pickIndex;
                 cancelPick(true);
                 // Κράτα το βέλος ορατό αμέσως μετά, ως επιβεβαίωση της σύνδεσης.
-                if (kind === "tp") {
+                if (kind === "plat") {
+                    const g = platGroups[i];
+                    setPlatValue(i, [p.c, p.r], g.chan, g.speed);
+                    setStatus("Platform #" + (i + 1) + " travels to col " +
+                        p.c + " row " + p.r + ".", "ok");
+                } else if (kind === "tp") {
                     setGroupDest(i, [p.c, p.r]);
                     teleHighlight = i;
                     renderTeleArrow();
@@ -2204,6 +2390,12 @@
             });
             // Ο πυργίσκος έρχεται σε δική του λίστα, γιατί κουβαλά τρεις
             // αριθμούς. Το κανάλι μπαίνει στον ΙΔΙΟ πίνακα με όλα τα άλλα.
+            platVals = new Map();
+            (dto.platforms || []).forEach(function (p) {
+                platVals.set(cellKey(p.col, p.row),
+                             [p.destCol, p.destRow, p.channel || 0,
+                              p.speed || PLAT_SPEED]);
+            });
             turretTimes = new Map();
             (dto.turrets || []).forEach(function (t) {
                 attrVals.set(attrKey("turret", t.col, t.row), t.channel || 0);
@@ -2328,6 +2520,13 @@
                     }))),
                 // ΕΞΩ ΑΠΟ ΤΑ attrs, γιατί η γραμμή του πυργίσκου έχει τρεις
                 // αριθμούς και δικό της σχήμα. Ο server τη γράφει ανά κελί.
+                // Μία εγγραφή ανά ΟΜΑΔΑ πλατφόρμας· ο server παραλείπει όσες
+                // δεν δηλώνουν τίποτα πέρα από τις προεπιλογές.
+                platforms: platGroups.map(g => ({
+                    col: g.col, row: g.row,
+                    destCol: g.dest[0], destRow: g.dest[1],
+                    channel: g.chan, speed: g.speed, cells: g.cells.length,
+                })),
                 turrets: WIRING.filter(w => w.times).flatMap(w =>
                     (attrGroups.get(w.kind) || []).map(g => ({
                         col: g.col, row: g.row, channel: g.value || 0,

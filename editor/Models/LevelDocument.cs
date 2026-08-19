@@ -322,6 +322,32 @@ public sealed class LevelDocument
         }
     }
 
+    // ===================== Κινούμενες πλατφόρμες =====================
+
+    /// <summary>Οι ομάδες κελιών πλατφόρμας, σε σειρά σάρωσης κατά γραμμές.</summary>
+    public List<CellGroup> PlatformGroups() => PlatformGraph.FindGroups(Rows);
+
+    /// <summary>Οι δηλώσεις «plat …» της ουράς.</summary>
+    public List<PlatformLink> PlatformLinks() => PlatformGraph.ParseLines(Footer);
+
+    /// <summary>
+    /// Ξαναγράφει τις γραμμές «plat». Μία ανά ΟΜΑΔΑ — το μέγεθος βγαίνει από το
+    /// πλέγμα — και μόνο για όσες δηλώνουν κάτι πέρα από τις προεπιλογές.
+    /// Ό,τι δεν πέφτει πάνω σε ομάδα πετιέται, όπως και μια ορφανή «exit».
+    /// </summary>
+    public void SetPlatformLinks(IEnumerable<PlatformLink> links)
+    {
+        Footer.RemoveAll(PlatformGraph.IsPlatformLine);
+        var anchors = PlatformGroups().Select(g => (g.Col, g.Row)).ToHashSet();
+        foreach (var link in links)
+        {
+            if (!anchors.Contains((link.Col, link.Row))) continue;
+            var v = PlatformGraph.Clamp(link);
+            if (PlatformGraph.IsDefault(v)) continue;
+            Footer.Add(PlatformGraph.FormatLine(v));
+        }
+    }
+
     /// <summary>
     /// Επικύρωση περιεχομένου (πέρα από τη μορφή): δείκτες εκκίνησης και έξοδοι.
     ///
@@ -384,6 +410,7 @@ public sealed class LevelDocument
 
         ValidateTeleports(errors, warnings);
         ValidateTurrets(warnings);
+        ValidatePlatforms(errors, warnings);
         return new ValidationReport(errors, warnings);
     }
 
@@ -448,6 +475,87 @@ public sealed class LevelDocument
         {
             warnings.Add($"The declaration \"{TurretGraph.FormatLine(link)}\" does not " +
                          "match a turret on the grid and was ignored.");
+        }
+    }
+
+    /// <summary>
+    /// Επικύρωση των κινούμενων πλατφορμών.
+    ///
+    /// Η ΛΟΞΗ ΔΙΑΔΡΟΜΗ ΕΙΝΑΙ ΣΦΑΛΜΑ, όχι προειδοποίηση: το tools/physics.py την
+    /// απορρίπτει με εξαίρεση, δηλαδή σπάει το χτίσιμο της δισκέτας. Καλύτερα
+    /// να το πει ο editor τη στιγμή που τη φτιάχνεις.
+    /// </summary>
+    private void ValidatePlatforms(List<string> errors, List<string> warnings)
+    {
+        var groups = PlatformGroups();
+        var anchors = groups.Select(g => (g.Col, g.Row)).ToHashSet();
+        var byAnchor = PlatformLinks()
+            .GroupBy(l => (l.Col, l.Row))
+            .ToDictionary(g => g.Key, g => g.Last());
+
+        foreach (var g in groups)
+        {
+            var where = $"col {g.Col}, row {g.Row}";
+            if (!byAnchor.TryGetValue((g.Col, g.Row), out var link))
+            {
+                warnings.Add($"The moving platform at {where} has no declared " +
+                             "path and will stay where it is.");
+                continue;
+            }
+
+            if (!PlatformGraph.PathOk(link))
+            {
+                errors.Add($"The platform at {where} travels to " +
+                           $"({link.DestCol},{link.DestRow}), which is neither " +
+                           "straight nor a 45-degree diagonal. The game refuses " +
+                           "to build such a path.");
+            }
+
+            if (link.DestCol < 0 || link.DestCol >= TileCatalog.Cols ||
+                link.DestRow < 0 || link.DestRow >= TileCatalog.Rows)
+            {
+                errors.Add($"The platform at {where} travels to " +
+                           $"({link.DestCol},{link.DestRow}), outside the grid.");
+            }
+        }
+
+        // ΤΙ ΕΠΙΤΡΕΠΕΤΑΙ ΝΑ ΚΑΘΕΤΑΙ ΠΑΝΩ ΤΗΣ: μόνο διακόπτης, και μόνο ένας.
+        //
+        // Ο διακόπτης ΤΑΞΙΔΕΥΕΙ μαζί της — φεύγει από το πλέγμα και γίνεται
+        // επιβάτης της. Κάθε άλλο αντικείμενο έχει το δικό του μονοπάτι
+        // αλληλεπίδρασης κλειδωμένο σε κελί (μάζεμα, ζημιά, πύλη,
+        // τηλεμεταφορά) και θα έμενε καρφωμένο εκεί ενώ η πλατφόρμα φεύγει από
+        // κάτω του — δηλαδή θα κρεμόταν στον αέρα. Καλύτερα να το πει ο editor
+        // παρά να το ανακαλύψει ο παίκτης.
+        foreach (var g in groups)
+        {
+            if (g.Row == 0) continue;
+            var above = g.Cells.Select(c => c.Col).Distinct()
+                .Where(c => c >= g.Col && c < g.Col + 1 + g.Cells.Max(x => x.Col) - g.Col)
+                .Select(c => (Col: c, Ch: Rows[g.Row - 1][c]))
+                .Where(x => x.Ch != TileCatalog.EmptySymbol)
+                .ToList();
+            var riders = above.Where(x => TileCatalog.IsSwitch(x.Ch)).ToList();
+            foreach (var x in above.Except(riders))
+            {
+                errors.Add($"The cell at col {x.Col}, row {g.Row - 1} sits on top " +
+                           $"of a moving platform. Only a switch can ride one — " +
+                           "anything else would be left hanging in mid-air when " +
+                           "the platform moves away.");
+            }
+
+            if (riders.Count > 1)
+            {
+                errors.Add($"The platform at col {g.Col}, row {g.Row} carries " +
+                           $"{riders.Count} switches. It can carry one.");
+            }
+        }
+
+        foreach (var link in PlatformLinks()
+                 .Where(l => !anchors.Contains((l.Col, l.Row))))
+        {
+            warnings.Add($"The declaration \"{PlatformGraph.FormatLine(link)}\" " +
+                         "does not match a platform on the grid and was ignored.");
         }
     }
 

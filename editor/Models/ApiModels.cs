@@ -42,6 +42,15 @@ public sealed record AttrDto(string Kind, int Col, int Row, int Value, int Cells
 public sealed record TurretDto(int Col, int Row, int Channel, int Reload, int Auto,
     int Cells);
 
+/// <summary>
+/// Μία κινούμενη πλατφόρμα. Το μέγεθος δεν ταξιδεύει — βγαίνει από το πλέγμα.
+/// </summary>
+/// <param name="DestCol">Το δεύτερο άκρο της διαδρομής, σε κελιά.</param>
+/// <param name="Channel">Κανάλι διακόπτη 0..7· 0 = δεν τη σταματά κανείς.</param>
+/// <param name="Speed">Pixel ανά δευτερόλεπτο.</param>
+public sealed record PlatformDto(int Col, int Row, int DestCol, int DestRow,
+    int Channel, int Speed, int Cells);
+
 /// <summary>Απάντηση φόρτωσης/δημιουργίας πίστας προς τον browser.</summary>
 public sealed record LevelDto(
     string Name,
@@ -53,7 +62,8 @@ public sealed record LevelDto(
     int? Room,
     int Gravity,
     IReadOnlyList<AttrDto> Attrs,
-    IReadOnlyList<TurretDto> Turrets);
+    IReadOnlyList<TurretDto> Turrets,
+    IReadOnlyList<PlatformDto> Platforms);
 
 /// <summary>
 /// Αίτημα αποθήκευσης από τον browser.
@@ -78,6 +88,9 @@ public sealed class SaveLevelRequest
 
     /// <summary>Οι πυργίσκοι — μία εγγραφή ανά ομάδα κελιών.</summary>
     public List<TurretDto> Turrets { get; set; } = [];
+
+    /// <summary>Οι κινούμενες πλατφόρμες — μία εγγραφή ανά ομάδα κελιών.</summary>
+    public List<PlatformDto> Platforms { get; set; } = [];
 }
 
 /// <summary>Ενιαία μορφή απάντησης σφάλματος (ελληνικό μήνυμα).</summary>

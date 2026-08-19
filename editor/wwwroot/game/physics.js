@@ -42,7 +42,7 @@
   for (const k in OPEN_OF) SHUT_OF[OPEN_OF[k]] = +k;
 
   class Room {
-    constructor(cells, teleports, attrs, turretArg) {
+    constructor(cells, teleports, attrs, turretArg, platSpec) {
       this.cells = cells.map(r => r.slice());
       this.probeG = 0;
       // Ιδιότητα ανά κελί: κανάλι για διακόπτες/πόρτες, ταυτότητα για
@@ -52,6 +52,81 @@
       this.teleports = teleports || {};   // "c,r" -> [dc, dr]
       // Πυργίσκοι: "c,r" -> [φόρτιση, αυτόματο διάστημα] σε δευτερόλεπτα.
       this.turretArg = turretArg || {};
+      this.buildPlatforms(platSpec || {});
+    }
+
+    /// Οι κινούμενες πλατφόρμες: από κελιά του πλέγματος σε πίνακα.
+    /// Μεταγραφή του _build_platforms του tools/physics.py.
+    ///
+    /// ΤΟ ΜΟΝΟ ΑΝΤΙΚΕΙΜΕΝΟ ΠΟΥ ΔΕΝ ΕΙΝΑΙ ΚΕΛΙ: κινείται ανά pixel, οπότε δεν
+    /// χωράει στο πλέγμα. Τα κελιά του σβήνονται — δείχνουν πού ΞΕΚΙΝΑΕΙ.
+    buildPlatforms(spec) {
+      this.platforms = [];
+      const seen = new Set();
+      for (let r = 0; r < D.ROWS; r++)
+        for (let c = 0; c < D.COLS; c++) {
+          const t = this.cells[r][c];
+          if ((t !== T.PLATFORM && t !== T.PLATFORM_OFF) || seen.has(c + "," + r))
+            continue;
+          // Γειτονικά κελιά του ΙΔΙΟΥ τύπου είναι ΜΙΑ πλατφόρμα, όπως μια
+          // ψηλή πύλη είναι μία πύλη.
+          const grp = [], st = [[c, r]];
+          seen.add(c + "," + r);
+          while (st.length) {
+            const [cc, rr] = st.pop();
+            grp.push([cc, rr]);
+            for (const [nc, nr] of [[cc+1,rr],[cc-1,rr],[cc,rr+1],[cc,rr-1]])
+              if (nc >= 0 && nr >= 0 && nc < D.COLS && nr < D.ROWS
+                  && !seen.has(nc + "," + nr) && this.cells[nr][nc] === t) {
+                seen.add(nc + "," + nr); st.push([nc, nr]);
+              }
+          }
+          const cs = grp.map(g => g[0]), rs = grp.map(g => g[1]);
+          const c0 = Math.min(...cs), r0 = Math.min(...rs);
+          const w = Math.max(...cs) - c0 + 1, h = Math.max(...rs) - r0 + 1;
+          for (const [cc, rr] of grp) this.cells[rr][cc] = T.EMPTY;
+          const sp = spec[c0 + "," + r0] || [c0, r0, 0, K.PLAT_SPEED];
+          this.platforms.push({
+            x: c0 * D.CELL, y: D.GRID_Y0 + r0 * D.CELL,
+            w: w * D.CELL, h: h * D.CELL,
+            ax: c0 * D.CELL, ay: D.GRID_Y0 + r0 * D.CELL,
+            bx: sp[0] * D.CELL, by: D.GRID_Y0 + sp[1] * D.CELL,
+            chan: sp[2], speed: Math.min(sp[3], K.PLAT_SPEED_MAX),
+            moving: t === T.PLATFORM, dir: 1, acc: 0, wait: 0,
+            // Ο επιβάτης: διακόπτης ζωγραφισμένος ΠΑΝΩ της, που ταξιδεύει μαζί.
+            rider: null, rdx: 0, rchan: 0,
+          });
+          this.takeRider(this.platforms[this.platforms.length - 1], c0, r0, w);
+        }
+    }
+
+    /// Διακόπτης ακριβώς ΠΑΝΩ από την πλατφόρμα γίνεται επιβάτης της.
+    /// Καμία δήλωση: η σχέση βγαίνει από τη ΓΕΩΜΕΤΡΙΑ, όπως στο physics.py.
+    takeRider(p, c0, r0, w) {
+      if (r0 === 0) return;
+      for (let c = c0; c < c0 + w; c++) {
+        const t = this.cells[r0 - 1][c];
+        if (!(D.PROPS[t] & D.F.SWITCH)) continue;
+        p.rider = t;
+        p.rdx = (c - c0) * D.CELL;
+        p.rchan = (this.attrs[c + "," + (r0 - 1)] || 0) & (K.ATTR_MAX - 1);
+        this.cells[r0 - 1][c] = T.EMPTY;
+        return;                 // ένας επιβάτης· ο editor δεν αφήνει δεύτερο
+      }
+    }
+
+    /// Το ορθογώνιο του επιβάτη σε pixel, ή null.
+    riderBox(p) {
+      return p.rider === null ? null
+           : [p.x + p.rdx, p.y - D.CELL, D.CELL, D.CELL];
+    }
+
+    /// Πατάει το pixel (px,py) πάνω σε πλατφόρμα;
+    platAt(px, py) {
+      for (const p of this.platforms)
+        if (px >= p.x && px < p.x + p.w && py >= p.y && py < p.y + p.h)
+          return true;
+      return false;
     }
     // ΜΟΝΟ τα χαμηλά 3 bits: το bit 3 είναι η σημαία «ανοίγει μόνη της».
     attr(c, r) { return (this.attrs[c + "," + r] || 0) & 7; }
@@ -100,6 +175,11 @@
       return this.turrets;
     }
     solidAt(px, py) {
+      // ΠΡΩΤΑ ΟΙ ΠΛΑΤΦΟΡΜΕΣ, ΚΑΙ ΕΔΩ ΜΕΣΑ: είναι το μόνο υλικό εκτός πλέγματος,
+      // και μπαίνοντας στο solidAt το βλέπουν δωρεάν ήρωας, κιβώτια και βέλη.
+      // ΜΟΝΟΔΡΟΜΗ: στερεή μόνο από πάνω, με τον κανόνα των μονόδρομων.
+      if (this.platforms.length && this.platAt(px, py))
+        return (K.PLAT_FACING + 4) % 8 === this.probeG;
       py -= D.GRID_Y0;
       if (py < 0) return true;
       const t = this.cell(Math.floor(px / D.CELL), Math.floor(py / D.CELL));
@@ -119,6 +199,8 @@
       // ΕΝΑΣ ΜΕΤΡΗΤΗΣ ΑΝΑ ΤΑΥΤΟΤΗΤΑ: το κλειδί 3 ανοίγει μόνο την κλειδαριά 3.
       this.keys = new Array(K.ATTR_MAX).fill(0);
       this.spikeTick = 0; this.prevCell = null; this.prevBody = null;
+      // Ο επιβάτης-διακόπτης δεν είναι κελί: δική του ΑΚΜΗ.
+      this.prevRider = null;
       this.plateOn = {};                // κανάλι -> πατημένο; (ΑΚΜΗ)
       // --- πυργίσκοι, μεταγραφή του tools/physics.py ---
       // Το ρολόι είναι σε VSYNC και όχι σε ενημερώσεις: μια ενημέρωση κοστίζει
@@ -384,6 +466,27 @@
         this.toggleTargets(this.room.attr(col, row));
       }
       this.prevBody = col + "," + row;
+      this.touchRider();
+    }
+
+    /// Ο διακόπτης που ταξιδεύει πάνω στην πλατφόρμα. Ξεχωριστός έλεγχος:
+    /// ο παραπάνω κοιτάζει το ΚΕΛΙ του σώματος και ο επιβάτης δεν είναι κελί —
+    /// έφυγε από το πλέγμα ώστε να μπορεί να κινείται ανά pixel μαζί της.
+    touchRider() {
+      let on = null;
+      for (let i = 0; i < this.room.platforms.length; i++) {
+        const b = this.room.riderBox(this.room.platforms[i]);
+        if (b && this.x >= b[0] && this.x < b[0] + b[2]
+              && this.y >= b[1] && this.y < b[1] + b[3]) { on = i; break; }
+      }
+      if (on !== null && on !== this.prevRider) {
+        const p = this.room.platforms[on];
+        if ((D.FACING[p.rider] + 4) % 8 === this.g) {
+          p.rider = D.SWITCH_FLIP[p.rider];
+          this.toggleTargets(p.rchan);
+        }
+      }
+      this.prevRider = on;
 
       // ΑΥΤΟΜΑΤΗ ΚΛΕΙΔΑΡΙΑ: ανοίγει μόλις την πατήσεις με το κλειδί της.
       const asc = this.supportCell();
@@ -496,6 +599,58 @@
       return false;
     }
 
+    /// Πατάει ο ήρωας ΑΥΤΗ την πλατφόρμα; Ρωτιέται ΠΡΙΝ κουνηθεί.
+    /// Βάθος FEET_B+2, όσο ανέχεται και το stable(): ο ήρωας ισορροπεί ως δύο
+    /// pixel πάνω από το έδαφος, και με στενότερη ανίχνευση η πλατφόρμα
+    /// έφευγε από κάτω του ενώ φαινόταν να στέκεται πάνω της.
+    platRiding(p) {
+      // ΜΟΝΟ ΜΕ ΤΗ ΒΑΡΥΤΗΤΑ ΠΟΥ ΤΗΝ ΚΑΝΕΙ ΣΤΕΡΕΗ: αλλιώς περνάς από μέσα της
+      // και η «μεταφορά» θα σε έσερνε πλάγια όσο τη διασχίζεις.
+      if ((K.PLAT_FACING + 4) % 8 !== this.g) return false;
+      for (const a of [-K.FOOT_A, 0, K.FOOT_A])
+        for (let k = K.FEET_B; k <= K.FEET_B + 2; k++) {
+          const [dx, dy] = off(this.g, a, k);
+          const px = this.x + dx, py = this.y + dy;
+          if (px >= p.x && px < p.x + p.w && py >= p.y && py < p.y + p.h)
+            return true;
+        }
+      return false;
+    }
+
+    /// Ένα βήμα κίνησης για κάθε πλατφόρμα, σε pixel.
+    /// Το ρολόι είναι σε VSYNC και όχι σε περάσματα: ένα πέρασμα κοστίζει 3 ως
+    /// 7, οπότε πλατφόρμα «ανά πέρασμα» θα επιτάχυνε όποτε τρέχει ο παίκτης.
+    platStep(vsyncs) {
+      for (const p of this.room.platforms) {
+        if (!p.moving) continue;
+        const sx = Math.sign(p.bx - p.ax), sy = Math.sign(p.by - p.ay);
+        if (!sx && !sy) continue;           // αδήλωτη: δεν πάει πουθενά
+        // Σταματημένη στο άκρο: μετράει ο χρόνος, όχι τα περάσματα.
+        if (p.wait > 0) { p.wait = Math.max(0, p.wait - vsyncs); continue; }
+        p.acc += p.speed * vsyncs;
+        while (p.acc >= 50) {               // 50 vsync = ένα δευτερόλεπτο
+          p.acc -= 50;
+          this.platMove(p, sx * p.dir, sy * p.dir);
+          if (p.wait) { p.acc = 0; break; } // έφτασε στο άκρο μέσα στο βήμα
+        }
+      }
+    }
+
+    /// Ένα pixel, μαζί με ό,τι στέκεται πάνω της.
+    platMove(p, dx, dy) {
+      const riding = this.platRiding(p);
+      p.x += dx; p.y += dy;
+      if (riding) {
+        // ΤΟΝ ΚΟΥΒΑΛΑΕΙ, ΑΛΛΑ ΔΕΝ ΤΟΝ ΧΩΝΕΙ ΣΕ ΤΟΙΧΟ: αν η νέα θέση είναι μέσα
+        // σε υλικό, η πλατφόρμα γλιστράει από κάτω του.
+        const ox = this.x, oy = this.y;
+        this.x += dx; this.y += dy;
+        if (this.at(0, 0) || this.at(0, -4)) { this.x = ox; this.y = oy; }
+      }
+      if (p.x === p.bx && p.y === p.by) { p.dir = -1; p.wait = K.PLAT_PAUSE * 50; }
+      else if (p.x === p.ax && p.y === p.ay) { p.dir = 1; p.wait = K.PLAT_PAUSE * 50; }
+    }
+
     turretStep() {
       if (this.arrows.length >= K.TURRET_MAX) return;
       for (const [c, r] of this.room.turretList()) {
@@ -560,6 +715,16 @@
       // ΕΝΑΣ ήχος ανά ενέργεια, όχι ένας ανά στόχο: τέσσερις πύλες στο ίδιο
       // κανάλι θα έδιναν ριπή από τέσσερα «άνοιξε».
       if (changed) this.sfx.push("gate");
+      this.platTargets(channel, () => !opened);
+    }
+
+    /// Οι πλατφόρμες του καναλιού, από τον ΠΙΝΑΚΑ και όχι από το πλέγμα: η
+    /// πλατφόρμα φεύγει από το κελί της με το πρώτο της βήμα, οπότε διακόπτης
+    /// που σαρώνει κελιά θα τη σταματούσε μόνο στην αφετηρία της.
+    /// «Ανοιχτό» σημαίνει ΑΚΙΝΗΤΗ, όπως σβήνει πυργίσκο και τραβάει αγκάθια.
+    platTargets(channel, want) {
+      for (const p of this.room.platforms)
+        if (p.chan && p.chan === channel) p.moving = want(p.moving);
     }
 
     toggleTargets(channel) {
@@ -573,6 +738,7 @@
         changed = true;
       }
       if (changed) this.sfx.push("gate");
+      this.platTargets(channel, moving => !moving);
     }
     aheadCell() {
       const rs = D.RSTEP[this.g];
@@ -650,8 +816,12 @@
       walk = walk | 0;
       // Το κόστος αυτής της ενημέρωσης σε vsync, ΜΕ ΤΟΝ ΙΔΙΟ ΚΑΝΟΝΑ που
       // χρησιμοποιεί ο cpcClock του run.js. Από εδώ βγαίνει η φόρτιση.
-      this.clock += walk ? (run ? K.CPC_VSYNC_RUN : K.CPC_VSYNC_WALK)
-                         : K.CPC_VSYNC_IDLE;
+      const cost = walk ? (run ? K.CPC_VSYNC_RUN : K.CPC_VSYNC_WALK)
+                        : K.CPC_VSYNC_IDLE;
+      this.clock += cost;
+      // ΠΡΙΝ ΑΠΟ ΤΗ ΦΥΣΙΚΗ ΤΟΥ ΗΡΩΑ: η πλατφόρμα είναι το έδαφος. Αν κινιόταν
+      // μετά, το βήμα του θα κρινόταν πάνω στην περσινή της θέση.
+      this.platStep(cost);
       // ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται ΚΑΤΩ και μένει εκεί — νησίδα
       // «κανονικού» παιχνιδιού μέσα στο δωμάτιο.
       if (this.noflip() && this.g !== 0) { this.g = 0; this.state = "FALL"; }

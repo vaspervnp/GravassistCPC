@@ -178,8 +178,23 @@ def check_room_wiring(fail):
         return fail("η start() δεν φτιάχνει δωμάτιο;")
 
     missing = [p for p in params[1:] if p not in call.group(1)]
-    return fail(f"η start() του run.js δεν περνά: {', '.join(missing)}") \
-        if missing else None
+    if missing:
+        return fail(f"η start() του run.js δεν περνά: {', '.join(missing)}")
+
+    # ΚΑΙ Η ΛΙΣΤΑ ΤΩΝ ΚΑΛΩΔΙΩΜΕΝΩΝ ΤΥΠΩΝ ΑΠΟ ΤΟ ΜΟΝΤΕΛΟ.
+    #
+    # Ήταν γραμμένη με το χέρι στο run.js και δύο τύποι είχαν πέσει έξω: η
+    # ΑΝΟΙΓΜΕΝΗ πύλη και η ΞΕΚΛΕΙΔΩΤΗ κλειδαριά. Το κανάλι απλώνεται σε όλα τα
+    # κελιά της ομάδας, οπότε πύλη τριών κελιών ζωγραφισμένη ήδη ανοιχτή είχε
+    # κανάλι μόνο στο κελί που ονόμαζε η ουρά — ο διακόπτης έκλεινε το ένα
+    # κομμάτι και άφηνε τα άλλα δύο ανοιχτά. Οι κλειστές πύλες δούλευαν, γιατί
+    # ο τύπος GATE ήταν στη λίστα.
+    if "D.WIRED" not in run:
+        return fail("το run.js δεν απλώνει τα κανάλια από το D.WIRED του "
+                    "μοντέλου — χειρόγραφη λίστα ξεχνάει τύπους")
+    hand = re.findall(r"spreadKind\([^)]*TYPE_NAMES\.indexOf", run)
+    return fail(f"{len(hand)} χειρόγραφες κλήσεις spreadKind στο run.js") \
+        if hand else None
 
 
 def main():
