@@ -92,6 +92,29 @@ def load(t, rm):
     t.call("ROOM_LOAD", a=rm.number)
 
 
+TICK_STEP = 200
+
+
+def ticks(t, name, cap=4000):
+    """Πόσοι κύκλοι Z80 χρειάζονται ώσπου να κάνει RET η ρουτίνα.
+
+    Ο προσομοιωτής δεν λέει πόσους κατανάλωσε, μόνο σταματά όταν εξαντληθεί το
+    ticks_to_stop — οπότε τον τρέχουμε με μικρές δόσεις και μετράμε τις δόσεις.
+    Η ακρίβεια είναι TICK_STEP· για τη διαφορά «μισό καρέ ή τέσσερα» αρκεί.
+    """
+    from z80run import SENTINEL
+    t.m.sp = 0xBFF0 - 2
+    t.poke16(t.m.sp, SENTINEL)
+    t.m.pc = t.sym(name)
+    t.m.halted = False
+    n = 0
+    while not t.m.halted and n < cap:
+        t.m.ticks_to_stop = TICK_STEP
+        t.m.run()
+        n += 1
+    return n * TICK_STEP
+
+
 def rec(t, i=0):
     """Η εγγραφή της i-οστής πλατφόρμας ως λεξικό, με τα ονόματα του asm."""
     base = t.sym("PLAT_TAB") + i * t.sym("PL_SIZE")
@@ -196,7 +219,8 @@ def main():
     check("άλλο κανάλι δεν την αγγίζει", rec(t)["flg"] & 1 == 0)
     t.call("GATE_TOGGLE", a=5)
     check("κανάλι 5 ξανά -> ξεκίνησε", rec(t)["flg"] & 1 == 1)
-    t.call("PLAT_STEP")
+    for _ in range(4):          # το οριζόντιο βήμα είναι 4 pixel: τετραπλάσιο
+        t.call("PLAT_STEP")     # κατώφλι, άρα και τετραπλάσια αναμονή
     check("…και κουνήθηκε", rec(t)["x"] != x0, f"{rec(t)['x']} vs {x0}")
 
     print("--- ο επιβάτης-διακόπτης ταξιδεύει μαζί της")
@@ -335,29 +359,74 @@ def main():
           bad == 0, f"{bad} bytes διαφορά, x={rec(t)['x']}")
 
     print("--- …και βάφει το ΦΟΝΤΟ ΤΗΣ ΠΙΣΤΑΣ, όχι μαύρο")
-    # Ένα κελί τοίχου κάτω από τη λωρίδα: το σβήσιμο πρέπει να ξαναφέρει τον
-    # τοίχο, όχι κενό. Με draw_tile αυτό ερχόταν τζάμπα· με σβήσιμο ανά pixel
-    # είναι δική μας δουλειά.
+    # Το σβήσιμο γράφει ΤΟ BYTE ΤΟΥ ΠΛΑΚΙΔΙΟΥ που κάθεται από κάτω. Με το
+    # draw_tile αυτό ερχόταν τζάμπα· σε επίπεδο byte είναι δική μας δουλειά.
     col, row = 25, 15
     t.poke(t.sym("CELL_BUF") + row * P.COLS + col, bytes((P.SOLID,)))
-    px, py = col * P.CELL + 3, P.GRID_Y0 + row * P.CELL + 3
-    addr = 0xC000 + (py & 7) * 0x800 + (py >> 3) * 80 + (px >> 2)
-    t.m.memory[addr] = 0
-    t.call("PE_BG", a=py, bc=px)
-    check("πάνω σε τοίχο ξαναβάφει τον τοίχο", t.m.memory[addr] != 0,
-          f"#{t.m.memory[addr]:02X}")
+    y = P.GRID_Y0 + row * P.CELL + 3
+    tile = t.sym("TILE_GFX") + P.SOLID * 16 + (y % 8) * 2
+    for half in (0, 1):
+        t.call("PL_BGBYTE", bc=((col * 2 + half) << 8) | y)
+        want = t.peek(tile + half, 1)[0]
+        check(f"πάνω σε τοίχο, μισό {half}", t.m.a == want,
+              f"#{t.m.a:02X} vs #{want:02X}")
     t.poke(t.sym("CELL_BUF") + row * P.COLS + col, b"\x00")
-    t.m.memory[addr] = 0xFF
-    t.call("PE_BG", a=py, bc=px)
-    # ΜΟΝΟ ΤΑ ΔΥΟ BITS ΤΟΥ pixel: στο MODE 1 ένα byte κρατά τέσσερα pixel, και
-    # τα bits του pixel s κάθονται στα (3-s) και (7-s). Το υπόλοιπο byte είναι
-    # οι γείτονές του και δεν πρέπει να το αγγίξει.
-    slot = px & 3
-    mask = (1 << (3 - slot)) | (1 << (7 - slot))
-    got = t.m.memory[addr]
-    check("πάνω σε κενό σβήνει ΤΟ pixel", got & mask == 0, f"#{got:02X}")
-    check("…και αφήνει ήσυχους τους γείτονές του στο ίδιο byte",
-          got & ~mask & 0xFF == 0xFF & ~mask, f"#{got:02X}")
+    t.call("PB_FORGET")     # ο cache κρατά ΕΝΑ κελί· το παιχνίδι τον σβήνει
+    t.call("PL_BGBYTE", bc=((col * 2) << 8) | y)
+    check("πάνω σε κενό, κενό byte", t.m.a == 0, f"#{t.m.a:02X}")
+    t.call("PL_BGBYTE", bc=((col * 2) << 8) | 4)
+    check("στη ζώνη του HUD δεν διαβάζει πλακίδιο", t.m.a == 0, f"#{t.m.a:02X}")
+
+    # Η μάσκα: ποια bits του φόντου επιβιώνουν κάτω από ένα byte μελανιού.
+    for ink, want in ((0x00, 0xFF),     # όλο διάφανο -> όλο το φόντο
+                      (0xFF, 0x00),     # όλο μελάνι  -> τίποτα
+                      (0x80, 0x77),     # pen στο pixel 0 (πάνω επίπεδο)
+                      (0x08, 0x77)):    # …και στο κάτω: ίδιο pixel, ίδια μάσκα
+        t.call("PL_MASK", a=ink)
+        check(f"μάσκα του #{ink:02X}", t.m.a == want,
+              f"#{t.m.a:02X} vs #{want:02X}")
+
+    print("--- ένα κελί που ΑΛΛΑΞΕ φαίνεται αμέσως")
+    # Ο cache του pl_bgbyte κρατά ένα κελί ώστε ο επιβάτης να μη ψάχνει οκτώ
+    # φορές το ίδιο. Μια πύλη που ανοίγει από κάτω του αλλάζει τον τύπο — χωρίς
+    # ακύρωση ο επιβάτης θα συντίθετο με το ΠΑΛΙΟ πλακίδιο, και κανένα τεστ δεν
+    # το έπιανε ώσπου μπήκε αυτό.
+    rm = model([(10, 15, "M"), (11, 15, "M"), (10, 14, "s")],
+               "plat 10 15 20 15 0 24\nsw 10 14 6\n")
+    load(t, rm)
+    r = rec(t)
+    band = screen_band(t, r["x"] + r["rdx"], r["y"] - P.CELL)
+    t.call("PLAT_DRAW")                 # γεμίζει τον cache με το κενό κελί
+    before = band_bytes(t, band)
+    t.poke(t.sym("CELL_BUF") + 14 * P.COLS + 10, bytes((P.SOLID,)))
+    band_clear(t, band)
+    t.call("PLAT_DRAW")
+    after = band_bytes(t, band)
+    check("τοίχος κάτω από τον επιβάτη -> περισσότερο μελάνι",
+          after > before, f"{before} -> {after} bytes")
+    t.poke(t.sym("CELL_BUF") + 14 * P.COLS + 10, b"\x00")
+
+    print("--- ΤΟ ΚΟΣΤΟΣ: πρέπει να τελειώνει πριν τη δέσμη")
+    # ΑΥΤΟΣ ΕΙΝΑΙ Ο ΦΥΛΑΚΑΣ ΤΟΥ ΤΡΕΜΟΠΑΙΓΜΑΤΟΣ, και ο μόνος έλεγχος εδώ που
+    # μετράει χρόνο. Η σχεδίαση ανά pixel κόστιζε 150.000 κύκλους και το
+    # σβήσιμο 175.000 — μαζί τέσσερα καρέ των 50 Hz, οπότε η δέσμη έβρισκε την
+    # πλατφόρμα πάντα μισοσχεδιασμένη. Κανένα άλλο τεστ δεν το έπιανε αυτό:
+    # η οθόνη έβγαινε σωστή, απλώς πολύ αργά.
+    rm = model([(10, 15, "M"), (11, 15, "M"), (12, 15, "M"), (10, 14, "s")],
+               "plat 10 15 20 15 0 24\nsw 10 14 6\n")
+    load(t, rm)
+    x0 = rec(t)["x"]
+    while rec(t)["x"] == x0:            # να έχει όντως κουνηθεί
+        t.call("PLAT_SAVE")
+        t.call("PLAT_STEP")
+    budget = 4_000_000 // 50            # ένα καρέ 50 Hz σε κύκλους Z80
+    total = 0
+    for r in ("PLAT_ERASE", "PLAT_DRAW"):
+        n = ticks(t, r)
+        total += n
+        print(f"      {r}: ~{n} κύκλοι = {n / 4000:.2f} ms")
+    check("σβήσιμο + σχεδίαση χωράνε σε ΜΙΣΟ καρέ", total < budget // 2,
+          f"{total} κύκλοι, {100 * total / budget:.0f}% ενός καρέ")
 
     print(f"\n{'ΟΛΑ ΚΑΛΑ' if not FAILS else 'ΑΠΕΤΥΧΑΝ: ' + ', '.join(FAILS)}")
     return 1 if FAILS else 0

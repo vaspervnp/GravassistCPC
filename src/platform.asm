@@ -448,10 +448,19 @@ ps_move:        ld   a,(ix+PL_SPD)
                 ld   (ix+PL_ACC),l
                 ld   (ix+PL_ACC+1),h
 
-                ; ...και ένα pixel ανά 300
+                ; ...και ένα ΒΗΜΑ ανά PLAT_TICK. Οριζόντια το βήμα είναι 4
+                ; pixel (ένα byte του MODE 1) και το κατώφλι τετραπλάσιο, ώστε
+                ; η ταχύτητα να βγαίνει η ίδια.
+                call ps_dir
+                ld   a,e
+                or   a
+                ld   hl,PLAT_TICK
+                jr   z,ps_thr
+                ld   hl,PLAT_TICK_X
+ps_thr:         ld   (pl_thr),hl
 ps_pix:         ld   l,(ix+PL_ACC)
                 ld   h,(ix+PL_ACC+1)
-                ld   de,300
+                ld   de,(pl_thr)
                 or   a
                 sbc  hl,de
                 ret  c                  ; λιγότερα από 300: τέλος
@@ -472,8 +481,18 @@ ps_pix:         ld   l,(ix+PL_ACC)
 ; ps_1px — ένα pixel, ΜΑΖΙ με ό,τι στέκεται πάνω της
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα εκτός IX
 ;---------------------------------------------------------------------
-ps_1px:         call ps_dir             ; D = dx, E = dy (προσημασμένα)
-                ld   (pl_dx),de
+ps_1px:         call ps_dir             ; E = dx, D = dy (προσημασμένα)
+                ld   a,e                ; οριζόντια συνιστώσα -> βήμα 4 pixel
+                or   a
+                jr   z,ps_1st
+                add  a,a
+                add  a,a
+                ld   e,a
+                ld   a,d
+                add  a,a
+                add  a,a
+                ld   d,a
+ps_1st:         ld   (pl_dx),de
                 call ps_riding          ; ΠΡΙΝ κουνηθεί: μετά το έδαφος έφυγε
                 ld   a,0
                 jr   nc,ps_nride
@@ -697,118 +716,123 @@ pr_a            db   0                  ; μετρητές του ps_riding
 pr_k            db   0
 
 ;---------------------------------------------------------------------
-; ΣΧΕΔΙΑΣΗ
+; ΣΧΕΔΙΑΣΗ — ΑΝΑ BYTE, ΟΧΙ ΑΝΑ PIXEL
 ;
-; ΑΝΑ PIXEL ΚΑΙ ΟΧΙ ΑΝΑ BYTE. Στο MODE 1 ένα byte κρατά τέσσερα pixel και το
-; draw_tile γράφει ΣΤΟΙΧΙΣΜΕΝΑ — η πλατφόρμα όμως στέκεται σε αυθαίρετο x, και
-; τα pixel της πέφτουν στη μέση των bytes. Η εναλλακτική ήταν να κινείται ανά
-; τέσσερα pixel· θα ήταν δέκα φορές φθηνότερη και θα έσπαγε τη συμφωνία με το
-; μοντέλο και τον browser, που κινούνται ανά ένα.
+; Η ΜΕΤΡΗΣΗ ΠΟΥ ΤΟ ΕΠΙΒΑΛΕ: με κίνηση ανά pixel η πλατφόρμα στεκόταν σε
+; αυθαίρετο x, τα pixel της έπεφταν στη μέση των bytes και το καθένα ήθελε
+; read-modify-write. Το plat_draw κόστιζε ~150.000 κύκλους και το plat_erase
+; ~175.000 — μαζί ΤΕΣΣΕΡΑ καρέ των 50 Hz ανά πέρασμα, δηλαδή η δέσμη την
+; προλάβαινε πάντα μισοσχεδιασμένη. Αυτό ήταν το τρεμόπαιγμα, και ΔΕΝ
+; διορθωνόταν με σειρά σχεδίασης: ήταν σκέτο κόστος.
+;
+; Με το x κλειδωμένο σε πολλαπλάσιο του 4 (PLAT_XSTEP, δες tools/physics.py) η
+; πλατφόρμα κάθεται σε όριο byte και γράφεται με ΟΛΟΚΛΗΡΑ bytes, όπως το
+; draw_tile. Το σώμα της είναι αδιαφανές, οπότε γράφεται σκέτο. Ο επιβάτης
+; είναι διάφανος και συντίθεται με το φόντο μέσω μάσκας.
 ;---------------------------------------------------------------------
 
 ;---------------------------------------------------------------------
-; pl_pen — το pen του pixel (D = u, E = v) του πλακιδίου τύπου A
-;
-;   Τα πλακίδια είναι πακεταρισμένα MODE 1: 2 bytes ανά γραμμή, 4 pixel ανά
-;   byte, τα δύο bits του pen μοιρασμένα στα δύο επίπεδα.
-; OUT: A = pen 0..3      ΑΛΛΟΙΩΝΕΙ: AF, BC, HL
+; pl_bcol — η στήλη byte της εγγραφής στο IX (x / 4)
+; OUT: A = στήλη 0..79   ΑΛΛΟΙΩΝΕΙ: AF, HL
 ;---------------------------------------------------------------------
-pl_pen:         ld   l,a                ; HL = tile_gfx + τύπος*16
+pl_bcol:        ld   l,(ix+PL_X)
+                ld   h,(ix+PL_X+1)
+                srl  h
+                rr   l
+                srl  l
+                ld   a,l
+                ret
+
+;---------------------------------------------------------------------
+; pl_bgbyte — το byte του ΦΟΝΤΟΥ (πλακίδιο της πίστας) σε μια θέση οθόνης
+;   IN:  B = στήλη byte, C = γραμμή σάρωσης
+;   OUT: A = το byte· 0 πάνω από το playfield (ζώνη HUD)
+;   ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL
+;---------------------------------------------------------------------
+pl_bgbyte:      ld   a,c
+                sub  LVL_Y0
+                jr   nc,pbg_in
+                xor  a                  ; στο HUD δεν υπάρχει πλακίδιο
+                ret
+pbg_in:         ld   c,a                ; C = y μέσα στο πλέγμα
+                and  7
+                add  a,a
+                ld   (pb_line),a        ; γραμμή μέσα στο πλακίδιο, x2 bytes
+                ld   a,b
+                and  1
+                ld   (pb_half),a        ; αριστερό ή δεξί μισό του πλακιδίου
+                srl  b                  ; στήλη byte -> στήλη κελιού
+                ld   a,c
+                srl  a
+                srl  a
+                srl  a
+                ld   c,b
+                ld   b,a                ; B = γραμμή, C = στήλη — έτσι τα θέλει
+                ; ΤΟ ΙΔΙΟ ΚΕΛΙ ΞΑΝΑ; Ο επιβάτης είναι δύο bytes επί οκτώ γραμμές
+                ; και σχεδόν όλα πέφτουν στο ίδιο κελί· η αναζήτηση κόστιζε τα
+                ; δύο τρίτα της σχεδίασης.
+                ld   a,(pb_cell)
+                cp   c
+                jr   nz,pbg_miss
+                ld   a,(pb_cell+1)
+                cp   b
+                jr   nz,pbg_miss
+                ld   hl,(pb_base)
+                jr   pbg_got
+pbg_miss:       ld   a,c
+                ld   (pb_cell),a
+                ld   a,b
+                ld   (pb_cell+1),a
+                call cell_rc            ; A = ο τύπος του κελιού
+                ld   l,a
                 ld   h,0
                 add  hl,hl
                 add  hl,hl
                 add  hl,hl
-                add  hl,hl
-                push de
-                ld   bc,tile_gfx
-                add  hl,bc
-                ld   a,e                ; + γραμμή*2
-                add  a,a
-                ld   c,a
-                ld   b,0
-                add  hl,bc
-                ld   a,d                ; + (u >= 4 ; δεύτερο byte)
-                cp   4
-                jr   c,plp_first
-                inc  hl
-                sub  4
-plp_first:       ld   c,a                ; C = θέση μέσα στο byte 0..3
+                add  hl,hl              ; τύπος * 16
+                ld   de,tile_gfx
+                add  hl,de
+                ld   (pb_base),hl
+pbg_got:
+                ld   a,(pb_line)
+                ld   e,a
+                ld   d,0
+                add  hl,de
+                ld   a,(pb_half)
+                ld   e,a
+                add  hl,de
                 ld   a,(hl)
-                pop  de
-                ; ΤΟ ΞΕΠΑΚΕΤΑΡΙΣΜΑ: ίδιο με του spr_unpack. Τα δύο bits ενός
-                ; pen κάθονται στα bits (3-c) και (7-c) του byte.
-                ld   b,c
-                inc  b
-plp_rot:         rlca
-                djnz plp_rot             ; φέρε το bit 7-c στη θέση 7... (c+1 φορές)
-                ld   c,a
-                and  #10                ; bit 4 = το ψηλό επίπεδο μετά τη στροφή
-                jr   z,plp_hi0
-                ld   a,2
-                jr   plp_lo
-plp_hi0:         xor  a
-plp_lo:          bit  0,c
-                ret  z
-                inc  a
                 ret
 
 ;---------------------------------------------------------------------
-; px_put — ένα pixel: BC = x (0..319), A = y, (pl_pen_v) = pen
-;   Έξω από την οθόνη αγνοείται σιωπηλά.
+; pl_mask — ποια bits του φόντου επιβιώνουν κάτω από ένα byte με μελάνι
+;
+;   ΣΤΟ MODE 1 ΤΑ ΔΥΟ BITS ΕΝΟΣ PEN ΕΙΝΑΙ ΧΩΡΙΣΤΑ: του pixel s κάθονται στα
+;   bits (3-s) και (7-s). Διάφανο σημαίνει pen 0, δηλαδή ΚΑΙ ΤΑ ΔΥΟ μηδέν —
+;   άρα ενώνουμε τα δύο επίπεδα σε ένα nibble, το απλώνουμε πάλι στα δύο, και
+;   παίρνουμε το συμπλήρωμα.
+; IN: A = byte μελανιού   OUT: A = μάσκα φόντου   ΑΛΛΟΙΩΝΕΙ: AF, C
+;---------------------------------------------------------------------
+pl_mask:        ld   c,a
+                rrca
+                rrca
+                rrca
+                rrca
+                or   c
+                and  #0F                ; ένα bit ανά pixel: «έχει μελάνι»
+                ld   c,a
+                rlca
+                rlca
+                rlca
+                rlca
+                or   c
+                cpl
+                ret
+
+;---------------------------------------------------------------------
+; plat_save — φωτογραφία των εγγραφών πριν το βήμα
+;   Το plat_erase τη χρειάζεται: όταν τρέχει, ο πίνακας δείχνει ήδη τη ΝΕΑ θέση.
 ; ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL
-;---------------------------------------------------------------------
-px_put:         cp   200
-                ret  nc
-                ld   d,a                ; D = y
-                ld   a,b
-                or   a
-                jr   z,px_ok
-                dec  a
-                ret  nz                 ; x >= 512
-                ld   a,c
-                cp   LVL_COLS*LVL_CELL-256
-                ret  nc                 ; x >= 320
-px_ok:          ld   a,c
-                and  3
-                ld   (px_slot),a
-                ld   h,b                ; στήλη byte = x >> 2
-                ld   l,c
-                srl  h
-                rr   l
-                srl  l
-                ld   c,l
-                ld   b,d
-                call scr_addr
-                push hl
-                ld   a,(px_slot)
-                ld   e,a
-                ld   d,0
-                ld   hl,spr_andtab
-                add  hl,de
-                ld   c,(hl)
-                ld   a,(pl_pen_v)       ; pixtab[pen*4 + slot]
-                add  a,a
-                add  a,a
-                ld   e,a
-                ld   a,(px_slot)
-                add  a,e
-                ld   e,a
-                ld   d,0
-                ld   hl,spr_pixtab
-                add  hl,de
-                ld   b,(hl)
-                pop  hl
-                ld   a,(hl)
-                and  c
-                or   b
-                ld   (hl),a
-                ret
-
-;---------------------------------------------------------------------
-; plat_save — φύλαξε ΠΟΥ ΕΙΝΑΙ ΤΩΡΑ, πριν κουνηθούν
-;   Ίδιος λόγος με το arrow_save: το σβήσιμο θέλει την ΠΑΛΙΑ θέση αλλά πρέπει
-;   να γίνει κολλητά στο νέο σχέδιο, αλλιώς η πλατφόρμα τρεμοπαίζει.
-; ΑΛΛΟΙΩΝΕΙ: BC, DE, HL
 ;---------------------------------------------------------------------
 plat_save:      ld   hl,plat_tab
                 ld   de,plat_old
@@ -817,21 +841,18 @@ plat_save:      ld   hl,plat_tab
                 ret
 
 ;---------------------------------------------------------------------
-; plat_erase — ΜΟΝΟ Η ΛΩΡΙΔΑ ΠΟΥ ΕΛΕΥΘΕΡΩΣΕ, όχι ολόκληρη η πλατφόρμα
+; plat_erase — τα bytes της ΠΑΛΙΑΣ θέσης που η νέα δεν θα ξαναγράψει
 ;
-;   ΓΙΑΤΙ ΟΧΙ ΟΛΟΚΛΗΡΗ: ανάμεσα στο σβήσιμο και τη σχεδίασή της μεσολαβεί το
-;   draw_hero. Με ολόκληρο σβήσιμο η πλατφόρμα έλειπε από την οθόνη όσο κρατά
-;   εκείνο, ΚΑΘΕ πέρασμα — αυτό ήταν το τρεμόπαιγμα. Δεν γίνεται να ζωγραφιστεί
-;   πριν από τον ήρωα: εκείνος συνθέτει το φόντο του από τα δεδομένα της ΠΙΣΤΑΣ,
-;   όπου η πλατφόρμα δεν υπάρχει, και θα την έσβηνε σε όλο του το ορθογώνιο.
-;   Μένει ο άλλος δρόμος — να μη σβηστεί ποτέ το σώμα της. Σβήνεται μόνο η
-;   λωρίδα που άφησε πίσω της (1 ως 2 pixel) και το υπόλοιπο ξαναγράφεται από
-;   πάνω του.
+;   ΜΟΝΟ ΑΥΤΑ: το σώμα της δεν σβήνεται ποτέ, γιατί ανάμεσα στο σβήσιμο και τη
+;   σχεδίαση μεσολαβεί το draw_hero — ό,τι λείπει εκεί, τρεμοπαίζει. Και δεν
+;   γίνεται να ζωγραφιστεί πριν από τον ήρωα: εκείνος συνθέτει το φόντο του από
+;   τα δεδομένα της ΠΙΣΤΑΣ, όπου η πλατφόρμα δεν υπάρχει.
 ;
-;   Σε ακίνητη πλατφόρμα δεν αγγίζει τίποτα: μηδέν λωρίδα, μηδέν κόστος.
+;   Ακίνητη πλατφόρμα με αμετάβλητο επιβάτη δεν κοστίζει τίποτα.
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-plat_erase:     ld   a,(plat_n)
+plat_erase:     call pb_forget
+                ld   a,(plat_n)
                 or   a
                 ret  z
                 ld   ix,plat_old
@@ -846,226 +867,199 @@ pe_lp:          push bc
                 djnz pe_lp
                 ret
 
-; --- μία πλατφόρμα: ό,τι είχε μελάνι και δεν θα το ξαναβάψει η νέα θέση
-;
-;   ΑΥΤΟ ΕΙΝΑΙ ΤΟ ΜΕΤΡΟ, όχι «η λωρίδα που ελευθέρωσε»: τα ΔΙΑΦΑΝΑ pixel της
-;   πλατφόρμας (η αραιή κάτω ακμή της, και σχεδόν όλο το κελί του επιβάτη) δεν
-;   ξαναγράφονται από τη σχεδίαση, οπότε το προηγούμενο μελάνι έμενε μέσα στο
-;   ΙΔΙΟ της το ορθογώνιο και μουτζούρωνε. Η λωρίδα δεν το έπιανε ποτέ.
-pe_one:         ld   l,(ix+PL_X)        ; --- η παλιά της θέση
-                ld   h,(ix+PL_X+1)
-                ld   (pe_ox),hl
+pe_one:         call pl_bcol            ; --- η παλιά θέση
+                ld   (pe_oc),a
                 ld   a,(ix+PL_Y)
                 ld   (pe_oy),a
                 ld   a,(ix+PL_W)
-                ld   (pe_w),a
+                srl  a
+                srl  a
+                ld   (pe_bw),a          ; πλάτος σε bytes
                 ld   a,(ix+PL_H)
-                ld   (pe_h),a
-                call pe_body
-                ld   (pe_ot),a
+                ld   (pe_bh),a
                 ld   a,(ix+PL_RID)
                 ld   (pe_or),a
                 ld   a,(ix+PL_RDX)
+                srl  a
+                srl  a
                 ld   (pe_ordx),a
 
                 push ix                 ; --- η ΙΔΙΑ θέση στον ζωντανό πίνακα
                 ld   bc,plat_tab-plat_old
                 add  ix,bc
-                ld   l,(ix+PL_X)
-                ld   h,(ix+PL_X+1)
-                ld   (pe_nx),hl
+                call pl_bcol
+                ld   (pe_nc),a
                 ld   a,(ix+PL_Y)
                 ld   (pe_ny),a
-                call pe_body
-                ld   (pe_nt),a
                 ld   a,(ix+PL_RID)
                 ld   (pe_nr),a
                 ld   a,(ix+PL_RDX)
+                srl  a
+                srl  a
                 ld   (pe_nrdx),a
                 pop  ix
 
-                ; ΑΚΙΝΗΤΗ ΚΑΙ ΙΔΙΑ: τίποτα να σβηστεί, μηδέν κόστος. Η μισή
-                ; ώρα της πλατφόρμας περνά έτσι — κινείται ένα pixel κάθε δύο
-                ; περάσματα περίπου.
-                ld   hl,(pe_ox)
-                ld   de,(pe_nx)
-                or   a
-                sbc  hl,de
-                jr   nz,pe_scan
+                ld   a,(pe_oc)          ; ίδια θέση; τότε τίποτα
+                ld   hl,pe_nc
+                cp   (hl)
+                jr   nz,pe_go
                 ld   a,(pe_oy)
                 ld   hl,pe_ny
                 cp   (hl)
-                jr   nz,pe_scan
-                ld   a,(pe_ot)
-                ld   hl,pe_nt
-                cp   (hl)
-                jr   nz,pe_scan
-                ld   a,(pe_or)
-                ld   hl,pe_nr
-                cp   (hl)
                 ret  z
 
-pe_scan:        ld   a,(pe_ot)          ; --- το σώμα της
-                ld   (pe_st),a
-                ld   a,(pe_nt)
-                ld   (pe_dt),a
-                ld   hl,(pe_ox)
-                ld   (pe_sx),hl
+pe_go:          ld   a,(pe_oc)          ; --- το σώμα
+                ld   (pe_sc),a
                 ld   a,(pe_oy)
                 ld   (pe_sy),a
-                ld   hl,(pe_nx)
-                ld   (pe_dx2),hl
+                ld   a,(pe_nc)
+                ld   (pe_dc),a
                 ld   a,(pe_ny)
-                ld   (pe_dy2),a
+                ld   (pe_dy),a
                 call pe_wipe
 
                 ld   a,(pe_or)          ; --- ο επιβάτης, ένα κελί πιο πάνω
                 or   a
                 ret  z
-                ld   (pe_st),a
-                ld   a,(pe_nr)
-                ld   (pe_dt),a
-                ld   hl,(pe_ox)
-                ld   a,(pe_ordx)
-                ld   e,a
-                ld   d,0
-                add  hl,de
-                ld   (pe_sx),hl
+                ld   a,(pe_oc)
+                ld   hl,pe_ordx
+                add  a,(hl)
+                ld   (pe_sc),a
                 ld   a,(pe_oy)
                 sub  LVL_CELL
                 ld   (pe_sy),a
-                ld   hl,(pe_nx)
-                ld   a,(pe_nrdx)
-                ld   e,a
-                ld   d,0
-                add  hl,de
-                ld   (pe_dx2),hl
+                ld   a,(pe_nc)
+                ld   hl,pe_nrdx
+                add  a,(hl)
+                ld   (pe_dc),a
                 ld   a,(pe_ny)
                 sub  LVL_CELL
-                ld   (pe_dy2),a
+                ld   (pe_dy),a
+                ld   a,LVL_CELL/4       ; 8 pixel = 2 bytes
+                ld   (pe_bw),a
                 ld   a,LVL_CELL
-                ld   (pe_w),a
-                ld   (pe_h),a
+                ld   (pe_bh),a
                 jp   pe_wipe
 
-; --- pe_body: ποιο πλακίδιο δείχνει η εγγραφή στο IX (κινούμενη ή σταματημένη)
-pe_body:        ld   a,T_PLATFORM
-                bit  0,(ix+PL_FLG)
-                ret  nz
-                ld   a,T_PLATFORM_OFF
+;---------------------------------------------------------------------
+; pe_wipe — ξαναβάφει με το φόντο ό,τι από το (pe_sc, pe_sy) μένει έξω από το
+;           (pe_dc, pe_dy). Ίδιο μέγεθος και τα δύο: (pe_bw) x (pe_bh).
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα εκτός IX
+;---------------------------------------------------------------------
+pe_wipe:        ld   a,(pe_dc)          ; --- η λωρίδα κατά x
+                ld   hl,pe_sc
+                sub  (hl)
+                ld   b,a                ; B = μετατόπιση σε bytes, με πρόσημο
+                ld   a,(pe_bw)
+                ld   c,a
+                call pe_span            ; C = μήκος, B = απόσταση από την αρχή
+                ld   a,c
+                or   a
+                jr   z,pew_vert
+                ld   (pe_rw),a
+                ld   a,(pe_bh)
+                ld   (pe_rh),a
+                ld   a,(pe_sc)
+                add  a,b
+                ld   (pe_rc),a
+                ld   a,(pe_sy)
+                ld   (pe_ry),a
+                call pe_rect
+
+pew_vert:       ld   a,(pe_dy)          ; --- η λωρίδα κατά y
+                ld   hl,pe_sy
+                sub  (hl)
+                ld   b,a
+                ld   a,(pe_bh)
+                ld   c,a
+                call pe_span
+                ld   a,c
+                or   a
+                ret  z
+                ld   (pe_rh),a
+                ld   a,(pe_bw)
+                ld   (pe_rw),a
+                ld   a,(pe_sc)
+                ld   (pe_rc),a
+                ld   a,(pe_sy)
+                add  a,b
+                ld   (pe_ry),a
+                jp   pe_rect
+
+;---------------------------------------------------------------------
+; pe_span — τι ελευθερώνει μια μετατόπιση σε έναν άξονα
+;   IN:  B = μετατόπιση με πρόσημο, C = μέγεθος
+;   OUT: B = απόσταση από την αρχή, C = μήκος (0 = τίποτα)
+;---------------------------------------------------------------------
+pe_span:        ld   a,b
+                or   a
+                jr   z,pes_none
+                jp   m,pes_neg
+                cp   c                  ; προς τα δεξιά/κάτω: από την αρχή
+                jr   c,pes_pos
+                ld   a,c
+pes_pos:        ld   c,a
+                ld   b,0
+                ret
+pes_neg:        neg                     ; προς τα αριστερά/πάνω: από το τέλος
+                cp   c
+                jr   c,pes_n2
+                ld   a,c
+pes_n2:         ld   b,a
+                ld   a,c
+                sub  b
+                ld   c,b
+                ld   b,a
+                ret
+pes_none:       ld   c,0
                 ret
 
 ;---------------------------------------------------------------------
-; pe_wipe — σβήνει το μελάνι του ΠΑΛΙΟΥ καρέ που το νέο δεν θα ξαναβάψει
-;   IN: (pe_sx,pe_sy,pe_st) παλιό, (pe_dx2,pe_dy2,pe_dt) νέο, (pe_w,pe_h)
+; pe_rect — βάφει με το φόντο το (pe_rc, pe_ry, pe_rw, pe_rh), σε bytes
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα εκτός IX
 ;---------------------------------------------------------------------
-pe_wipe:        xor  a
+pe_rect:        xor  a
                 ld   (pe_v),a
-pew_row:        xor  a
+per_row:        xor  a
                 ld   (pe_u),a
-pew_col:        ld   a,(pe_u)           ; είχε μελάνι εκεί το παλιό καρέ;
-                and  7
-                ld   d,a
-                ld   a,(pe_v)
-                and  7
-                ld   e,a
-                ld   a,(pe_st)
-                call pl_pen
-                or   a
-                jp   z,pew_next
-                ld   hl,(pe_sx)         ; το pixel σε συντεταγμένες οθόνης
-                ld   a,(pe_u)
-                ld   e,a
-                ld   d,0
-                add  hl,de
-                ld   (pe_px),hl
-                ld   a,(pe_sy)
-                ld   e,a
-                ld   a,(pe_v)
-                add  a,e
-                ld   (pe_py),a
-                ld   de,(pe_dx2)        ; μέσα στο ΝΕΟ ορθογώνιο;
-                or   a
-                sbc  hl,de
-                jr   c,pew_paint
-                ld   a,h
-                or   a
-                jr   nz,pew_paint
-                ld   a,l
-                ld   hl,pe_w
-                cp   (hl)
-                jr   nc,pew_paint
-                and  7
-                ld   d,a
-                ld   a,(pe_py)
-                ld   hl,pe_dy2
-                sub  (hl)
-                jr   c,pew_paint
-                ld   hl,pe_h
-                cp   (hl)
-                jr   nc,pew_paint
-                and  7
-                ld   e,a
-                ld   a,(pe_dt)          ; …και το νέο καρέ βάζει μελάνι εκεί;
-                call pl_pen
-                or   a
-                jr   nz,pew_next        ; ναι: άσ' το, θα το γράψει εκείνο
-pew_paint:      ld   bc,(pe_px)
-                ld   a,(pe_py)
-                call pe_bg
-pew_next:       ld   hl,pe_u
+per_col:        ld   a,(pe_rc)
+                ld   hl,pe_u
+                add  a,(hl)
+                ld   b,a                ; B = στήλη byte
+                ld   a,(pe_ry)
+                ld   hl,pe_v
+                add  a,(hl)
+                ld   c,a                ; C = γραμμή σάρωσης
+                push bc
+                call pl_bgbyte
+                pop  bc
+                push af
+                ld   a,b
+                ld   b,c
+                ld   c,a                ; scr_addr: B = γραμμή, C = στήλη
+                call scr_addr
+                pop  af
+                ld   (hl),a
+                ld   hl,pe_u
                 inc  (hl)
                 ld   a,(hl)
-                ld   hl,pe_w
+                ld   hl,pe_rw
                 cp   (hl)
-                jp   c,pew_col
+                jr   c,per_col
                 ld   hl,pe_v
                 inc  (hl)
                 ld   a,(hl)
-                ld   hl,pe_h
+                ld   hl,pe_rh
                 cp   (hl)
-                jp   c,pew_row
+                jr   c,per_row
                 ret
 
 ;---------------------------------------------------------------------
-; pe_bg — ένα pixel του φόντου, από το κελί που κάθεται από κάτω
-;   IN: BC = x, A = y     ΑΛΛΟΙΩΝΕΙ: τα πάντα εκτός IX
-;---------------------------------------------------------------------
-pe_bg:          ld   (pe_py),a
-                ld   (pe_px),bc
-                sub  LVL_Y0
-                ret  c                  ; στο HUD δεν ακουμπάμε
-                srl  a
-                srl  a
-                srl  a
-                ld   b,a                ; B = γραμμή κελιού
-                ld   hl,(pe_px)
-                srl  h
-                rr   l
-                srl  l
-                srl  l
-                ld   c,l                ; C = στήλη κελιού
-                call cell_rc            ; A = ο τύπος που κάθεται από κάτω
-                push af
-                ld   a,(pe_px)
-                and  7
-                ld   d,a                ; D = u μέσα στο κελί
-                ld   a,(pe_py)
-                and  7
-                ld   e,a                ; E = v
-                pop  af
-                call pl_pen
-                ld   (pl_pen_v),a
-                ld   bc,(pe_px)
-                ld   a,(pe_py)
-                jp   px_put
-
-;---------------------------------------------------------------------
-; plat_draw — η πλατφόρμα και ο επιβάτης της, σε θέση PIXEL
+; plat_draw — η πλατφόρμα και ο επιβάτης της, με ολόκληρα bytes
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
-plat_draw:      ld   a,(plat_n)
+plat_draw:      call pb_forget
+                ld   a,(plat_n)
                 or   a
                 ret  z
                 ld   ix,plat_tab
@@ -1080,123 +1074,190 @@ pd_lp:          push bc
                 djnz pd_lp
                 ret
 
-pd_one:         ld   a,T_PLATFORM       ; ποιο πλακίδιο: κινούμενη ή σταματημένη
-                bit  0,(ix+PL_FLG)
-                jr   nz,pd_tile
-                ld   a,T_PLATFORM_OFF
-pd_tile:        ld   (pd_type),a
+pd_one:         call pe_body            ; ποιο πλακίδιο: κινούμενη ή σταματημένη
+                ld   (pd_type),a
+                call pl_bcol
+                ld   (pd_col),a
+                ld   a,(ix+PL_W)
+                srl  a
+                srl  a
+                ld   (pd_bw),a
+                ld   a,(ix+PL_H)
+                ld   (pd_bh),a
+                ld   a,(ix+PL_Y)
+                ld   (pd_y),a
                 xor  a
                 ld   (pd_v),a
-pd_row:         xor  a
-                ld   (pd_u),a
-pd_col:         call pd_pen             ; pen του (u mod 8, v mod 8)
-                ld   (pl_pen_v),a
-                or   a
-                jr   z,pd_next          ; pen 0 = διαφανές
-                ld   l,(ix+PL_X)
-                ld   h,(ix+PL_X+1)
-                ld   a,(pd_u)
+
+                ; --- ΤΟ ΣΩΜΑ: αδιαφανές, σκέτη εγγραφή
+pd_row:         ld   a,(pd_v)           ; τα δύο bytes αυτής της γραμμής
+                and  7
+                add  a,a
                 ld   e,a
                 ld   d,0
-                add  hl,de
-                ld   b,h
-                ld   c,l
+                ld   a,(pd_type)
+                call pl_trow            ; HL -> tile_gfx + τύπος*16 + γραμμή
+                ld   c,(hl)
+                inc  hl
+                ld   b,(hl)
+                push bc
+                ld   a,(pd_y)
+                ld   e,a
                 ld   a,(pd_v)
-                add  a,(ix+PL_Y)
-                call px_put
-pd_next:        ld   hl,pd_u
+                add  a,e
+                ld   b,a
+                ld   a,(pd_col)
+                ld   c,a
+                call scr_addr
+                pop  bc
+                ld   a,(pd_bw)
+                ld   d,a
+pd_byte:        ld   (hl),c             ; αριστερό μισό του πλακιδίου
+                inc  hl
+                dec  d
+                jr   z,pd_erow
+                ld   (hl),b             ; δεξί
+                inc  hl
+                dec  d
+                jr   nz,pd_byte
+pd_erow:        ld   hl,pd_v
                 inc  (hl)
                 ld   a,(hl)
-                cp   (ix+PL_W)
-                jr   c,pd_col
-                ld   hl,pd_v
-                inc  (hl)
-                ld   a,(hl)
-                cp   (ix+PL_H)
-                jp   c,pd_row
-                ; --- Ο ΕΠΙΒΑΤΗΣ, ένα κελί από πάνω της.
-                ;     Έφυγε από το πλέγμα στη φόρτωση ώστε να κινείται μαζί
-                ;     της· χωρίς αυτό δούλευε κανονικά και ήταν ΑΟΡΑΤΟΣ.
+                ld   hl,pd_bh
+                cp   (hl)
+                jr   c,pd_row
+
+                ; --- Ο ΕΠΙΒΑΤΗΣ: διάφανος, συντίθεται με το φόντο
                 ld   a,(ix+PL_RID)
                 or   a
                 ret  z
                 ld   (pd_type),a
-                xor  a
-                ld   (pd_v),a
-prd_row:         xor  a
-                ld   (pd_u),a
-prd_col:         call pd_pen
-                ld   (pl_pen_v),a
-                or   a
-                jr   z,prd_next
-                ld   l,(ix+PL_X)
-                ld   h,(ix+PL_X+1)
                 ld   a,(ix+PL_RDX)
+                srl  a
+                srl  a
+                ld   hl,pd_col
+                add  a,(hl)
+                ld   (pd_col),a
+                ld   a,(pd_y)
+                sub  LVL_CELL
+                ld   (pd_y),a
+                xor  a
+                ld   (pd_u),a
+                ; ΣΤΗΛΗ-ΣΤΗΛΗ, ΟΧΙ ΓΡΑΜΜΗ-ΓΡΑΜΜΗ: με σταθερή στήλη οι οκτώ
+                ; γραμμές πέφτουν στο ίδιο κελί και ο cache του pl_bgbyte
+                ; αστοχεί μία φορά αντί για οκτώ.
+prd_row:        xor  a
+                ld   (pd_v),a
+prd_col:        ld   a,(pd_v)           ; το byte μελανιού
+                add  a,a
+                ld   e,a
+                ld   a,(pd_u)
+                add  a,e
                 ld   e,a
                 ld   d,0
-                add  hl,de
-                ld   a,(pd_u)
-                ld   e,a
-                add  hl,de
-                ld   b,h
-                ld   c,l
-                ld   a,(ix+PL_Y)
-                sub  LVL_CELL           ; μία σειρά πιο πάνω
-                ld   e,a
-                ld   a,(pd_v)
-                add  a,e
-                call px_put
-prd_next:        ld   hl,pd_u
-                inc  (hl)
+                ld   a,(pd_type)
+                call pl_trow
                 ld   a,(hl)
-                cp   LVL_CELL
-                jp   c,prd_col
+                ld   (pd_ink),a
+                ld   a,(pd_y)           ; …το φόντο από κάτω του
+                ld   hl,pd_v
+                add  a,(hl)
+                ld   c,a
+                ld   a,(pd_col)
+                ld   hl,pd_u
+                add  a,(hl)
+                ld   b,a
+                push bc
+                call pl_bgbyte
+                ld   (pd_bg),a
+                ld   a,(pd_ink)
+                call pl_mask            ; ΧΑΛΑΕΙ ΤΟ C: το φόντο μένει σε μνήμη
+                ld   hl,pd_bg
+                and  (hl)               ; φόντο εκεί που είναι διάφανος
+                ld   hl,pd_ink
+                or   (hl)
+                ld   (pd_ink),a
+                pop  bc                 ; B = στήλη, C = γραμμή
+                ld   a,b
+                ld   b,c
+                ld   c,a                ; scr_addr: B = γραμμή, C = στήλη
+                call scr_addr
+                ld   a,(pd_ink)
+                ld   (hl),a
                 ld   hl,pd_v
                 inc  (hl)
                 ld   a,(hl)
                 cp   LVL_CELL
+                jr   c,prd_col
+                ld   hl,pd_u
+                inc  (hl)
+                ld   a,(hl)
+                cp   LVL_CELL/4
                 jr   c,prd_row
                 ret
 
-; --- pl_pen με τα ορίσματα στη σειρά που βολεύει το pd_one
-;     IN: (pd_type) τύπος, (pd_u) u, (pd_v) v
-pd_pen:         ld   a,(pd_u)
-                and  7
-                ld   d,a
-                ld   a,(pd_v)
-                and  7
-                ld   e,a
-                ld   a,(pd_type)
-                jp   pl_pen
+; --- pl_trow: HL = tile_gfx + A*16 + DE
+pl_trow:        ld   l,a
+                ld   h,0
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
+                add  hl,hl
+                add  hl,de
+                ld   de,tile_gfx
+                add  hl,de
+                ret
+
+; --- pb_forget: ξεχνά το κελί που θυμόταν το pl_bgbyte
+;     ΥΠΟΧΡΕΩΤΙΚΟ ΣΕ ΚΑΘΕ ΚΛΗΣΗ: μια πύλη που άνοιξε ή ένας διακόπτης που
+;     γύρισε αλλάζει τον τύπο του κελιού, και ο cache θα ζωγράφιζε τον παλιό.
+;     Η στήλη #FF δεν υπάρχει (80 στήλες), οπότε δεν ταιριάζει ποτέ.
+pb_forget:      ld   hl,#FFFF
+                ld   (pb_cell),hl
+                ret
+
+; --- pe_body: ποιο πλακίδιο δείχνει η εγγραφή στο IX
+pe_body:        ld   a,T_PLATFORM
+                bit  0,(ix+PL_FLG)
+                ret  nz
+                ld   a,T_PLATFORM_OFF
+                ret
 
 plat_old        ds   PL_SIZE*PLAT_MAX
-pl_pen_v        db   0
-px_slot         db   0
 pa_y            db   0
 pa_left         db   0
-pe_ox           dw   0
+pb_line         db   0
+pb_half         db   0
+pb_cell         dw   #FFFF   ; τελευταίο (στήλη, γραμμή)
+pb_base         dw   0
+pe_oc           db   0
 pe_oy           db   0
-pe_nx           dw   0
+pe_nc           db   0
 pe_ny           db   0
-pe_w            db   0
-pe_h            db   0
-pe_ot           db   0
-pe_nt           db   0
+pe_bw           db   0
+pe_bh           db   0
 pe_or           db   0
 pe_nr           db   0
 pe_ordx         db   0
 pe_nrdx         db   0
-pe_sx           dw   0
+pe_sc           db   0
 pe_sy           db   0
-pe_st           db   0
-pe_dx2          dw   0
-pe_dy2          db   0
-pe_dt           db   0
+pe_dc           db   0
+pe_dy           db   0
 pe_u            db   0
 pe_v            db   0
-pe_px           dw   0
-pe_py           db   0
+pe_rc           db   0
+pe_ry           db   0
+pe_rw           db   0
+pe_rh           db   0
 pd_type         db   0
+pd_col          db   0
+pd_bw           db   0
+pd_bh           db   0
+pd_y            db   0
+pd_ink          db   0
+pd_bg           db   0
+pl_thr          dw   0
 pd_u            db   0
 pd_v            db   0
 

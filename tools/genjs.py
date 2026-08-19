@@ -105,6 +105,7 @@ def build():
               "ARROW_STEP": P.ARROW_STEP,
                "PLAT_SPEED": P.PLAT_SPEED,
                "PLAT_SPEED_MAX": P.PLAT_SPEED_MAX,
+               "PLAT_XSTEP": P.PLAT_XSTEP,
                "PLAT_MAX": P.PLAT_MAX,
                "PLAT_FACING": P.PLAT_FACING,
                "PLAT_PAUSE": P.PLAT_PAUSE, "TURRET_RANGE": P.TURRET_RANGE,

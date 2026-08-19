@@ -627,10 +627,14 @@
         if (!sx && !sy) continue;           // αδήλωτη: δεν πάει πουθενά
         // Σταματημένη στο άκρο: μετράει ο χρόνος, όχι τα περάσματα.
         if (p.wait > 0) { p.wait = Math.max(0, p.wait - vsyncs); continue; }
+        // 4 pixel όταν υπάρχει οριζόντια συνιστώσα (ένα byte του MODE 1), 1
+        // όταν δεν υπάρχει. Το κατώφλι πολλαπλασιάζεται μαζί, ώστε η ταχύτητα
+        // να μείνει η ίδια. Δες PLAT_XSTEP στο tools/physics.py.
+        const step = sx ? K.PLAT_XSTEP : 1;
         p.acc += p.speed * vsyncs;
-        while (p.acc >= 50) {               // 50 vsync = ένα δευτερόλεπτο
-          p.acc -= 50;
-          this.platMove(p, sx * p.dir, sy * p.dir);
+        while (p.acc >= 50 * step) {        // 50 vsync = ένα δευτερόλεπτο
+          p.acc -= 50 * step;
+          this.platMove(p, sx * p.dir * step, sy * p.dir * step);
           if (p.wait) { p.acc = 0; break; } // έφτασε στο άκρο μέσα στο βήμα
         }
       }
