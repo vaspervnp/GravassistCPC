@@ -817,9 +817,18 @@ plat_save:      ld   hl,plat_tab
                 ret
 
 ;---------------------------------------------------------------------
-; plat_erase — ξαναζωγραφίζει τα ΚΕΛΙΑ που κάλυπτε η παλιά θέση
-;   Ολόκληρα κελιά και όχι pixel: το φόντο είναι πλακίδια, και το draw_tile
-;   είναι η γρήγορη, στοιχισμένη διαδρομή.
+; plat_erase — ΜΟΝΟ Η ΛΩΡΙΔΑ ΠΟΥ ΕΛΕΥΘΕΡΩΣΕ, όχι ολόκληρη η πλατφόρμα
+;
+;   ΓΙΑΤΙ ΟΧΙ ΟΛΟΚΛΗΡΗ: ανάμεσα στο σβήσιμο και τη σχεδίασή της μεσολαβεί το
+;   draw_hero. Με ολόκληρο σβήσιμο η πλατφόρμα έλειπε από την οθόνη όσο κρατά
+;   εκείνο, ΚΑΘΕ πέρασμα — αυτό ήταν το τρεμόπαιγμα. Δεν γίνεται να ζωγραφιστεί
+;   πριν από τον ήρωα: εκείνος συνθέτει το φόντο του από τα δεδομένα της ΠΙΣΤΑΣ,
+;   όπου η πλατφόρμα δεν υπάρχει, και θα την έσβηνε σε όλο του το ορθογώνιο.
+;   Μένει ο άλλος δρόμος — να μη σβηστεί ποτέ το σώμα της. Σβήνεται μόνο η
+;   λωρίδα που άφησε πίσω της (1 ως 2 pixel) και το υπόλοιπο ξαναγράφεται από
+;   πάνω του.
+;
+;   Σε ακίνητη πλατφόρμα δεν αγγίζει τίποτα: μηδέν λωρίδα, μηδέν κόστος.
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
 plat_erase:     ld   a,(plat_n)
@@ -837,57 +846,220 @@ pe_lp:          push bc
                 djnz pe_lp
                 ret
 
-pe_one:         ld   l,(ix+PL_X)        ; πρώτη στήλη κελιού
+; --- μία πλατφόρμα: ό,τι είχε μελάνι και δεν θα το ξαναβάψει η νέα θέση
+;
+;   ΑΥΤΟ ΕΙΝΑΙ ΤΟ ΜΕΤΡΟ, όχι «η λωρίδα που ελευθέρωσε»: τα ΔΙΑΦΑΝΑ pixel της
+;   πλατφόρμας (η αραιή κάτω ακμή της, και σχεδόν όλο το κελί του επιβάτη) δεν
+;   ξαναγράφονται από τη σχεδίαση, οπότε το προηγούμενο μελάνι έμενε μέσα στο
+;   ΙΔΙΟ της το ορθογώνιο και μουτζούρωνε. Η λωρίδα δεν το έπιανε ποτέ.
+pe_one:         ld   l,(ix+PL_X)        ; --- η παλιά της θέση
                 ld   h,(ix+PL_X+1)
+                ld   (pe_ox),hl
+                ld   a,(ix+PL_Y)
+                ld   (pe_oy),a
+                ld   a,(ix+PL_W)
+                ld   (pe_w),a
+                ld   a,(ix+PL_H)
+                ld   (pe_h),a
+                call pe_body
+                ld   (pe_ot),a
+                ld   a,(ix+PL_RID)
+                ld   (pe_or),a
+                ld   a,(ix+PL_RDX)
+                ld   (pe_ordx),a
+
+                push ix                 ; --- η ΙΔΙΑ θέση στον ζωντανό πίνακα
+                ld   bc,plat_tab-plat_old
+                add  ix,bc
+                ld   l,(ix+PL_X)
+                ld   h,(ix+PL_X+1)
+                ld   (pe_nx),hl
+                ld   a,(ix+PL_Y)
+                ld   (pe_ny),a
+                call pe_body
+                ld   (pe_nt),a
+                ld   a,(ix+PL_RID)
+                ld   (pe_nr),a
+                ld   a,(ix+PL_RDX)
+                ld   (pe_nrdx),a
+                pop  ix
+
+                ; ΑΚΙΝΗΤΗ ΚΑΙ ΙΔΙΑ: τίποτα να σβηστεί, μηδέν κόστος. Η μισή
+                ; ώρα της πλατφόρμας περνά έτσι — κινείται ένα pixel κάθε δύο
+                ; περάσματα περίπου.
+                ld   hl,(pe_ox)
+                ld   de,(pe_nx)
+                or   a
+                sbc  hl,de
+                jr   nz,pe_scan
+                ld   a,(pe_oy)
+                ld   hl,pe_ny
+                cp   (hl)
+                jr   nz,pe_scan
+                ld   a,(pe_ot)
+                ld   hl,pe_nt
+                cp   (hl)
+                jr   nz,pe_scan
+                ld   a,(pe_or)
+                ld   hl,pe_nr
+                cp   (hl)
+                ret  z
+
+pe_scan:        ld   a,(pe_ot)          ; --- το σώμα της
+                ld   (pe_st),a
+                ld   a,(pe_nt)
+                ld   (pe_dt),a
+                ld   hl,(pe_ox)
+                ld   (pe_sx),hl
+                ld   a,(pe_oy)
+                ld   (pe_sy),a
+                ld   hl,(pe_nx)
+                ld   (pe_dx2),hl
+                ld   a,(pe_ny)
+                ld   (pe_dy2),a
+                call pe_wipe
+
+                ld   a,(pe_or)          ; --- ο επιβάτης, ένα κελί πιο πάνω
+                or   a
+                ret  z
+                ld   (pe_st),a
+                ld   a,(pe_nr)
+                ld   (pe_dt),a
+                ld   hl,(pe_ox)
+                ld   a,(pe_ordx)
+                ld   e,a
+                ld   d,0
+                add  hl,de
+                ld   (pe_sx),hl
+                ld   a,(pe_oy)
+                sub  LVL_CELL
+                ld   (pe_sy),a
+                ld   hl,(pe_nx)
+                ld   a,(pe_nrdx)
+                ld   e,a
+                ld   d,0
+                add  hl,de
+                ld   (pe_dx2),hl
+                ld   a,(pe_ny)
+                sub  LVL_CELL
+                ld   (pe_dy2),a
+                ld   a,LVL_CELL
+                ld   (pe_w),a
+                ld   (pe_h),a
+                jp   pe_wipe
+
+; --- pe_body: ποιο πλακίδιο δείχνει η εγγραφή στο IX (κινούμενη ή σταματημένη)
+pe_body:        ld   a,T_PLATFORM
+                bit  0,(ix+PL_FLG)
+                ret  nz
+                ld   a,T_PLATFORM_OFF
+                ret
+
+;---------------------------------------------------------------------
+; pe_wipe — σβήνει το μελάνι του ΠΑΛΙΟΥ καρέ που το νέο δεν θα ξαναβάψει
+;   IN: (pe_sx,pe_sy,pe_st) παλιό, (pe_dx2,pe_dy2,pe_dt) νέο, (pe_w,pe_h)
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα εκτός IX
+;---------------------------------------------------------------------
+pe_wipe:        xor  a
+                ld   (pe_v),a
+pew_row:        xor  a
+                ld   (pe_u),a
+pew_col:        ld   a,(pe_u)           ; είχε μελάνι εκεί το παλιό καρέ;
+                and  7
+                ld   d,a
+                ld   a,(pe_v)
+                and  7
+                ld   e,a
+                ld   a,(pe_st)
+                call pl_pen
+                or   a
+                jp   z,pew_next
+                ld   hl,(pe_sx)         ; το pixel σε συντεταγμένες οθόνης
+                ld   a,(pe_u)
+                ld   e,a
+                ld   d,0
+                add  hl,de
+                ld   (pe_px),hl
+                ld   a,(pe_sy)
+                ld   e,a
+                ld   a,(pe_v)
+                add  a,e
+                ld   (pe_py),a
+                ld   de,(pe_dx2)        ; μέσα στο ΝΕΟ ορθογώνιο;
+                or   a
+                sbc  hl,de
+                jr   c,pew_paint
+                ld   a,h
+                or   a
+                jr   nz,pew_paint
+                ld   a,l
+                ld   hl,pe_w
+                cp   (hl)
+                jr   nc,pew_paint
+                and  7
+                ld   d,a
+                ld   a,(pe_py)
+                ld   hl,pe_dy2
+                sub  (hl)
+                jr   c,pew_paint
+                ld   hl,pe_h
+                cp   (hl)
+                jr   nc,pew_paint
+                and  7
+                ld   e,a
+                ld   a,(pe_dt)          ; …και το νέο καρέ βάζει μελάνι εκεί;
+                call pl_pen
+                or   a
+                jr   nz,pew_next        ; ναι: άσ' το, θα το γράψει εκείνο
+pew_paint:      ld   bc,(pe_px)
+                ld   a,(pe_py)
+                call pe_bg
+pew_next:       ld   hl,pe_u
+                inc  (hl)
+                ld   a,(hl)
+                ld   hl,pe_w
+                cp   (hl)
+                jp   c,pew_col
+                ld   hl,pe_v
+                inc  (hl)
+                ld   a,(hl)
+                ld   hl,pe_h
+                cp   (hl)
+                jp   c,pew_row
+                ret
+
+;---------------------------------------------------------------------
+; pe_bg — ένα pixel του φόντου, από το κελί που κάθεται από κάτω
+;   IN: BC = x, A = y     ΑΛΛΟΙΩΝΕΙ: τα πάντα εκτός IX
+;---------------------------------------------------------------------
+pe_bg:          ld   (pe_py),a
+                ld   (pe_px),bc
+                sub  LVL_Y0
+                ret  c                  ; στο HUD δεν ακουμπάμε
+                srl  a
+                srl  a
+                srl  a
+                ld   b,a                ; B = γραμμή κελιού
+                ld   hl,(pe_px)
                 srl  h
                 rr   l
                 srl  l
                 srl  l
-                ld   c,l
-                ld   a,(ix+PL_Y)
-                sub  LVL_Y0
-                srl  a
-                srl  a
-                srl  a
-                ld   b,a
-                dec  b                  ; και η σειρά του επιβάτη από πάνω
-                jp   p,pe_bok
-                ld   b,0
-pe_bok:         ld   a,(ix+PL_W)        ; πλάτος σε κελιά, +1 για τη μετατόπιση
-                srl  a
-                srl  a
-                srl  a
-                inc  a
-                ld   (pe_w),a
-                ld   a,(ix+PL_H)
-                srl  a
-                srl  a
-                srl  a
-                inc  a
-                inc  a                  ; +1 ύψος, +1 για τον επιβάτη
-                ld   (pe_h),a
-pe_row:         ld   a,(pe_w)
-                ld   (pe_i),a
-                push bc
-pe_col:         push bc
-                ld   a,c
-                cp   LVL_COLS
-                jr   nc,pe_skipc
-                ld   a,b
-                cp   LVL_ROWS
-                jr   nc,pe_skipc
-                call draw_tile
-pe_skipc:       pop  bc
-                inc  c
-                ld   hl,pe_i
-                dec  (hl)
-                jr   nz,pe_col
-                pop  bc
-                inc  b
-                ld   hl,pe_h
-                dec  (hl)
-                jr   nz,pe_row
-                ret
+                ld   c,l                ; C = στήλη κελιού
+                call cell_rc            ; A = ο τύπος που κάθεται από κάτω
+                push af
+                ld   a,(pe_px)
+                and  7
+                ld   d,a                ; D = u μέσα στο κελί
+                ld   a,(pe_py)
+                and  7
+                ld   e,a                ; E = v
+                pop  af
+                call pl_pen
+                ld   (pl_pen_v),a
+                ld   bc,(pe_px)
+                ld   a,(pe_py)
+                jp   px_put
 
 ;---------------------------------------------------------------------
 ; plat_draw — η πλατφόρμα και ο επιβάτης της, σε θέση PIXEL
@@ -1002,9 +1174,28 @@ pl_pen_v        db   0
 px_slot         db   0
 pa_y            db   0
 pa_left         db   0
+pe_ox           dw   0
+pe_oy           db   0
+pe_nx           dw   0
+pe_ny           db   0
 pe_w            db   0
 pe_h            db   0
-pe_i            db   0
+pe_ot           db   0
+pe_nt           db   0
+pe_or           db   0
+pe_nr           db   0
+pe_ordx         db   0
+pe_nrdx         db   0
+pe_sx           dw   0
+pe_sy           db   0
+pe_st           db   0
+pe_dx2          dw   0
+pe_dy2          db   0
+pe_dt           db   0
+pe_u            db   0
+pe_v            db   0
+pe_px           dw   0
+pe_py           db   0
 pd_type         db   0
 pd_u            db   0
 pd_v            db   0

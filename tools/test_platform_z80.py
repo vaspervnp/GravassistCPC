@@ -283,6 +283,82 @@ def main():
     check("μετά την κίνηση γράφεται στη νέα του θέση",
           band_bytes(t, new_band) > 0, f'x={m["x"]}')
 
+    print("--- το σβήσιμο: χωρίς ίχνη ΚΑΙ χωρίς στιγμή που λείπει")
+    # ΜΕ ΕΠΙΒΑΤΗ: το κελί του είναι σχεδόν όλο διάφανο, οπότε είναι εκείνο που
+    # μουτζουρώνει χειρότερα — μια δοκιμή χωρίς αυτόν θα έλεγε «καθαρό».
+    rm = model([(10, 15, "M"), (11, 15, "M"), (10, 14, "s")],
+               "plat 10 15 20 15 0 24\nsw 10 14 6\n")
+    load(t, rm)
+    t.call("PLAT_SAVE")
+
+    # Η ζώνη που μπορεί να ακουμπήσει: όλη η διαδρομή της, η σειρά της και η
+    # σειρά του επιβάτη από πάνω.
+    zone = [0xC000 + ((y) & 7) * 0x800 + ((y) >> 3) * 80 + col
+            for y in range(P.GRID_Y0 + 14 * P.CELL, P.GRID_Y0 + 16 * P.CELL)
+            for col in range(18, 44)]
+
+    def zone_bytes():
+        return bytes(t.m.memory[a] for a in zone)
+
+    for a in zone:
+        t.m.memory[a] = 0
+    t.call("PLAT_DRAW")
+    at_start = zone_bytes()
+    ink = sum(1 for b in at_start if b)
+    check("η πλατφόρμα ζωγραφίστηκε", ink > 0, f"{ink} bytes")
+
+    # ΣΤΙΓΜΗ ΠΟΥ ΛΕΙΠΕΙ: ανάμεσα στο σβήσιμο και τη σχεδίαση μεσολαβεί το
+    # draw_hero. Ό,τι λείπει εκεί, τρεμοπαίζει.
+    worst = ink
+    steps = 0
+    while steps < 60:
+        t.call("PLAT_SAVE")
+        t.call("PLAT_STEP")
+        t.call("PLAT_ERASE")
+        worst = min(worst, sum(1 for b in zone_bytes() if b))
+        t.call("PLAT_DRAW")
+        steps += 1
+        if rec(t)["x"] == 10 * P.CELL + 2 * P.CELL:
+            break
+    check("μετά το σβήσιμο το σώμα της είναι ακόμα εκεί",
+          worst >= ink * 3 // 4, f"χειρότερο: {worst} από {ink} bytes")
+
+    # ΙΧΝΗ: στη νέα θέση η οθόνη πρέπει να είναι ΑΚΡΙΒΩΣ ό,τι θα ζωγράφιζε μια
+    # καθαρή σχεδίαση εκεί. Ένα pixel που ξέμεινε πίσω της φαίνεται εδώ.
+    moved = zone_bytes()
+    for a in zone:
+        t.m.memory[a] = 0
+    t.call("PLAT_DRAW")
+    clean = zone_bytes()
+    bad = sum(1 for x, y in zip(moved, clean) if x != y)
+    check(f"καμία διαφορά από καθαρή σχεδίαση μετά από {steps} βήματα",
+          bad == 0, f"{bad} bytes διαφορά, x={rec(t)['x']}")
+
+    print("--- …και βάφει το ΦΟΝΤΟ ΤΗΣ ΠΙΣΤΑΣ, όχι μαύρο")
+    # Ένα κελί τοίχου κάτω από τη λωρίδα: το σβήσιμο πρέπει να ξαναφέρει τον
+    # τοίχο, όχι κενό. Με draw_tile αυτό ερχόταν τζάμπα· με σβήσιμο ανά pixel
+    # είναι δική μας δουλειά.
+    col, row = 25, 15
+    t.poke(t.sym("CELL_BUF") + row * P.COLS + col, bytes((P.SOLID,)))
+    px, py = col * P.CELL + 3, P.GRID_Y0 + row * P.CELL + 3
+    addr = 0xC000 + (py & 7) * 0x800 + (py >> 3) * 80 + (px >> 2)
+    t.m.memory[addr] = 0
+    t.call("PE_BG", a=py, bc=px)
+    check("πάνω σε τοίχο ξαναβάφει τον τοίχο", t.m.memory[addr] != 0,
+          f"#{t.m.memory[addr]:02X}")
+    t.poke(t.sym("CELL_BUF") + row * P.COLS + col, b"\x00")
+    t.m.memory[addr] = 0xFF
+    t.call("PE_BG", a=py, bc=px)
+    # ΜΟΝΟ ΤΑ ΔΥΟ BITS ΤΟΥ pixel: στο MODE 1 ένα byte κρατά τέσσερα pixel, και
+    # τα bits του pixel s κάθονται στα (3-s) και (7-s). Το υπόλοιπο byte είναι
+    # οι γείτονές του και δεν πρέπει να το αγγίξει.
+    slot = px & 3
+    mask = (1 << (3 - slot)) | (1 << (7 - slot))
+    got = t.m.memory[addr]
+    check("πάνω σε κενό σβήνει ΤΟ pixel", got & mask == 0, f"#{got:02X}")
+    check("…και αφήνει ήσυχους τους γείτονές του στο ίδιο byte",
+          got & ~mask & 0xFF == 0xFF & ~mask, f"#{got:02X}")
+
     print(f"\n{'ΟΛΑ ΚΑΛΑ' if not FAILS else 'ΑΠΕΤΥΧΑΝ: ' + ', '.join(FAILS)}")
     return 1 if FAILS else 0
 
