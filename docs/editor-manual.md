@@ -336,7 +336,7 @@ does.
 
 | | Behaviour |
 |---|---|
-| **Switch (`S`)** | A toggle. Step on it and its targets flip; step on it again and they flip back. Not consumed. |
+| **Switch (`S` `Q` `A` `E`)** | A toggle. Step on it and its targets flip; step on it again and they flip back. Not consumed. |
 | **Pressure plate (`p`)** | Active only while pressed, by the hero **or by a crate**. Leaving a crate on a plate holds it down while you walk away. |
 | **Key (`k`)** | Opens its targets **permanently** and is consumed. Stand on a lock **or a gate** of its channel and press the action key. |
 
@@ -348,6 +348,13 @@ does.
 | **Lock (`K`)** | Unlocked — you pass through. |
 | **Spikes (`^ v < >`)** | Retracted into the floor: still solid, but harmless. |
 | **Turret (`I` `=`)** | Switched off: it stops shooting. |
+
+A switch has **four mountings**, and the mounting is a rule rather than decoration: you
+can only press it from the surface it is bolted to. `S` sits on a floor, `A` hangs from a
+ceiling, `Q` is on the **right-hand** wall and `E` on the **left-hand** wall — so `Q`
+answers when gravity pulls right and `E` when it pulls left. The palette shows each one
+with its base against the surface it needs; if the base looks wrong, that is the bug, not
+your level.
 
 Any actuator drives any target: a switch can unlock a lock, a key can open a gate, a
 pressure plate can pull spikes in. "Open" means the same thing in all cases — *it no

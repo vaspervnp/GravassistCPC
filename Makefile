@@ -155,6 +155,7 @@ sprites-init:
 # διαφορά στη JavaScript ενώ φταίει η σειρά του build.
 test: $(JSDATA)
 	$(PY) tools/check_names.py
+	$(PY) tools/check_palette.py
 	$(PY) tools/verify_rotate.py
 	$(PY) tools/test_sprites.py
 	$(PY) tools/test_physics.py

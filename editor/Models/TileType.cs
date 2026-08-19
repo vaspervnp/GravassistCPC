@@ -441,23 +441,29 @@ public static class TileCatalog
             <circle cx="6.1" cy="1.9" r="1" fill="var(--fill)"/>
             </g>
             """),
-        new TileType('Q', "switch_left",
-            MechGroup, "Switch, left wall",
-            "Toggle. Answers only standing on the wall to its left — like spikes, the facing is a rule, not decoration.",
+        // ΤΟ ΓΡΑΜΜΑ ΕΙΝΑΙ Η ΦΟΡΑ, ΟΧΙ Ο ΤΟΙΧΟΣ — ο ίδιος κανόνας με τα αγκάθια.
+        // Το 'Q' είναι SWITCH_L στο μοντέλο: κοιτάζει ΑΡΙΣΤΕΡΑ, άρα η βάση του
+        // πατάει στον ΔΕΞΙΟ τοίχο. Η παλέτα το ζωγράφιζε καθρεφτισμένο και το
+        // έλεγε «left wall», ενώ το πλακίδιο του Amstrad και το tools/physics.py
+        // λένε το αντίθετο. Η ετικέτα δείχνει τώρα τον ΤΟΙΧΟ, γιατί αυτόν
+        // διαλέγει ο σχεδιαστής όταν το τοποθετεί.
+        new TileType('Q', "switch_wall_right",
+            MechGroup, "Switch, right wall",
+            "Toggle, mounted on the right-hand wall and facing left. You press it standing on that wall, with gravity pulling right — like spikes, the facing is a rule, not decoration.",
             Palette.Ink, Palette.EdgeColor,
             """
-            <g transform="rotate(90 4 4)">
+            <g transform="rotate(270 4 4)">
             <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
             <line x1="4" y1="6" x2="2" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
             <circle cx="1.9" cy="1.9" r="1" fill="var(--fill)"/>
             </g>
             """),
-        new TileType('q', "switch_left_on",
-            MechGroup, "Switch, left wall (pressed)",
-            "Toggle. Answers only standing on the wall to its left — like spikes, the facing is a rule, not decoration.",
+        new TileType('q', "switch_wall_right_on",
+            MechGroup, "Switch, right wall (pressed)",
+            "Toggle, mounted on the right-hand wall and facing left. You press it standing on that wall, with gravity pulling right — like spikes, the facing is a rule, not decoration.",
             Palette.Ink, Palette.EdgeColor,
             """
-            <g transform="rotate(90 4 4)">
+            <g transform="rotate(270 4 4)">
             <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
             <line x1="4" y1="6" x2="6" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
             <circle cx="6.1" cy="1.9" r="1" fill="var(--fill)"/>
@@ -485,23 +491,23 @@ public static class TileCatalog
             <circle cx="6.1" cy="1.9" r="1" fill="var(--fill)"/>
             </g>
             """),
-        new TileType('E', "switch_right",
-            MechGroup, "Switch, right wall",
-            "Toggle. Answers only standing on the wall to its right — like spikes, the facing is a rule, not decoration.",
+        new TileType('E', "switch_wall_left",
+            MechGroup, "Switch, left wall",
+            "Toggle, mounted on the left-hand wall and facing right. You press it standing on that wall, with gravity pulling left — like spikes, the facing is a rule, not decoration.",
             Palette.Ink, Palette.EdgeColor,
             """
-            <g transform="rotate(270 4 4)">
+            <g transform="rotate(90 4 4)">
             <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
             <line x1="4" y1="6" x2="2" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
             <circle cx="1.9" cy="1.9" r="1" fill="var(--fill)"/>
             </g>
             """),
-        new TileType('e', "switch_right_on",
-            MechGroup, "Switch, right wall (pressed)",
-            "Toggle. Answers only standing on the wall to its right — like spikes, the facing is a rule, not decoration.",
+        new TileType('e', "switch_wall_left_on",
+            MechGroup, "Switch, left wall (pressed)",
+            "Toggle, mounted on the left-hand wall and facing right. You press it standing on that wall, with gravity pulling left — like spikes, the facing is a rule, not decoration.",
             Palette.Ink, Palette.EdgeColor,
             """
-            <g transform="rotate(270 4 4)">
+            <g transform="rotate(90 4 4)">
             <rect x="1" y="6" width="6" height="2" fill="var(--edge)"/>
             <line x1="4" y1="6" x2="6" y2="2.2" stroke="var(--fill)" stroke-width="0.9"/>
             <circle cx="6.1" cy="1.9" r="1" fill="var(--fill)"/>
