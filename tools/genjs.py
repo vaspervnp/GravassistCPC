@@ -28,6 +28,20 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "editor", "wwwroot", "game", "data.js")
 
 
+def asm_equ(name, path="src/main.asm"):
+    """Μια σταθερά γραμμένη ΜΕ ΤΟ ΧΕΡΙ σε αρχείο asm, διαβασμένη από εκεί.
+
+    ΓΙΑΤΙ ΟΧΙ ΑΝΤΙΓΡΑΦΗ: οι γραμμές των μηνυμάτων ζουν στο src/main.asm και
+    δεν περνούν από το μοντέλο. Γραμμένες ξανά εδώ θα αποκλίνανε σιωπηλά — το
+    ίδιο έχει ήδη συμβεί με τις θέσεις του HUD.
+    """
+    text = open(os.path.join(ROOT, path)).read()
+    m = re.search(rf"^{name}\s+equ\s+(\d+)", text, re.M)
+    if not m:
+        raise SystemExit(f"το {name} δεν βρέθηκε στο {path}")
+    return int(m.group(1))
+
+
 def sprite_frames(frames):
     """Frames σε συμπαγή μορφή: μία συμβολοσειρά ψηφίων pen ανά γραμμή."""
     return ["".join("".join(str(v) for v in row) for row in f) for f in frames]
@@ -106,6 +120,8 @@ def build():
                "PLAT_SPEED": P.PLAT_SPEED,
                "PLAT_SPEED_MAX": P.PLAT_SPEED_MAX,
                "PLAT_XSTEP": P.PLAT_XSTEP,
+               "MSG_ROW_LO": asm_equ("MSG_ROW_LO"),
+               "MSG_ROW_HI": asm_equ("MSG_ROW_HI"),
                "PLAT_MAX": P.PLAT_MAX,
                "PLAT_FACING": P.PLAT_FACING,
                "PLAT_PAUSE": P.PLAT_PAUSE, "TURRET_RANGE": P.TURRET_RANGE,

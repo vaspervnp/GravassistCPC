@@ -526,7 +526,8 @@
       screen.sprite(R.arrowSprite(a.dx, a.dy), a.x, a.y);
     screen.hud(hero);
     screen.flush();
-    // Θέση από το μοντέλο, ίδια με το SCORE_COL του src/score.asm.
+    // Θέση από το μοντέλο, ίδια με το src/score.asm: στήλη SCORE_COL, γραμμή
+    // κειμένου 1 — δηλαδή ΤΟ HUD, όχι η πρώτη γραμμή του πλέγματος.
     screen.text(scoreText(), 1, D.HUD.score_col);
 
     // ΜΗΝΥΜΑ ΓΙΑ Ο,ΤΙ ΠΑΤΑΣ, στο ΑΛΛΟ μισό της οθόνης ώστε να μη σκεπάζει
@@ -539,7 +540,8 @@
     const hint = msgLeft ? "This key unlocks on touch" : hintFor(hero);
     if (hint) {
       const [, dr] = hero.bodyCell();
-      screen.text(hint, dr < 12 ? 16 : 7,
+      // «γραμμή πλέγματος + 2 = γραμμή κειμένου», όπως το add a,2 του hint_draw.
+      screen.text(hint, (dr < 12 ? D.K.MSG_ROW_LO : D.K.MSG_ROW_HI) + 2,
                   Math.floor((40 - hint.length) / 2) + 1);
     }
     // Το κόστος του καρέ που μόλις έτρεξε. Η πτώση χρεώνεται σαν ακινησία:

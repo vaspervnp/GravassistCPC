@@ -213,14 +213,21 @@
     /// Ο Amstrad το τυπώνει με τη γραμματοσειρά του firmware, που δεν την
     /// έχουμε εδώ — το σχήμα των γραμμάτων διαφέρει. Η ΘΕΣΗ και η
     /// ΣΥΜΠΕΡΙΦΟΡΑ είναι ίδιες, και αυτές δοκιμάζει ο σχεδιαστής.
-    text(msg, gridRow, col) {
-      const x = col * 8 * this.scale;
-      const y = (D.GRID_Y0 + gridRow * D.CELL + 7) * this.scale;
+    /// Κείμενο στο πλέγμα ΤΟΥ FIRMWARE: στήλη και γραμμή ΑΠΟ ΤΟ 1, όπως τα
+    /// παίρνει το TXT_SET_CURSOR (H = στήλη, L = γραμμή) — και όπως τα δίνουν
+    /// το src/score.asm και το hint_draw.
+    ///
+    /// ΤΟ ΑΠΟ ΤΟ 1 ΔΕΝ ΕΙΝΑΙ ΛΕΠΤΟΜΕΡΕΙΑ: με 0-based όλα έπεφταν οκτώ pixel
+    /// δεξιά, και το σκορ — που ο Amstrad το βάζει στη γραμμή 1, δηλαδή στο
+    /// HUD — έμπαινε μέσα στο πλέγμα.
+    text(msg, textRow, col) {
+      const x = (col - 1) * 8 * this.scale;
+      const top = (textRow - 1) * D.CELL * this.scale;
+      const y = top + 7 * this.scale;
       this.ctx.font = (8 * this.scale) + "px monospace";
       this.ctx.textBaseline = "alphabetic";
       this.ctx.fillStyle = "#000080";
-      this.ctx.fillRect(x - 2, y - 8 * this.scale,
-                        msg.length * 8 * this.scale + 4, 9 * this.scale);
+      this.ctx.fillRect(x, top, msg.length * 8 * this.scale, D.CELL * this.scale);
       this.ctx.fillStyle = "#FFFFFF";
       this.ctx.fillText(msg, x, y);
     }
