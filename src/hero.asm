@@ -40,7 +40,7 @@ hu_nohurt:      ld   a,(h_d)
                 call plate_step         ; οι πλάκες κρατούν τις πύλες τους
                 pop  af
 
-                ; ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται ΚΑΤΩ και μένει εκεί.
+                ; ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται Η ΔΙΚΗ ΤΗΣ και μένει εκεί.
                 ; Δεν είναι «πάγωμα στην τιμή που είχες»: ο παίκτης πρέπει να
                 ; ξέρει τι θα βρει μπαίνοντας, όχι να εξαρτάται από το πώς
                 ; έτυχε να μπει.
@@ -53,11 +53,11 @@ hu_nohurt:      ld   a,(h_d)
 hu_zoff:        ld   (hero_zone),a      ; το διαβάζει ο ήχος στο main_loop
                 or   a
                 jr   z,hu_nolock
-                ld   a,(hero_g)
-                or   a
+                ld   a,(h_nfg)          ; η φορά ΤΗΣ ζώνης, όχι πάντα «κάτω»
+                ld   hl,hero_g
+                cp   (hl)
                 jr   z,hu_nolock
-                xor  a
-                ld   (hero_g),a
+                ld   (hl),a
                 ld   a,HST_FALL
                 ld   (hero_state),a
 hu_nolock:      pop  af
@@ -1168,7 +1168,11 @@ h_hist          ds STUCK_FRAMES*4, 0
 
 ;---------------------------------------------------------------------
 ; h_noflip — είναι μέσα σε ζώνη όπου απαγορεύεται η αλλαγή βαρύτητας;
-;   OUT: CY = απαγορεύεται
+;   OUT: CY = απαγορεύεται, και τότε (h_nfg) = η φορά που ΕΠΙΒΑΛΛΕΙ η ζώνη.
+;   Η φορά βγαίνει από τον ΙΔΙΟ πίνακα και τον ΙΔΙΟ κανόνα με τα αγκάθια και
+;   τις μονόδρομες: (tile_facing + 4) & 7. Οι τέσσερις ζώνες είναι τέσσερις
+;   τύποι κελιού, όχι μία με ιδιότητα — το πλακίδιο πρέπει να δείχνει πού
+;   τραβάει.
 h_noflip:       ld   (h_nfa),a          ; ΟΧΙ push af: το pop θα επανέφερε ΚΑΙ τα
                 ld   bc,(hero_x)        ; flags, σβήνοντας το αποτέλεσμα του AND.
                 ld   de,(hero_y)        ; (Αυτό έκανε να δουλεύει μόνο η φορά 0:
@@ -1179,12 +1183,22 @@ h_noflip:       ld   (h_nfa),a          ; ΟΧΙ push af: το pop θα επαν
                 add  hl,de
                 ld   a,(hl)
                 and  F_NOFLIP
+                jr   nz,hnf_zone
                 ld   a,(h_nfa)          ; το ld ΔΕΝ πειράζει flags
-                ret  z                  ; NC = επιτρέπεται
+                or   a                  ; NC = επιτρέπεται
+                ret
+hnf_zone:       ld   hl,tile_facing
+                add  hl,de
+                ld   a,(hl)
+                add  a,4
+                and  7
+                ld   (h_nfg),a
+                ld   a,(h_nfa)
                 scf
                 ret
 
 h_nfa           db 0
+h_nfg           db 0            ; η φορά της ζώνης στην οποία βρίσκεται
 ht_kid          db 0
 ht_raw          db 0
 

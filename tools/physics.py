@@ -122,6 +122,13 @@ PLATFORM = 45           # κινείται
 PLATFORM_OFF = 46       # σταματημένη· ο διακόπτης την ξεκινάει
 PLATFORMS = (PLATFORM, PLATFORM_OFF)
 
+# Η ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ ΕΧΕΙ ΦΟΡΑ. Το GRAVLOCK τραβάει κάτω· τα τρία από εδώ
+# τραβάνε πάνω, αριστερά και δεξιά. Ξεχωριστοί ΤΥΠΟΙ και όχι ιδιότητα του
+# κελιού: το πλακίδιο πρέπει να ΔΕΙΧΝΕΙ πού τραβάει, αλλιώς ο παίκτης μπαίνει
+# και το μαθαίνει με το σώμα του.
+GRAVLOCK_U, GRAVLOCK_L, GRAVLOCK_R = 47, 48, 49
+GRAVLOCKS = (GRAVLOCK, GRAVLOCK_U, GRAVLOCK_L, GRAVLOCK_R)
+
 # Πόσες χωράνε σε μία αίθουσα. Ο πίνακας σαρώνεται σε ΚΑΘΕ solid_at, που είναι
 # η πιο καυτή ρουτίνα του παιχνιδιού — δύο είναι ήδη γενναιόδωρο.
 PLAT_MAX = 2
@@ -193,6 +200,10 @@ CHARS = {
     # με τους διακόπτες. Ζωγραφίζεις το 'm' μόνο όταν θέλεις να ΞΕΚΙΝΑΕΙ
     # ακίνητη και να την ξυπνάει ο παίκτης.
     "M": PLATFORM, "m": PLATFORM_OFF,
+    # Οι ζώνες βαρύτητας με τους αριθμούς του αριθμητικού πληκτρολογίου: 8
+    # πάνω, 4 αριστερά, 6 δεξιά. Το ":" έμεινε αυτό που ήταν — κάτω — ώστε
+    # καμία υπάρχουσα πίστα να μην αλλάξει νόημα.
+    "8": GRAVLOCK_U, "4": GRAVLOCK_L, "6": GRAVLOCK_R,
 }
 NAMES = {v: k for k, v in CHARS.items()}
 TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
@@ -205,8 +216,9 @@ TYPE_NAMES = ["EMPTY", "SOLID", "RAMP_DR", "RAMP_DL", "RAMP_UR", "RAMP_UL",
               "SWITCH_L", "SWITCH_D", "SWITCH_R",
               "SWITCH_U_ON", "SWITCH_L_ON", "SWITCH_D_ON", "SWITCH_R_ON",
               "TURRET_V", "TURRET_H", "TURRET_V_OFF", "TURRET_H_OFF",
-              "PLATFORM", "PLATFORM_OFF"]
-NTYPES = 47
+              "PLATFORM", "PLATFORM_OFF",
+              "GRAVLOCK_U", "GRAVLOCK_L", "GRAVLOCK_R"]
+NTYPES = 50
 
 # Ποιο αγκάθι αντιστοιχεί σε ποιο τραβηγμένο, και ανάποδα.
 SPIKE_OFF = {SPIKE_U: SPIKE_U_OFF, SPIKE_L: SPIKE_L_OFF,
@@ -256,7 +268,8 @@ for _t in (ONEWAY_U, ONEWAY_L, ONEWAY_D, ONEWAY_R):
 # του editor και για όποιον αφήσει το κελί στο πλέγμα.
 for _t in PLATFORMS:
     PROPS[_t] |= F_SOLID
-PROPS[GRAVLOCK] |= F_NOFLIP
+for _t in GRAVLOCKS:
+    PROPS[_t] |= F_NOFLIP
 PROPS[CRUMBLE] |= F_SOLID | F_FRAGILE
 for _t in (EXIT, TELEPORT, PLATE, PLATE_DOWN):
     PROPS[_t] |= F_TRIGGER
@@ -283,7 +296,11 @@ FACING = {SPIKE_U: 4, SPIKE_L: 2, SPIKE_D: 0, SPIKE_R: 6,
           # Same numbers as the spikes: a switch answers only from the side it
           # is mounted on, and both states face the same way.
           SWITCH_U: 4, SWITCH_L: 2, SWITCH_D: 0, SWITCH_R: 6,
-          SWITCH_U_ON: 4, SWITCH_L_ON: 2, SWITCH_D_ON: 0, SWITCH_R_ON: 6}
+          SWITCH_U_ON: 4, SWITCH_L_ON: 2, SWITCH_D_ON: 0, SWITCH_R_ON: 6,
+          # Οι ζώνες: ΙΔΙΟΣ ΚΑΝΟΝΑΣ, δηλαδή η βαρύτητα που επιβάλλουν είναι η
+          # (FACING + 4) % 8 — σαν να έχουν πάτωμα στη μεριά που δείχνει το
+          # FACING. Το GRAVLOCK «έχει πάτωμα από κάτω» και τραβάει κάτω.
+          GRAVLOCK: 4, GRAVLOCK_U: 0, GRAVLOCK_L: 6, GRAVLOCK_R: 2}
 
 # Για κάθε ράμπα: είναι στερεό το pixel (u,v) μέσα στο κελί 8x8;
 RAMP_TEST = {
@@ -1633,6 +1650,15 @@ class Hero:
         """Είναι μέσα σε ζώνη όπου απαγορεύεται η αλλαγή βαρύτητας;"""
         return bool(PROPS[self.body_cell()] & F_NOFLIP)
 
+    def lock_g(self):
+        """Ποια βαρύτητα επιβάλλει η ζώνη από κάτω του· None αν δεν είναι σε ζώνη.
+
+        Ο ΙΔΙΟΣ ΚΑΝΟΝΑΣ ΜΕ ΤΑ ΑΓΚΑΘΙΑ ΚΑΙ ΤΙΣ ΜΟΝΟΔΡΟΜΕΣ: (FACING + 4) % 8. Η
+        ζώνη είναι σαν πάτωμα στη μεριά που δείχνει, και σε τραβάει προς τα εκεί.
+        """
+        t = self.body_cell()
+        return (FACING[t] + 4) % 8 if PROPS[t] & F_NOFLIP else None
+
     def slipping(self):
         """Γλιστράει; Ναι αν η βαρύτητα δεν είναι κάθετη στην επιφάνεια.
 
@@ -1684,12 +1710,13 @@ class Hero:
         # μετά, ο ήρωας θα έπεφτε από ένα πάτωμα που είχε ήδη μετακινηθεί, και
         # το βήμα του θα κρινόταν πάνω στην περσινή θέση της.
         self.plat_step(cost)
-        # ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται ΚΑΤΩ και μένει εκεί. Δεν είναι
+        # ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται Η ΔΙΚΗ ΤΗΣ και μένει εκεί. Δεν είναι
         # «πάγωμα στην τιμή που είχες»: η ζώνη είναι νησίδα κανονικής
         # βαρύτητας μέσα στο δωμάτιο, και ο παίκτης πρέπει να ξέρει τι θα βρει
         # μπαίνοντας — όχι να εξαρτάται από το πώς έτυχε να μπει.
-        if self.noflip() and self.g != 0:
-            self.g = 0
+        zg = self.lock_g()
+        if zg is not None and self.g != zg:
+            self.g = zg
             self.state = "FALL"
         self.plates_step()
         if self.hurt_left:

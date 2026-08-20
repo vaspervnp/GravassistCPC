@@ -723,6 +723,39 @@ def main():
     check("ζώνη κλειδώματος: Z80 και μοντέλο ταυτίζονται 200 frames",
           diverged is None, str(diverged))
 
+    # ΚΑΙ ΟΙ ΤΕΣΣΕΡΙΣ ΦΟΡΕΣ, ΜΕΣΑ ΑΠΟ ΤΟ hero_update. Η ζώνη επιβάλλει τη δική
+    # της φορά, όχι πάντα «κάτω»: τέσσερις τύποι κελιού, ένας πίνακας
+    # (tile_facing) και ο ίδιος κανόνας με τα αγκάθια.
+    for ch, want in ((":", 0), ("8", 4), ("4", 2), ("6", 6)):
+        rows4 = [list("#" * P.COLS)] \
+            + [list("#" + "." * (P.COLS - 2) + "#") for _ in range(P.ROWS - 2)] \
+            + [list("#" * P.COLS)]
+        for r in range(10, 20):
+            for c in range(10, 20):
+                rows4[r][c] = ch
+        txt4 = ";\n" + "\n".join("".join(r) for r in rows4) + "\ngravity 0"
+        rm4 = P.Room(txt4)
+        rm4.number, rm4.path = 1, ""
+        t.poke(set_buf, RF.build_set([rm4]))
+        t.poke(t.sym("SET_CUR"), b"\x01")
+        t.poke(t.sym("JR_COUNT"), b"\x00")
+        t.call("ROOM_LOAD", a=1)
+        got = set()
+        for g0 in range(8):
+            t.poke16(t.sym("HERO_X"), 15 * P.CELL + 4)
+            t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + 15 * P.CELL + 4)
+            t.poke(t.sym("HERO_G"), bytes((g0,)))
+            t.call("HERO_UPDATE", a=0)
+            got.add(t.peek(t.sym("HERO_G"))[0])
+            # …και το μοντέλο λέει το ίδιο, από την ίδια αφετηρία
+            ref4 = P.Hero(P.Room(txt4), 15 * P.CELL + 4,
+                          P.GRID_Y0 + 15 * P.CELL + 4, g0)
+            ref4.update(0)
+            if ref4.g != t.peek(t.sym("HERO_G"))[0]:
+                got.add(("μοντέλο", ref4.g))
+        check(f"ζώνη «{ch}» στον Z80: φορά {want} από όποια κι αν μπεις",
+              got == {want}, str(sorted(str(x) for x in got)))
+
     # Η σημαία που διαβάζει ο ήχος: χωρίς αυτήν τα παράσιτα δεν ξέρουν πότε
     # να ξεκινήσουν. Ο ήρωας είναι ΜΕΣΑ στη ζώνη μετά τα 200 frames.
     check("η ζώνη αφήνει σημάδι για τον ήχο",

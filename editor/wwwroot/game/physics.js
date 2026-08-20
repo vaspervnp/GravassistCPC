@@ -296,6 +296,14 @@
     }
     noflip() { const [c, r] = this.bodyCell(); return !!(D.PROPS[this.room.cell(c, r)] & D.F.NOFLIP); }
 
+    /// Ποια βαρύτητα επιβάλλει η ζώνη από κάτω του· null αν δεν είναι σε ζώνη.
+    /// Ο ΙΔΙΟΣ ΚΑΝΟΝΑΣ ΜΕ ΤΑ ΑΓΚΑΘΙΑ: (FACING + 4) % 8 — η ζώνη είναι σαν
+    /// πάτωμα στη μεριά που δείχνει και σε τραβάει προς τα εκεί.
+    lockG() {
+      const [c, r] = this.bodyCell(), t = this.room.cell(c, r);
+      return (D.PROPS[t] & D.F.NOFLIP) ? (D.FACING[t] + 4) % 8 : null;
+    }
+
     // --- κίνηση -----------------------------------------------------
     step(vec, n) { this.x += vec[0] * n; this.y += vec[1] * n; }
     snap() {
@@ -847,7 +855,8 @@
       this.platStep(cost);
       // ΖΩΝΗ ΚΛΕΙΔΩΜΑΤΟΣ: η βαρύτητα γίνεται ΚΑΤΩ και μένει εκεί — νησίδα
       // «κανονικού» παιχνιδιού μέσα στο δωμάτιο.
-      if (this.noflip() && this.g !== 0) { this.g = 0; this.state = "FALL"; }
+      const zg = this.lockG();
+      if (zg !== null && this.g !== zg) { this.g = zg; this.state = "FALL"; }
       this.events.length = 0;
       // ΤΟ ΑΔΕΙΑΣΜΑ ΠΡΩΤΑ. Ήταν μετά το platesStep(), που σημαίνει ότι οι
       // ήχοι «πλάκα» και «πύλη» σβήνονταν στην ίδια γραμμή που γεννιόντουσαν

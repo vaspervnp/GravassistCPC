@@ -108,7 +108,11 @@ PLACEHOLDER = {
     P.SWITCH_D: ("SWITCH", 2), P.SWITCH_R: ("SWITCH", 1),
     P.SWITCH_U_ON: ("SWITCH", 0, True), P.SWITCH_L_ON: ("SWITCH", 3, True),
     P.SWITCH_D_ON: ("SWITCH", 2, True), P.SWITCH_R_ON: ("SWITCH", 1, True),
-    P.CRATE: ("CRATE", 0), P.CRUMBLE: ("CRUMBLE", 0), P.GRAVLOCK: ("GRAVLOCK", 0),
+        P.CRATE: ("CRATE", 0), P.CRUMBLE: ("CRUMBLE", 0),
+    # Οι τέσσερις ζώνες: ΕΝΑ σχέδιο με βέλος, τέσσερις στροφές — όπως τα
+    # αγκάθια. Στροφή N = N x 90 δεξιόστροφα, και το βασικό βέλος δείχνει ΚΑΤΩ.
+    P.GRAVLOCK: ("GRAVLOCK", 0), P.GRAVLOCK_L: ("GRAVLOCK", 1),
+    P.GRAVLOCK_U: ("GRAVLOCK", 2), P.GRAVLOCK_R: ("GRAVLOCK", 3),
     # Κινούμενη πλατφόρμα: ΕΝΑ σχήμα, δύο καταστάσεις. Τα κελιά της
     # σβήνονται στη φόρτωση — το πλακίδιο το ζωγραφίζει ο πίνακάς της.
     P.PLATFORM: ("PLATFORM", 0), P.PLATFORM_OFF: ("PLATFORM", 0, True),

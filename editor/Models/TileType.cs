@@ -222,13 +222,46 @@ public static class TileCatalog
                   stroke="var(--edge)" stroke-width="0.5"/>
             """),
 
-        new TileType(':', "gravlock", SurfaceGroup, "Gravity-lock zone",
-            "Inside it gravity does NOT change. It is not solid.",
+        new TileType(':', "gravlock", SurfaceGroup, "Gravity zone ↓",
+            "Inside it gravity is forced DOWN and cannot be changed. Not solid.",
             Palette.Ink, Palette.EdgeColor,
             """
             <rect x="0" y="0" width="8" height="8" fill="var(--fill)" fill-opacity="0.12"/>
-            <circle cx="4" cy="4" r="2.4" fill="none" stroke="var(--fill)" stroke-width="0.7"/>
-            <line x1="2.3" y1="5.7" x2="5.7" y2="2.3" stroke="var(--fill)" stroke-width="0.7"/>
+              <line x1="4" y1="0.8" x2="4" y2="5" stroke="var(--fill)" stroke-width="1.2"/>
+              <polygon points="4,7.2 1.8,4.4 6.2,4.4" fill="var(--fill)"/>
+            """),
+
+        new TileType('8', "gravlock_u", SurfaceGroup, "Gravity zone ↑",
+            "Inside it gravity is forced UP and cannot be changed. Not solid.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <g transform="rotate(180 4 4)">
+              <rect x="0" y="0" width="8" height="8" fill="var(--fill)" fill-opacity="0.12"/>
+              <line x1="4" y1="0.8" x2="4" y2="5" stroke="var(--fill)" stroke-width="1.2"/>
+              <polygon points="4,7.2 1.8,4.4 6.2,4.4" fill="var(--fill)"/>
+            </g>
+            """),
+
+        new TileType('4', "gravlock_l", SurfaceGroup, "Gravity zone ←",
+            "Inside it gravity is forced LEFT and cannot be changed. Not solid.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <g transform="rotate(90 4 4)">
+              <rect x="0" y="0" width="8" height="8" fill="var(--fill)" fill-opacity="0.12"/>
+              <line x1="4" y1="0.8" x2="4" y2="5" stroke="var(--fill)" stroke-width="1.2"/>
+              <polygon points="4,7.2 1.8,4.4 6.2,4.4" fill="var(--fill)"/>
+            </g>
+            """),
+
+        new TileType('6', "gravlock_r", SurfaceGroup, "Gravity zone →",
+            "Inside it gravity is forced RIGHT and cannot be changed. Not solid.",
+            Palette.Ink, Palette.EdgeColor,
+            """
+            <g transform="rotate(270 4 4)">
+              <rect x="0" y="0" width="8" height="8" fill="var(--fill)" fill-opacity="0.12"/>
+              <line x1="4" y1="0.8" x2="4" y2="5" stroke="var(--fill)" stroke-width="1.2"/>
+              <polygon points="4,7.2 1.8,4.4 6.2,4.4" fill="var(--fill)"/>
+            </g>
             """),
 
         new TileType('%', "crumble", SurfaceGroup, "Fragile",

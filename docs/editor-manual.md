@@ -198,7 +198,10 @@ three settings live in the *Wiring — targets* panel — see §8.
 | `_` | One-way ↓ | Solid only from below — you pass through going down from above. |
 | `[` | One-way ← | Solid only from the left — you pass through moving left. |
 | `]` | One-way → | Solid only from the right — you pass through moving right. |
-| `:` | Gravity-lock zone | Inside it gravity does **not** change and the hero does not turn — gravity is forced down. Not solid. |
+| `:` | Gravity zone ↓ | Inside it gravity is forced **down** and cannot be changed; the hero does not turn. Not solid. |
+| `8` | Gravity zone ↑ | The same, pulling **up**. |
+| `4` | Gravity zone ← | The same, pulling **left**. |
+| `6` | Gravity zone → | The same, pulling **right**. |
 | `%` | Fragile | Solid that collapses shortly after you step on it. |
 
 ### Items
@@ -426,8 +429,11 @@ There are three places gravity is decided, in order of precedence:
    the `@` marker. Written as the `gravity` line in the file.
 2. **Arrival gravity** (per door, Exits panel) — overrides the above when the player
    enters through that door. `— room` leaves it to the room.
-3. **Gravity-lock zones** (`:`) — inside one, the player cannot turn and gravity is
-   forced down, whatever the walls do.
+3. **Gravity zones** (`:` `8` `4` `6`) — inside one, the player cannot turn and gravity
+   is forced to the zone's own direction, whatever the walls do. The arrow on the tile
+   shows which way it pulls: down, up, left, right. The four characters are the numeric
+   keypad — 8 up, 4 left, 6 right — and `:` stayed the down one so that no existing
+   level changes meaning.
 
 ---
 
