@@ -1005,6 +1005,7 @@ dhu_w:          ld   (dh_w),a
                 jr   c,dhu_y0
                 ld   a,(hl)
 dhu_y0:         ld   (dh_yy),a
+                ld   (dh_top),a         ; το dh_yy είναι μετρητής· η κορυφή μένει
                 ld   a,(cur_y1)
                 ld   hl,last_y1
                 cp   (hl)
@@ -1013,6 +1014,7 @@ dhu_y0:         ld   (dh_yy),a
 dhu_y1:         ld   (dh_y1),a
 
 dh_line:        call dh_bgline          ; φόντο -> linebuf
+                call plat_bgline        ; …ΚΑΙ η πλατφόρμα, πριν το sprite
                 ; ΑΝΑΒΟΣΒΗΝΕΙ ΟΣΟ ΕΙΝΑΙ ΑΤΡΩΤΟΣ. Παραλείπουμε ΜΟΝΟ το sprite,
                 ; όχι τη σχεδίαση: το φόντο γράφεται κανονικά, οπότε ο ήρωας
                 ; σβήνεται σωστά. Αν παραλείπαμε όλο το draw_hero, θα έμενε
@@ -1344,6 +1346,7 @@ dh_c1           db   0
 dh_w            db   0
 dh_yy           db   0
 dh_y1           db   0
+dh_top          db   0
 dhb_off         db   0
 dhb_half        db   0
 linebuf         ds   LINEBUF_W, 0

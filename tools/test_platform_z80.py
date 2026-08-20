@@ -418,6 +418,64 @@ def main():
           after > before, f"{before} -> {after} bytes")
     t.poke(t.sym("CELL_BUF") + 14 * P.COLS + 10, b"\x00")
 
+    print("--- ο ήρωας πάνω στον διακόπτη: κανείς δεν σβήνει τον άλλο")
+    # ΤΟ ΣΦΑΛΜΑ: ο επιβάτης ζωγραφιζόταν ΜΕΤΑ τον ήρωα και, εκεί που είναι
+    # διάφανος, έβαφε φόντο πάνω στα πόδια του. Η δέσμη τον έπιανε άλλοτε
+    # ζωγραφισμένο κι άλλοτε σβησμένο — τρεμόπαιγμα ακριβώς όταν πατάς τον
+    # διακόπτη. Τώρα η πλατφόρμα μπαίνει στο ΦΟΝΤΟ του ήρωα (plat_bgline) και
+    # η σχεδίαση δεν ξαναγράφει ό,τι εκείνος ζωγράφισε.
+    rm = model([(10, 15, "M"), (11, 15, "M"), (10, 14, "s")],
+               "plat 10 15 20 15 0 24\nsw 10 14 6\n")
+    load(t, rm)
+    r = rec(t)
+    hero_col = (r["x"] + r["rdx"]) >> 2          # η στήλη του επιβάτη
+    hero_top = r["y"] - P.CELL
+
+    def set_hero_rect(col, w, top, bot):
+        t.poke(t.sym("DH_C0"), bytes((col,)))
+        t.poke(t.sym("DH_W"), bytes((w,)))
+        t.poke(t.sym("DH_TOP"), bytes((top,)))
+        t.poke(t.sym("DH_Y1"), bytes((bot,)))
+
+    # Ο ήρωας «ζωγράφισε» ένα ορθογώνιο πάνω στο κελί του επιβάτη.
+    MARK = 0x5A
+    # ΚΑΙ ΟΙ ΔΥΟ ΖΩΝΕΣ, του επιβάτη ΚΑΙ του σώματος: με μόνο του επιβάτη, ένα
+    # σπάσιμο που άφηνε το σώμα να γράφει πάνω στον ήρωα έμενε πράσινο.
+    inside = (screen_band(t, r["x"] + r["rdx"], hero_top)
+              + screen_band(t, r["x"], r["y"]))
+    set_hero_rect(hero_col, 2, hero_top, r["y"] + P.CELL - 1)
+    for a in inside:
+        t.poke(a, bytes([MARK] * 2))
+    t.call("PLAT_DRAW")
+    kept = sum(1 for a in inside for b in t.peek(a, 2) if b == MARK)
+    check("ό,τι ζωγράφισε ο ήρωας μένει ανέγγιχτο", kept == len(inside) * 2,
+          f"{kept} από {len(inside) * 2} bytes")
+
+    # …και ΕΞΩ από το ορθογώνιό του η πλατφόρμα ζωγραφίζεται κανονικά.
+    # ΜΕΣΑ στην πλατφόρμα αλλά ΕΞΩ από το ορθογώνιο του ήρωα: το δεύτερο κελί
+    # της. Η πρώτη εκδοχή δειγμάτιζε πέρα από την άκρη της και έλεγε «δεν
+    # ζωγραφίζεται» για ένα σημείο όπου δεν υπάρχει πλατφόρμα.
+    outside = screen_band(t, r["x"] + P.CELL, r["y"])
+    band_clear(t, outside)
+    t.call("PLAT_DRAW")
+    check("…και έξω από αυτό η πλατφόρμα ζωγραφίζεται", band_bytes(t, outside) > 0,
+          f"{band_bytes(t, outside)} bytes")
+    set_hero_rect(0, 0, 0, 0)           # κανένα παράθυρο ήρωα για τα επόμενα
+
+    # ΚΑΙ ΜΕΣΑ ΣΤΟ ΦΟΝΤΟ ΤΟΥ: το linebuf πρέπει να έχει την πλατφόρμα, αλλιώς
+    # ο ήρωας θα την έσβηνε σε όλο του το ορθογώνιο κάθε πέρασμα.
+    lb = t.sym("LINEBUF")
+    body_col = r["x"] >> 2
+    for line, what in ((r["y"] + 2, "το σώμα"), (hero_top + 5, "ο επιβάτης")):
+        t.poke(t.sym("DH_YY"), bytes((line,)))
+        t.poke(t.sym("DH_C0"), bytes((body_col,)))
+        t.poke(t.sym("DH_W"), b"\x08")
+        t.poke(lb, b"\x00" * 8)
+        t.call("PLAT_BGLINE")
+        got = sum(1 for b in t.peek(lb, 8) if b)
+        check(f"  {what} μπαίνει στο φόντο του ήρωα", got > 0, f"{got} bytes")
+    t.poke(t.sym("DH_W"), b"\x00")
+
     print("--- ΤΟ ΚΟΣΤΟΣ: πρέπει να τελειώνει πριν τη δέσμη")
     # ΑΥΤΟΣ ΕΙΝΑΙ Ο ΦΥΛΑΚΑΣ ΤΟΥ ΤΡΕΜΟΠΑΙΓΜΑΤΟΣ, και ο μόνος έλεγχος εδώ που
     # μετράει χρόνο. Η σχεδίαση ανά pixel κόστιζε 150.000 κύκλους και το

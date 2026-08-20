@@ -1055,6 +1055,206 @@ per_col:        ld   a,(pe_rc)
                 ret
 
 ;---------------------------------------------------------------------
+; plat_bgline — η πλατφόρμα ΜΕΣΑ στο φόντο του ήρωα
+;
+;   ΤΟ draw_hero ΣΥΝΘΕΤΕΙ ΤΟ ΦΟΝΤΟ ΤΟΥ ΑΠΟ ΤΗΝ ΠΙΣΤΑ, όπου η πλατφόρμα δεν
+;   υπάρχει. Όποιος ζωγράφιζε δεύτερος έσβηνε τον πρώτο: ο επιβάτης-διακόπτης
+;   ζωγραφιζόταν μετά τον ήρωα και, εκεί που είναι διάφανος, έβαφε φόντο πάνω
+;   στα πόδια του — η δέσμη τον έπιανε άλλοτε ζωγραφισμένο κι άλλοτε σβησμένο.
+;   Μπαίνοντας εδώ, στο linebuf, ο ήρωας ζωγραφίζεται ΑΠΟ ΠΑΝΩ της μία φορά.
+;
+; IN: (dh_yy) γραμμή σάρωσης, (dh_c0) πρώτη στήλη byte, (dh_w) πλήθος bytes
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+plat_bgline:    ld   a,(plat_n)
+                or   a
+                ret  z
+                ld   (pbl_left),a
+                ld   ix,plat_tab
+pbl_lp:         call pbl_one
+                ld   bc,PL_SIZE
+                add  ix,bc
+                ld   hl,pbl_left
+                dec  (hl)
+                jr   nz,pbl_lp
+                ret
+
+pbl_one:        ld   a,(dh_yy)          ; --- το σώμα, αδιαφανές
+                sub  (ix+PL_Y)
+                jr   c,pbl_rid
+                ld   hl,pbl_v
+                ld   (hl),a
+                cp   (ix+PL_H)
+                jr   nc,pbl_rid
+                call pe_body
+                ld   (pbl_type),a
+                call pl_bcol
+                ld   (pbl_col),a
+                ld   a,(ix+PL_W)
+                srl  a
+                srl  a
+                ld   (pbl_bw),a
+                xor  a
+                ld   (pbl_op),a
+                call pbl_row
+
+pbl_rid:        ld   a,(ix+PL_RID)      ; --- ο επιβάτης, με μάσκα
+                or   a
+                ret  z
+                ld   (pbl_type),a
+                ld   a,(ix+PL_Y)
+                sub  LVL_CELL
+                ld   c,a
+                ld   a,(dh_yy)
+                sub  c
+                ret  c
+                cp   LVL_CELL
+                ret  nc
+                ld   (pbl_v),a
+                call pl_bcol
+                ld   c,a
+                ld   a,(ix+PL_RDX)
+                srl  a
+                srl  a
+                add  a,c
+                ld   (pbl_col),a
+                ld   a,LVL_CELL/4
+                ld   (pbl_bw),a
+                ld   a,1
+                ld   (pbl_op),a
+                ; και πέφτει στο pbl_row
+
+; --- pbl_row: μία γραμμή του (pbl_col, pbl_bw) μέσα στο linebuf
+pbl_row:        xor  a
+                ld   (pbl_u),a
+pbr_lp:         ld   a,(pbl_col)
+                ld   hl,pbl_u
+                add  a,(hl)
+                ld   c,a                ; C = στήλη byte
+                ld   hl,dh_c0
+                sub  (hl)
+                jr   c,pbr_next         ; έξω από το παράθυρο του ήρωα
+                ld   hl,dh_w
+                cp   (hl)
+                jr   nc,pbr_next
+                ld   e,a                ; E = θέση μέσα στο linebuf
+                ld   d,0
+                ld   hl,linebuf
+                add  hl,de
+                push hl
+                ld   a,(pbl_v)          ; το byte μελανιού
+                add  a,a
+                ld   e,a
+                ld   a,(pbl_bw)
+                cp   LVL_CELL/4         ; ο επιβάτης: 2 bytes ανά γραμμή
+                ld   a,(pbl_u)
+                jr   z,pbr_half
+                and  1                  ; το σώμα: πλακίδιο που επαναλαμβάνεται
+pbr_half:       add  a,e
+                ld   e,a
+                ld   d,0
+                ld   a,(pbl_type)
+                call pl_trow
+                ld   a,(hl)
+                pop  hl
+                ld   c,a
+                ld   a,(pbl_op)
+                or   a
+                jr   z,pbr_put          ; αδιαφανές: σκέτη αντικατάσταση
+                ld   a,c
+                call pl_mask
+                and  (hl)               ; φόντο εκεί που είναι διάφανος
+                or   c
+                ld   (hl),a
+                jr   pbr_next
+pbr_put:        ld   (hl),c
+pbr_next:       ld   hl,pbl_u
+                inc  (hl)
+                ld   a,(hl)
+                ld   hl,pbl_bw
+                cp   (hl)
+                jr   c,pbr_lp
+                ret
+
+; --- pd_split: πόσα bytes της γραμμής είναι πριν, μέσα και μετά το ορθογώνιο
+;     που μόλις ζωγράφισε ο ήρωας.
+;     ΑΝΑ ΓΡΑΜΜΗ ΚΑΙ ΟΧΙ ΑΝΑ BYTE: ο ίδιος έλεγχος με κλήση σε κάθε byte
+;     κόστιζε 13.000 κύκλους — περισσότερο από όλη την υπόλοιπη σχεδίαση.
+; OUT: D = πριν, E = παράλειψη, (pd_after) = μετά
+pd_split:       ld   a,(pd_bw)
+                ld   d,a                ; προεπιλογή: όλα δικά μας
+                ld   e,0
+                xor  a
+                ld   (pd_after),a
+                ld   a,(pd_line)
+                ld   hl,dh_top
+                cp   (hl)
+                ret  c                  ; η γραμμή είναι πάνω από τον ήρωα
+                ld   hl,dh_y1
+                cp   (hl)
+                jr   z,pds_in
+                ret  nc                 ; ή κάτω από αυτόν
+pds_in:         ld   a,(dh_c0)
+                ld   hl,pd_col
+                sub  (hl)
+                ld   c,a                ; C = αρχή του παραθύρου, προσημασμένη
+                ld   a,(dh_w)
+                add  a,c
+                ld   b,a                ; B = τέλος του
+                ld   a,c
+                bit  7,a
+                jr   z,pds_c1
+                xor  a
+pds_c1:         ld   hl,pd_bw
+                cp   (hl)
+                jr   c,pds_c2
+                ld   a,(hl)
+pds_c2:         ld   c,a
+                ld   a,b
+                bit  7,a
+                jr   z,pds_h1
+                xor  a
+pds_h1:         ld   hl,pd_bw
+                cp   (hl)
+                jr   c,pds_h2
+                ld   a,(hl)
+pds_h2:         ld   b,a
+                sub  c
+                ld   e,a
+                ld   a,(pd_bw)
+                sub  b
+                ld   (pd_after),a
+                ld   d,c
+                ret
+
+;---------------------------------------------------------------------
+; pl_inhero — πέφτει το byte (B = στήλη, C = γραμμή) μέσα σε ό,τι μόλις
+;             ζωγράφισε το draw_hero;
+;   OUT: CF=1 μέσα. Εκεί ΔΕΝ ξαναγράφουμε: το plat_bgline το έβαλε ήδη στο
+;   φόντο του και ο ήρωας κάθεται από πάνω· δεύτερη εγγραφή θα τον έσβηνε.
+; ΑΛΛΟΙΩΝΕΙ: AF, HL
+;---------------------------------------------------------------------
+pl_inhero:      ld   a,b
+                ld   hl,dh_c0
+                sub  (hl)
+                jr   c,pih_no
+                ld   hl,dh_w
+                cp   (hl)
+                jr   nc,pih_no
+                ld   a,c
+                ld   hl,dh_top
+                cp   (hl)
+                jr   c,pih_no
+                ld   hl,dh_y1
+                cp   (hl)
+                jr   z,pih_yes
+                jr   nc,pih_no
+pih_yes:        scf
+                ret
+pih_no:         or   a
+                ret
+
+;---------------------------------------------------------------------
 ; plat_draw — η πλατφόρμα και ο επιβάτης της, με ολόκληρα bytes
 ; ΑΛΛΟΙΩΝΕΙ: τα πάντα
 ;---------------------------------------------------------------------
@@ -1105,21 +1305,47 @@ pd_row:         ld   a,(pd_v)           ; τα δύο bytes αυτής της γ
                 ld   e,a
                 ld   a,(pd_v)
                 add  a,e
+                ld   (pd_line),a
                 ld   b,a
                 ld   a,(pd_col)
                 ld   c,a
+                ld   (pd_cc),a
                 call scr_addr
                 pop  bc
-                ld   a,(pd_bw)
-                ld   d,a
-pd_byte:        ld   (hl),c             ; αριστερό μισό του πλακιδίου
+                push hl                 ; ΤΟ HL ΕΙΝΑΙ Η ΟΘΟΝΗ: το pd_split το χαλάει
+                call pd_split           ; D = πριν, E = παράλειψη, (pd_after)
+                pop  hl
+                ld   a,d
+                or   a
+                jr   z,pd_gap
+pd_w1:          ld   (hl),c             ; ό,τι είναι αριστερά του ήρωα
                 inc  hl
+                ld   a,b
+                ld   b,c
+                ld   c,a
                 dec  d
+                jr   nz,pd_w1
+pd_gap:         ld   a,e                ; ΤΟ ΚΟΜΜΑΤΙ ΤΟΥ ΗΡΩΑ ΔΕΝ ΞΑΝΑΓΡΑΦΕΤΑΙ:
+                or   a                  ; το plat_bgline το έβαλε ήδη στο φόντο
+                jr   z,pd_run2          ; του και εκείνος κάθεται από πάνω
+                ld   d,0
+                add  hl,de
+                bit  0,e                ; μονός αριθμός -> τα μισά εναλλάσσονται
+                jr   z,pd_run2
+                ld   a,b
+                ld   b,c
+                ld   c,a
+pd_run2:        ld   a,(pd_after)
+                or   a
                 jr   z,pd_erow
-                ld   (hl),b             ; δεξί
+                ld   d,a
+pd_w2:          ld   (hl),c             ; και ό,τι είναι δεξιά του
                 inc  hl
+                ld   a,b
+                ld   b,c
+                ld   c,a
                 dec  d
-                jr   nz,pd_byte
+                jr   nz,pd_w2
 pd_erow:        ld   hl,pd_v
                 inc  (hl)
                 ld   a,(hl)
@@ -1178,12 +1404,15 @@ prd_col:        ld   a,(pd_v)           ; το byte μελανιού
                 or   (hl)
                 ld   (pd_ink),a
                 pop  bc                 ; B = στήλη, C = γραμμή
+                call pl_inhero          ; μέσα στον ήρωα; τότε δεν το αγγίζουμε
+                jr   c,prd_next
                 ld   a,b
                 ld   b,c
                 ld   c,a                ; scr_addr: B = γραμμή, C = στήλη
                 call scr_addr
                 ld   a,(pd_ink)
                 ld   (hl),a
+prd_next:
                 ld   hl,pd_v
                 inc  (hl)
                 ld   a,(hl)
@@ -1260,6 +1489,16 @@ pd_bg           db   0
 pl_thr          dw   0
 pd_u            db   0
 pd_v            db   0
+pbl_left        db   0
+pbl_type        db   0
+pbl_col         db   0
+pbl_bw          db   0
+pbl_v           db   0
+pbl_u           db   0
+pbl_op          db   0
+pd_line         db   0
+pd_cc           db   0
+pd_after        db   0
 
 ;---------------------------------------------------------------------
 ; plat_toggle — ο διακόπτης του καναλιού A σταματά ή ξεκινά τις πλατφόρμες του
