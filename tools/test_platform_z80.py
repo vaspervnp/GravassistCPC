@@ -451,29 +451,90 @@ def main():
     check("ό,τι ζωγράφισε ο ήρωας μένει ανέγγιχτο", kept == len(inside) * 2,
           f"{kept} από {len(inside) * 2} bytes")
 
-    # …και ΕΞΩ από το ορθογώνιό του η πλατφόρμα ζωγραφίζεται κανονικά.
-    # ΜΕΣΑ στην πλατφόρμα αλλά ΕΞΩ από το ορθογώνιο του ήρωα: το δεύτερο κελί
-    # της. Η πρώτη εκδοχή δειγμάτιζε πέρα από την άκρη της και έλεγε «δεν
-    # ζωγραφίζεται» για ένα σημείο όπου δεν υπάρχει πλατφόρμα.
-    outside = screen_band(t, r["x"] + P.CELL, r["y"])
-    band_clear(t, outside)
-    t.call("PLAT_DRAW")
-    check("…και έξω από αυτό η πλατφόρμα ζωγραφίζεται", band_bytes(t, outside) > 0,
-          f"{band_bytes(t, outside)} bytes")
-    set_hero_rect(0, 0, 0, 0)           # κανένα παράθυρο ήρωα για τα επόμενα
+    # …και ΕΞΩ από το ορθογώνιό του η πλατφόρμα είναι ΑΚΡΙΒΩΣ όπως θα ήταν
+    # χωρίς αυτόν. ΟΧΙ «υπάρχει κάτι»: το pd_split χαλούσε το BC — τα δύο bytes
+    # του πλακιδίου — και οι στήλες δεξιά του ήρωα γράφονταν με σκουπίδια. Ένας
+    # έλεγχος «μη μηδενικό» τα δεχόταν, γιατί τα σκουπίδια δεν ήταν μηδενικά.
+    set_hero_rect(0, 0, 0, 0)
+    body = screen_band(t, r["x"], r["y"])
+
+    def paint(dy):
+        """Ένα πλήρες πέρασμα σχεδίασης με τον ήρωα dy pixel από την πλατφόρμα."""
+        load(t, rm)
+        c = rec(t)
+        t.poke16(t.sym("HERO_X"), c["x"] + 4)
+        t.poke16(t.sym("HERO_Y"), c["y"] + dy)
+        t.poke(t.sym("HERO_G"), b"\x00")
+        for a in screen_band(t, c["x"], c["y"] - 2 * P.CELL, rows=40):
+            t.poke(a, b"\x00" * 4)
+        t.call("PREP_HERO")
+        t.call("PLAT_ERASE")
+        t.call("DRAW_HERO")
+        t.call("PLAT_DRAW")
+        return [bytes(t.peek(a, 4)) for a in body]
+
+    far = paint(-40)                    # ο ήρωας αλλού: η αναφορά
+    near = paint(4)                     # ο ήρωας μέσα στις γραμμές της
+    c0 = t.peek(t.sym("DH_C0"), 1)[0]
+    w = t.peek(t.sym("DH_W"), 1)[0]
+    col0 = r["x"] >> 2
+    bad = wrong = blank = 0
+    for row_far, row_near in zip(far, near):
+        for i in range(4):
+            inside = c0 <= col0 + i < c0 + w
+            if inside:
+                blank += 1 if row_near[i] == 0 else 0
+            elif row_near[i] != row_far[i]:
+                wrong += 1
+        bad += 1
+    check("έξω από τον ήρωα η πλατφόρμα είναι ΙΔΙΑ με το χωρίς αυτόν",
+          wrong == 0, f"{wrong} bytes διαφορετικά (παράθυρο {c0}..{c0 + w - 1})")
+    check("…και μέσα στο ορθογώνιό του δεν μένει κενή",
+          blank == 0, f"{blank} άδεια bytes — ο ήρωας την έσβησε")
 
     # ΚΑΙ ΜΕΣΑ ΣΤΟ ΦΟΝΤΟ ΤΟΥ: το linebuf πρέπει να έχει την πλατφόρμα, αλλιώς
     # ο ήρωας θα την έσβηνε σε όλο του το ορθογώνιο κάθε πέρασμα.
     lb = t.sym("LINEBUF")
     body_col = r["x"] >> 2
-    for line, what in ((r["y"] + 2, "το σώμα"), (hero_top + 5, "ο επιβάτης")):
+    rid_col = (r["x"] + r["rdx"]) >> 2
+
+    def mask_of(ink):
+        """Τα bits του φόντου που επιβιώνουν — ό,τι κάνει το pl_mask."""
+        nib = ((ink >> 4) | ink) & 0x0F
+        return ~(nib | (nib << 4)) & 0xFF
+
+    def bgline(line, fill=0xFF):
         t.poke(t.sym("DH_YY"), bytes((line,)))
         t.poke(t.sym("DH_C0"), bytes((body_col,)))
         t.poke(t.sym("DH_W"), b"\x08")
-        t.poke(lb, b"\x00" * 8)
+        t.poke(lb, bytes([fill]) * 8)
         t.call("PLAT_BGLINE")
-        got = sum(1 for b in t.peek(lb, 8) if b)
-        check(f"  {what} μπαίνει στο φόντο του ήρωα", got > 0, f"{got} bytes")
+        return t.peek(lb, 8)
+
+    # ΤΟ ΣΩΜΑ: αδιαφανές, άρα το byte του πλακιδίου αυτούσιο.
+    v = 2
+    tile = t.sym("TILE_GFX") + P.PLATFORM * 16 + v * 2
+    want = [t.peek(tile + (i & 1), 1)[0] for i in range(4)] + [0xFF] * 4
+    got = list(bgline(r["y"] + v))
+    check("το σώμα μπαίνει στο φόντο του ήρωα, byte προς byte", got == want,
+          f"{[f'{b:02X}' for b in got]} vs {[f'{b:02X}' for b in want]}")
+
+    # Ο ΕΠΙΒΑΤΗΣ: διάφανος, άρα (φόντο ΚΑΙ μάσκα) Ή μελάνι. ΟΧΙ πλήθος bytes:
+    # ένα «υπάρχει κάτι» δεχόταν το σφάλμα όπου το pl_mask χαλούσε το μελάνι.
+    # ΚΑΙ ΟΧΙ ΜΕ ΦΟΝΤΟ #FF: εκεί το (φόντο & μάσκα) | μελάνι βγαίνει #FF ό,τι κι
+    # αν κάνει ο κώδικας — η πρώτη εκδοχή αυτού του ελέγχου δεν έλεγχε τίποτα.
+    v = 5
+    tile = t.sym("TILE_GFX") + r["rid"] * 16 + v * 2
+    off = rid_col - body_col
+    for fill in (0x00, 0x0F):
+        want = [fill] * 8
+        for i in range(2):
+            ink = t.peek(tile + i, 1)[0]
+            want[off + i] = (fill & mask_of(ink)) | ink
+        got = list(bgline(r["y"] - P.CELL + v, fill))
+        check(f"ο επιβάτης πάνω σε φόντο #{fill:02X}, byte προς byte", got == want,
+              f"{[f'{b:02X}' for b in got]} vs {[f'{b:02X}' for b in want]}")
+
     t.poke(t.sym("DH_W"), b"\x00")
 
     print("--- ΤΟ ΚΟΣΤΟΣ: πρέπει να τελειώνει πριν τη δέσμη")

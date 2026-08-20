@@ -1141,6 +1141,7 @@ pbr_lp:         ld   a,(pbl_col)
                 ld   d,0
                 ld   hl,linebuf
                 add  hl,de
+                ld   (pbl_dst),hl
                 push hl
                 ld   a,(pbl_v)          ; το byte μελανιού
                 add  a,a
@@ -1162,9 +1163,12 @@ pbr_half:       add  a,e
                 or   a
                 jr   z,pbr_put          ; αδιαφανές: σκέτη αντικατάσταση
                 ld   a,c
+                ld   (pbl_ink),a        ; ΤΟ pl_mask ΧΑΛΑΕΙ ΤΟ C
                 call pl_mask
                 and  (hl)               ; φόντο εκεί που είναι διάφανος
-                or   c
+                ld   hl,pbl_ink
+                or   (hl)
+                ld   hl,(pbl_dst)
                 ld   (hl),a
                 jr   pbr_next
 pbr_put:        ld   (hl),c
@@ -1312,9 +1316,11 @@ pd_row:         ld   a,(pd_v)           ; τα δύο bytes αυτής της γ
                 ld   (pd_cc),a
                 call scr_addr
                 pop  bc
-                push hl                 ; ΤΟ HL ΕΙΝΑΙ Η ΟΘΟΝΗ: το pd_split το χαλάει
+                push bc                 ; ΤΟ BC ΕΙΝΑΙ ΤΑ ΔΥΟ BYTES ΤΟΥ ΠΛΑΚΙΔΙΟΥ
+                push hl                 ; και το HL η οθόνη: το pd_split τα χαλάει
                 call pd_split           ; D = πριν, E = παράλειψη, (pd_after)
                 pop  hl
+                pop  bc
                 ld   a,d
                 or   a
                 jr   z,pd_gap
@@ -1496,6 +1502,8 @@ pbl_bw          db   0
 pbl_v           db   0
 pbl_u           db   0
 pbl_op          db   0
+pbl_ink         db   0
+pbl_dst         dw   0
 pd_line         db   0
 pd_cc           db   0
 pd_after        db   0
