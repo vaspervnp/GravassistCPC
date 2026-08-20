@@ -31,6 +31,34 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TILES = os.path.join(ROOT, "editor", "Models", "TileType.cs")
 
 
+def palette_chars():
+    """(χαρακτήρας -> όνομα) για ΚΑΘΕ πλακίδιο της παλέτας."""
+    with open(TILES, encoding="utf-8") as f:
+        src = f.read()
+    out = {}
+    for ch, name in re.findall(r"new TileType\('(\\?.)',\s*\"([a-z0-9_]+)\"", src):
+        out[{"\\\\": "\\", "\\'": "'"}.get(ch, ch)] = name
+    return out
+
+
+def check_chars():
+    """Η παλέτα και ο parser δέχονται ΤΟΥΣ ΙΔΙΟΥΣ χαρακτήρες.
+
+    ΤΟ ΣΧΟΛΙΟ ΤΟΥ TileCatalog ΤΟ ΕΛΕΓΕ ΚΑΙ ΚΑΝΕΙΣ ΔΕΝ ΤΟ ΕΛΕΓΧΕ. Ένας τύπος που
+    μπαίνει στο μοντέλο και ξεχνιέται εδώ δεν ζωγραφίζεται πουθενά: ο
+    σχεδιαστής δεν τον βλέπει και δεν μπορεί να τον βάλει. Ανάποδα, ένας
+    χαρακτήρας που ζωγραφίζεται εδώ και δεν υπάρχει στο CHARS γίνεται πίστα
+    που ο parser απορρίπτει.
+    """
+    pal, model = palette_chars(), P.CHARS
+    bad = []
+    for ch in sorted(set(model) - set(pal)):
+        bad.append(f"το «{ch}» ({P.TYPE_NAMES[model[ch]]}) λείπει από την παλέτα")
+    for ch in sorted(set(pal) - set(model)):
+        bad.append(f"το «{ch}» ({pal[ch]}) της παλέτας δεν υπάρχει στο CHARS")
+    return bad
+
+
 def game_turns(tile):
     """Πόσα τέταρτα δεξιόστροφα στρίβει το παιχνίδι αυτόν τον τύπο."""
     if tile in genasm.SPIKE_OFF_TURNS:
@@ -60,7 +88,7 @@ def main():
               file=sys.stderr)
         return 1
 
-    bad = []
+    bad = check_chars()
     for ch, name, angle in rots:
         tile = P.CHARS.get(ch)
         if tile is None:
@@ -78,7 +106,8 @@ def main():
             print(f"        {b}", file=sys.stderr)
         return 1
 
-    print(f"  Παλέτα και πλακίδια συμφωνούν σε {len(rots)} στραμμένα κελιά")
+    print(f"  Παλέτα και πλακίδια συμφωνούν σε {len(rots)} στραμμένα κελιά "
+          f"και {len(palette_chars())} χαρακτήρες")
     return 0
 
 

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Security.Claims;
 using GravassistEditor.Models;
 using GravassistEditor.Services;
@@ -70,6 +71,21 @@ Check("…και ΔΕΝ βλέπει τα αρχεία του πρώτου",
     File.ReadAllText(Path.Combine(dir2, "room_1.txt")) == "ένα");
 Check("οι φάκελοι χρηστών δεν αντιγράφονται σε νέους",
     !Directory.Exists(Path.Combine(dir2, "a_at_b.com")));
+
+// --- η παλέτα υπάρχει ΚΑΙ σηκώνεται
+// ΟΧΙ ΜΟΝΟ ΤΟ check_palette.py: εκείνο διαβάζει το αρχείο με regex. Εδώ ο
+// κατάλογος ΧΤΙΖΕΤΑΙ — αν ο στατικός αρχικοποιητής σκάσει, η σελίδα του editor
+// δεν δείχνει κανένα cell type και το regex δεν το μαθαίνει ποτέ.
+Check("ο κατάλογος πλακιδίων χτίζεται", TileCatalog.All.Count > 40,
+    $"{TileCatalog.All.Count} πλακίδια");
+Check("κάθε πλακίδιο έχει δικό του χαρακτήρα",
+    TileCatalog.All.Select(t => t.Symbol).Distinct().Count() == TileCatalog.All.Count);
+Check("…και δικό του id για το <symbol> του πλέγματος",
+    TileCatalog.All.Select(t => t.Id).Distinct().Count() == TileCatalog.All.Count);
+Check("οι τέσσερις ζώνες βαρύτητας είναι μέσα",
+    new[] { ':', '8', '4', '6' }.All(c => TileCatalog.All.Any(t => t.Symbol == c)),
+    string.Join(",", TileCatalog.All.Where(t => t.Id.StartsWith("gravlock"))
+                                    .Select(t => $"{t.Symbol}={t.Id}")));
 
 // --- τι ΔΕΙΧΝΕΙ η κεφαλίδα
 // Η απόλυτη διαδρομή ήταν μισή οθόνη μηχανήματος — και σε κοινό μηχάνημα
