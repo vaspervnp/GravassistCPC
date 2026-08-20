@@ -485,6 +485,7 @@
         // Πριν το write-back, ξήλωσε τη σφράγιση: αλλιώς τα μπλοκ θα
         // αποθηκεύονταν ως πραγματικά τοιχώματα του δωματίου.
         unsealDoors();
+        room.restorePlatCells();        // τα «M» είναι δήλωση, όχι κατάσταση
         rooms[curName].cells = room.cells;
         const arr = arrivalIn(nr, from);
         start(sel.value, nr.cells, arr || nr.start, {

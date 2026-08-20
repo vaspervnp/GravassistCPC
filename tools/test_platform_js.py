@@ -160,6 +160,81 @@ console.log(JSON.stringify({ withRider, without: box(113, 120) }));
 """
 
 
+# ΒΓΑΙΝΩ ΑΠΟ ΤΗΝ ΠΙΣΤΑ ΚΑΙ ΞΑΝΑΜΠΑΙΝΩ.
+#
+# Το δωμάτιο αποθηκεύει το πλέγμα του στην έξοδο ώστε τα pickups να μην
+# αναγεννιούνται — και αποθήκευε μαζί και το σβήσιμο των «M», που κάνει η
+# buildPlatforms. Γυρνώντας πίσω, η πλατφόρμα είχε εξαφανιστεί.
+REENTER_JS = """
+const fs = require("fs");
+global.window = {};
+eval(fs.readFileSync(process.argv[2], "utf8"));
+eval(fs.readFileSync(process.argv[3], "utf8"));
+const D = window.GAME_DATA, P = window.GRAV;
+const spec = JSON.parse(fs.readFileSync(process.argv[4], "utf8"));
+const mk = cells => new P.Room(cells.map(r => r.slice()), {}, spec.attrs,
+                               {}, spec.platSpec);
+const first = mk(spec.cells);
+// Ό,τι θα αποθήκευε το run.js στην έξοδο, με και χωρίς την επαναφορά.
+const saved = first.cells.map(r => r.slice());
+const without = mk(saved).platforms.length;
+first.restorePlatCells(saved);
+const again = mk(saved);
+console.log(JSON.stringify({
+  first: first.platforms.length,
+  without: without,
+  again: again.platforms.length,
+  origin: again.platforms.length ? [again.platforms[0].x, again.platforms[0].y,
+                                    again.platforms[0].rider] : null,
+  wanted: [first.platforms[0].ax, first.platforms[0].ay,
+           first.platforms[0].rider],
+}));
+"""
+
+
+def reenter_check(tmp, fail):
+    """Η πλατφόρμα επιβιώνει της εξόδου και της επιστροφής."""
+    js = os.path.join(tmp, "reenter.js")
+    with open(js, "w") as f:
+        f.write(REENTER_JS)
+    r = subprocess.run([node_exe(), js,
+                        os.path.join(GAME, "data.js"),
+                        os.path.join(GAME, "physics.js"),
+                        os.path.join(tmp, "room.json")],
+                       capture_output=True, text=True)
+    if r.returncode:
+        return fail("η επανείσοδος έσκασε: " + (r.stderr.strip() or "?"))
+    got = json.loads(r.stdout)
+    if got["first"] != 1:
+        return fail("το σενάριο δεν έχει πλατφόρμα εξαρχής")
+    # ΧΩΡΙΣ ΤΗΝ ΕΠΑΝΑΦΟΡΑ ΧΑΝΕΤΑΙ — αλλιώς ο έλεγχος από κάτω δεν αποδεικνύει
+    # τίποτα: θα περνούσε ακόμα κι αν η επαναφορά δεν έκανε απολύτως τίποτα.
+    if got["without"] != 0:
+        return fail("το αποθηκευμένο πλέγμα κρατά την πλατφόρμα από μόνο του "
+                    "— ο έλεγχος της επαναφοράς δεν δοκιμάζει τίποτα")
+    if got["again"] != 1:
+        return fail("μετά την έξοδο και την επιστροφή η πλατφόρμα εξαφανίστηκε")
+    if got["origin"] != got["wanted"]:
+        return fail(f"ξαναχτίστηκε στο {got['origin']} αντί για {got['wanted']}")
+    print("  ΟΚ   βγαίνοντας και ξαναμπαίνοντας, η πλατφόρμα είναι εκεί "
+          f"— στην αρχή της διαδρομής της, με τον επιβάτη της")
+
+    # ΚΑΙ ΤΟ run.js ΤΗΝ ΚΑΛΕΙ ΟΝΤΩΣ: το σφάλμα ζούσε εκεί, όχι στη φυσική.
+    # Γραμμή προς γραμμή και ΧΩΡΙΣ τα σχόλια: ένα «//» μπροστά στην κλήση
+    # άφηνε τον έλεγχο πράσινο, δηλαδή δεν έλεγχε τίποτα.
+    call = save = -1
+    for n, line in enumerate(open(os.path.join(GAME, "run.js"))):
+        code = line.split("//")[0]
+        if "restorePlatCells(" in code and call < 0:
+            call = n
+        if "rooms[curName].cells = room.cells" in code and save < 0:
+            save = n
+    if call < 0 or save < 0 or call > save:
+        return fail("το run.js δεν επαναφέρει τα κελιά ΠΡΙΝ αποθηκεύσει "
+                    "το πλέγμα του δωματίου")
+    return None
+
+
 def draw_check(tmp, fail):
     """Η πλατφόρμα και ο επιβάτης της στα σωστά pixel."""
     js = os.path.join(tmp, "draw.js")
@@ -202,6 +277,11 @@ def main():
         return 1
 
     py, js = python_trace(), js_trace(tmp)
+
+    # ΜΕΤΑ το js_trace: εκείνο γράφει το room.json που χρειάζεται.
+    reenter_check(tmp, lambda m: (print(f"  ΛΑΘΟΣ {m}"), bad.append(m)))
+    if bad:
+        return 1
 
     moved = len({tuple(f[:2]) for f in py})
     if moved < 5:

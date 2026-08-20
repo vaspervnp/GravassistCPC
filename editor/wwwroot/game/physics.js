@@ -62,6 +62,11 @@
     /// χωράει στο πλέγμα. Τα κελιά του σβήνονται — δείχνουν πού ΞΕΚΙΝΑΕΙ.
     buildPlatforms(spec) {
       this.platforms = [];
+      // ΤΙ ΣΒΗΣΤΗΚΕ ΑΠΟ ΤΟ ΠΛΕΓΜΑ, ώστε να μπορεί να ξαναμπεί. Το δωμάτιο
+      // αποθηκεύει το πλέγμα του όταν βγαίνεις (τα pickups δεν αναγεννιούνται),
+      // και μαζί αποθήκευε και το σβήσιμο: γυρνώντας πίσω η πλατφόρμα είχε
+      // εξαφανιστεί. Τα «M» δεν είναι κατάσταση, είναι ΔΗΛΩΣΗ.
+      this.platMarks = [];
       const seen = new Set();
       for (let r = 0; r < D.ROWS; r++)
         for (let c = 0; c < D.COLS; c++) {
@@ -84,7 +89,10 @@
           const cs = grp.map(g => g[0]), rs = grp.map(g => g[1]);
           const c0 = Math.min(...cs), r0 = Math.min(...rs);
           const w = Math.max(...cs) - c0 + 1, h = Math.max(...rs) - r0 + 1;
-          for (const [cc, rr] of grp) this.cells[rr][cc] = T.EMPTY;
+          for (const [cc, rr] of grp) {
+            this.platMarks.push([cc, rr, this.cells[rr][cc]]);
+            this.cells[rr][cc] = T.EMPTY;
+          }
           const sp = spec[c0 + "," + r0] || [c0, r0, 0, K.PLAT_SPEED];
           this.platforms.push({
             x: c0 * D.CELL, y: D.GRID_Y0 + r0 * D.CELL,
@@ -110,9 +118,20 @@
         p.rider = t;
         p.rdx = (c - c0) * D.CELL;
         p.rchan = (this.attrs[c + "," + (r0 - 1)] || 0) & (K.ATTR_MAX - 1);
+        this.platMarks.push([c, r0 - 1, t]);
         this.cells[r0 - 1][c] = T.EMPTY;
         return;                 // ένας επιβάτης· ο editor δεν αφήνει δεύτερο
       }
+    }
+
+    /// Ξαναβάζει στο πλέγμα ό,τι πήραν οι πλατφόρμες — τα «M» και τον επιβάτη.
+    ///
+    /// ΠΡΙΝ ΑΠΟΘΗΚΕΥΤΕΙ ΤΟ ΔΩΜΑΤΙΟ, όπως το unsealDoors ξηλώνει τη σφράγιση.
+    /// Η πλατφόρμα ξαναχτίζεται από τη δήλωση σε κάθε είσοδο — στην αρχή της
+    /// διαδρομής της, όπως ακριβώς κάνει το room_load στον Amstrad.
+    restorePlatCells(cells) {
+      const g = cells || this.cells;
+      for (const [c, r, t] of this.platMarks || []) g[r][c] = t;
     }
 
     /// Το ορθογώνιο του επιβάτη σε pixel, ή null.
