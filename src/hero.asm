@@ -722,14 +722,34 @@ hu_exsnd:       push af
                 ld   a,SFXID_EXIT
                 jp   sfx_play
 
-hu_noexit:      call h_support          ; ΤΑ ΥΠΟΛΟΙΠΑ από το κελί που ΠΑΤΑΣ:
-                ld   (h_cell),a         ; με τον ήρωα σε τοίχους και ταβάνια το
-                                        ; "μπροστά" δεν προβλέπεται εύκολα, το
-                                        ; "από κάτω μου" ναι.
+hu_noexit:      call h_support          ; ΠΡΩΤΑ το κελί που ΠΑΤΑΣ…
+                ld   (h_cell),a
+                call hu_try
+                jp   c,hu_redraw
+                ; …ΚΑΙ ΜΕΤΑ ΑΥΤΟ ΠΟΥ ΚΟΙΤΑΣ. Η πύλη είναι ΣΤΕΡΕΗ: στέκεσαι
+                ; μπροστά της, δεν την πατάς. Το μήνυμα του παιχνιδιού έλεγε
+                ; ήδη «Up or down to open with key» όταν την κοιτούσες, ενώ η
+                ; ενέργεια κοιτούσε μόνο τα πόδια σου — πάταγες και δεν γινόταν
+                ; τίποτα. Το h_ahead αφήνει cell_col/cell_row/cell_ptr στο κελί
+                ; που κοιτάς, που είναι ό,τι ακριβώς θέλει το hu_try.
+                call h_ahead
+                ld   (h_cell),a
+                call hu_try
+                jp   c,hu_redraw
+                jr   hu_notlock
+
+;---------------------------------------------------------------------
+; hu_try — ξεκλείδωσε ΤΟ ΚΕΛΙ που δείχνουν τα cell_col/cell_row
+;   IN:  (h_cell) = ο τύπος του     OUT: CF=1 άνοιξε
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+hu_try:         ld   a,(h_cell)
                 cp   T_LOCK
                 jr   z,hu_islock
                 cp   T_GATE             ; ΚΑΙ Η ΠΥΛΗ, με το κλειδί της
-                jr   nz,hu_notlock
+                jr   z,hu_islock
+hu_nokey:       or   a                  ; CF=0: δεν άνοιξε
+                ret
 hu_islock:
                 ; ΤΟ ΚΛΕΙΔΙ ΤΑΙΡΙΑΖΕΙ Ή ΔΕΝ ΑΝΟΙΓΕΙ. Χωρίς ταυτότητες ένα
                 ; κλειδί άνοιγε ό,τι έβρισκε και ο σχεδιαστής δεν μπορούσε να
@@ -746,7 +766,7 @@ hu_islock:
                 add  hl,de
                 ld   a,(hl)
                 or   a
-                jr   z,hu_notlock       ; λάθος κλειδί: συνέχισε στα υπόλοιπα
+                jr   z,hu_nokey         ; λάθος κλειδί: δεν άνοιξε
                 dec  (hl)
                 ld   a,e                ; E = η ταυτότητα, από το cell_attr
                 ld   (hu_kid),a
@@ -766,7 +786,8 @@ hu_islock:
                 call score_once
                 ld   a,SFXID_UNLOCK
                 call sfx_play
-                jp   hu_redraw          ; και περνά από μέσα.
+                scf                     ; άνοιξε: ο καλών ξαναζωγραφίζει
+                ret
 
 hu_kid          db 0
 hero_zone       db 0

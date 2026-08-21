@@ -1088,6 +1088,22 @@ class Hero:
         return ((self.x + rx * self.face * CELL) // CELL,
                 (self.y + ry * self.face * CELL - GRID_Y0) // CELL)
 
+    def unlock_at(self, cell):
+        """Ξεκλειδώνει λουκέτο ή πύλη σε αυτό το κελί, αν κρατάς το κλειδί της."""
+        if not cell:
+            return False
+        c, r = cell
+        if not (0 <= c < COLS and 0 <= r < ROWS):
+            return False
+        if self.room.cell(c, r) not in (LOCK, GATE):
+            return False
+        kid = self.room.attr(c, r)
+        if not self.keys[kid]:
+            return False
+        self.keys[kid] -= 1
+        self.open_locks(cell, kid)
+        return True
+
     def use(self):
         """Ενεργοποίηση αντικειμένου. ΜΙΑ φορά ανά πάτημα, όχι όσο κρατιέται.
 
@@ -1109,14 +1125,19 @@ class Hero:
             self.won = True
             return True
 
-        kid = self.room.attr(*sc) if sc else 0
         # ΚΑΙ Η ΠΥΛΗ, ΟΧΙ ΜΟΝΟ ΤΟ ΛΟΥΚΕΤΟ. Στέκεσαι πάνω της και πατάς
         # ενεργοποίηση, ακριβώς όπως στο λουκέτο: αφού το κλειδί ανοίγει ήδη
         # πύλες όταν ξεκλειδώνεις λουκέτο του ίδιου καναλιού, το να μην
         # ανοίγει την πύλη που πατάς ήταν ασυνέπεια, όχι κανόνας.
-        if st in (LOCK, GATE) and self.keys[kid]:
-            self.keys[kid] -= 1
-            self.open_locks(sc, kid)
+        #
+        # ΚΑΙ ΔΙΠΛΑ ΣΟΥ, ΟΧΙ ΜΟΝΟ ΑΠΟ ΚΑΤΩ. Η πύλη είναι ΣΤΕΡΕΗ: στέκεσαι
+        # μπροστά της, δεν την πατάς — και το μήνυμα του παιχνιδιού έλεγε ήδη
+        # «Up or down to open with key» όταν την κοιτάς. Ο κώδικας κοιτούσε
+        # μόνο το κελί που πατάς, οπότε πάταγες και δεν γινόταν τίποτα: η
+        # οθόνη υποσχόταν κάτι που η φυσική δεν έκανε.
+        if self.unlock_at(sc):
+            return True
+        if self.unlock_at(self.ahead_cell()):
             return True
 
         col, row = self.x // CELL, (self.y - GRID_Y0) // CELL

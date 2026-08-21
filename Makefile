@@ -164,6 +164,7 @@ test: $(JSDATA)
 	$(PY) tools/test_platform_js.py
 	$(PY) tools/test_hud_js.py
 	$(PY) tools/test_gravzone_js.py
+	$(PY) tools/test_keys_js.py
 	$(PY) tools/test_platform_z80.py
 	$(PY) tools/test_z80.py
 	$(PY) tools/test_music.py

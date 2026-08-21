@@ -871,6 +871,52 @@ def main():
               f'ήρωας +({h.x - x0},{h.y - y0}) πλατφόρμα '
               f'+({pl["x"] - px0},{pl["y"] - py0})')
 
+    # ΤΗΝ ΠΥΛΗ ΠΟΥ ΚΟΙΤΑΣ, ΟΧΙ ΜΟΝΟ ΑΥΤΗΝ ΠΟΥ ΠΑΤΑΣ. Η πύλη είναι στερεή:
+    # στέκεσαι μπροστά της. Το μήνυμα του παιχνιδιού το έλεγε ήδη· η ενέργεια
+    # κοιτούσε μόνο τα πόδια, οπότε πάταγες και δεν γινόταν τίποτα.
+    grows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    for r in range(18, 23):
+        grows[r][15] = "G"
+    gtxt = ";\n" + "\n".join("".join(r) for r in grows) + "\ngravity 0\n" \
+        + "\n".join(f"gate 15 {r} 1" for r in range(18, 23))
+
+    def facing_gate(keys):
+        rm = P.Room(gtxt)
+        h = P.Hero(rm, 12 * 8 + 4, P.GRID_Y0 + 21 * 8 + 4, 0)
+        h.keys[1] = keys
+        for _ in range(20):
+            h.update(0)
+        for _ in range(40):                 # περπάτα ώσπου να την κοιτάξεις
+            if rm.cell(*h.ahead_cell()) == P.GATE:
+                break
+            h.update(1)
+        return rm, h
+
+    rm, h = facing_gate(1)
+    check("η πύλη είναι μπροστά του, όχι από κάτω του",
+          rm.cell(*h.ahead_cell()) == P.GATE
+          and rm.cell(*h.support_cell()) != P.GATE)
+    check("με το κλειδί, το πάτημα ανοίγει την πύλη που κοιτάς", h.use())
+    check("…και ΟΛΟ το ύψος της", all(rm.cell(15, r) == P.GATE_OPEN
+                                      for r in range(18, 23)),
+          str([P.TYPE_NAMES[rm.cell(15, r)] for r in range(18, 23)]))
+    check("…ξοδεύοντας ΕΝΑ κλειδί", h.keys[1] == 0, str(h.keys[1]))
+
+    rm, h = facing_gate(0)
+    check("χωρίς κλειδί δεν ανοίγει", not h.use()
+          and rm.cell(15, 22) == P.GATE)
+
+    # ΚΑΙ ΤΟ ΠΑΛΙΟ ΕΞΑΚΟΛΟΥΘΕΙ: πάνω στην πύλη, το πάτημα την ανοίγει.
+    rm = P.Room(gtxt)
+    h = P.Hero(rm, 15 * 8 + 4, P.GRID_Y0 + 17 * 8 + 4, 0)
+    h.keys[1] = 1
+    for _ in range(30):
+        h.update(0)
+    check("πάνω στην πύλη, ανοίγει όπως πάντα",
+          rm.cell(*h.support_cell()) == P.GATE and h.use()
+          and rm.cell(15, 18) == P.GATE_OPEN)
+
     # ΠΑΥΣΗ ΣΤΑ ΑΚΡΑ. Χωρίς αυτήν γύριζε ακαριαία και το παράθυρο για να
     # ανέβεις ή να κατέβεις ήταν ένα καρέ.
     rm = proom("14 14", speed=100)

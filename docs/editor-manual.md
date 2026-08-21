@@ -408,6 +408,10 @@ when you want spikes that **start** retracted. There are four and not one becaus
 direction has to survive being pulled in — a spike that pops back out facing a different
 way is a different trap.
 
+**Opening with a key** works from two places: the cell you are **standing on**, and the
+one you are **facing**. A gate is solid, so you never stand on the side of it — you walk
+up to it and press up or down. The hint line says so when you are carrying its key.
+
 **The `auto` checkbox** (locks only) makes a lock open the moment you step on it while
 carrying the matching key, without pressing anything. The default is off — you press the
 action key to unlock. When a key opens `auto` locks, the game says so when you pick it

@@ -776,6 +776,20 @@
       return [Math.floor((this.x + rs[0] * this.face * D.CELL) / D.CELL),
               Math.floor((this.y + rs[1] * this.face * D.CELL - D.GRID_Y0) / D.CELL)];
     }
+    /// Ξεκλειδώνει λουκέτο ή πύλη σε αυτό το κελί, αν κρατάς το κλειδί της.
+    unlockAt(cell) {
+      if (!cell) return false;
+      const [c, r] = cell;
+      if (c < 0 || r < 0 || c >= D.COLS || r >= D.ROWS) return false;
+      const t = this.room.cell(c, r);
+      if (t !== T.LOCK && t !== T.GATE) return false;
+      const kid = this.room.attr(c, r);
+      if (!this.keys[kid]) return false;
+      this.keys[kid]--;
+      this.openLocks(cell, kid);
+      return true;
+    }
+
     use() {
       const sc = this.supportCell();
       const st = sc ? this.room.cell(sc[0], sc[1]) : T.EMPTY;
@@ -786,15 +800,15 @@
       const [ec, er] = this.bodyCell();
       if (this.room.cell(ec, er) === T.EXIT) { this.won = true; return true; }
 
-      const kid = sc ? this.room.attr(sc[0], sc[1]) : 0;
       // ΚΑΙ Η ΠΥΛΗ: στέκεσαι πάνω της και πατάς ενεργοποίηση, όπως στο
       // λουκέτο. Το κλειδί άνοιγε ήδη πύλες του καναλιού του ξεκλειδώνοντας
       // λουκέτο — το να μην ανοίγει αυτήν που πατάς ήταν ασυνέπεια.
-      if ((st === T.LOCK || st === T.GATE) && this.keys[kid]) {
-        this.keys[kid]--;
-        this.openLocks(sc, kid);
-        return true;
-      }
+      //
+      // ΚΑΙ ΔΙΠΛΑ ΣΟΥ: η πύλη είναι ΣΤΕΡΕΗ, στέκεσαι μπροστά της και δεν την
+      // πατάς. Το μήνυμα έλεγε ήδη «Up or down to open with key» κοιτάζοντάς
+      // την, ενώ η ενέργεια κοιτούσε μόνο το κελί που πατάς.
+      if (this.unlockAt(sc)) return true;
+      if (this.unlockAt(this.aheadCell())) return true;
       const [col, row] = this.bodyCell();
       if (this.room.cell(col, row) === T.TELEPORT) return this.teleport(col, row);
       if (this.carry) return this.drop();

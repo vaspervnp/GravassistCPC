@@ -767,6 +767,66 @@ def main():
     check("…και σβήνει μόλις βγει", t.peek(t.sym("HERO_ZONE"))[0] == 0,
           str(t.peek(t.sym("HERO_ZONE"))[0]))
 
+    # ΤΟ ΜΗΝΥΜΑ ΚΑΙ Η ΕΝΕΡΓΕΙΑ ΠΡΕΠΕΙ ΝΑ ΣΥΜΦΩΝΟΥΝ.
+    #
+    # Το hint_msg έλεγε ήδη «Up or down to open with key» για την πύλη που
+    # ΚΟΙΤΑΣ, ενώ το h_use ξεκλείδωνε μόνο το κελί που ΠΑΤΑΣ: πάταγες και δεν
+    # γινόταν τίποτα. Ο έλεγχος δεν ρωτά «ανοίγει;» αλλά «ό,τι υπόσχεται η
+    # οθόνη, γίνεται;» — εκεί ήταν το σφάλμα, όχι σε καθένα χωριστά.
+    rows5 = [list("#" * P.COLS)] \
+        + [list("#" + "." * (P.COLS - 2) + "#") for _ in range(P.ROWS - 2)] \
+        + [list("#" * P.COLS)]
+    for r in range(18, 23):
+        rows5[r][15] = "G"
+    txt5 = ";\n" + "\n".join("".join(r) for r in rows5) + "\ngravity 0\n" \
+        + "\n".join(f"gate 15 {r} 1" for r in range(18, 23))
+    rm5 = P.Room(txt5)
+    rm5.number, rm5.path = 1, ""
+    t.poke(set_buf, RF.build_set([rm5]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.call("ROOM_LOAD", a=1)
+
+    def stand_facing_gate(key):
+        t.poke(t.sym("HERO_KEYS") + 1, bytes((key,)))
+        t.poke16(t.sym("HERO_X"), 14 * P.CELL + 4)
+        t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + 22 * P.CELL + 2)
+        t.poke(t.sym("HERO_G"), b"\x00")
+        t.poke(t.sym("HERO_FACE"), b"\x01")
+        t.poke(t.sym("HERO_STATE"), b"\x02")
+        t.poke(t.sym("MSG_CUR"), b"\xFF")
+        t.poke(t.sym("MSG_LEFT"), b"\x00")
+        for _ in range(6):
+            t.call("HERO_UPDATE", a=0)
+
+    gate = lambda r: t.peek(t.sym("CELL_BUF") + r * P.COLS + 15, 1)[0]
+    stand_facing_gate(1)
+    t.call("H_AHEAD")
+    check("η πύλη είναι όντως μπροστά του", t.m.a == P.GATE,
+          P.TYPE_NAMES[t.m.a])
+    t.stub("HINT_DRAW")                 # χωρίς οθόνη· θέλουμε ΠΟΙΟ μήνυμα
+    t.call("HINT_MSG")
+    said = t.peek(t.sym("MSG_CUR"), 1)[0]
+    check("το μήνυμα λέει «άνοιξέ την με το κλειδί»",
+          said == t.sym("MSG_GKEY"), f"msg={said}")
+    t.call("H_USE")
+    check("…και το πάτημα ΟΝΤΩΣ την ανοίγει",
+          all(gate(r) == P.GATE_OPEN for r in range(18, 23)),
+          str([P.TYPE_NAMES[gate(r)] for r in range(18, 23)]))
+    check("…ξοδεύοντας το κλειδί", t.peek(t.sym("HERO_KEYS") + 1, 1)[0] == 0)
+
+    # Και χωρίς κλειδί: ούτε το μήνυμα το υπόσχεται, ούτε το πάτημα το κάνει.
+    t.poke(t.sym("JR_COUNT"), b"\x00")     # ΤΟ ΗΜΕΡΟΛΟΓΙΟ ΘΥΜΑΤΑΙ: χωρίς
+    t.call("ROOM_LOAD", a=1)               # καθάρισμα η πύλη ξαναφόρτωνε ανοιχτή
+    stand_facing_gate(0)
+    t.call("HINT_MSG")
+    said = t.peek(t.sym("MSG_CUR"), 1)[0]
+    check("χωρίς κλειδί, άλλο μήνυμα", said != t.sym("MSG_GKEY"), f"msg={said}")
+    t.call("H_USE")
+    check("…και η πύλη μένει κλειστή", gate(22) == P.GATE,
+          P.TYPE_NAMES[gate(22)])
+
+
     # 18. Αυτόματη κλειδαριά: ανοίγει με ΤΗΝ ΕΠΑΦΗ, χωρίς πλήκτρο. Η σημαία
     #     ζει στο bit 3 της ίδιας τιμής, οπότε κάθε σύγκριση ταυτότητας
     #     πρέπει να κάνει AND 7 — αλλιώς η αυτόματη κλειδαριά «2» δεν
