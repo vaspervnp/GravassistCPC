@@ -615,12 +615,12 @@ public static class TileCatalog
         // όπως μια ψηλή πύλη. Στη φόρτωση σβήνονται από το πλέγμα και τη
         // δουλειά την αναλαμβάνει ο πίνακας πλατφορμών, με θέση σε pixel.
         new TileType('M', "platform", MechGroup, "Moving platform",
-            "Solid from ABOVE only — you land on it, you pass through from below — and it carries you. Adjacent cells are ONE platform. It pauses two seconds at each end. Set its trip and speed in the Moving platforms panel; a switch on its channel stops and starts it.",
+            "Solid from EVERY side, like a wall — you stand on it whatever your gravity is, and it carries you. Adjacent cells are ONE platform. It pauses two seconds at each end. Set its trip and speed in the Moving platforms panel; a switch on its channel stops and starts it.",
             Palette.Material, Palette.EdgeColor,
             """
             <g >
-            <rect x="0" y="0" width="8" height="1" fill="var(--edge)"/>
-            <rect x="0" y="1" width="8" height="6" fill="var(--fill)"/>
+            <rect x="0" y="0" width="8" height="8" fill="var(--edge)"/>
+            <rect x="1" y="1" width="6" height="6" fill="var(--fill)"/>
             <rect x="0" y="7" width="1" height="1" fill="var(--edge)"/>
             <rect x="2" y="7" width="1" height="1" fill="var(--edge)"/>
             <rect x="4" y="7" width="1" height="1" fill="var(--edge)"/>

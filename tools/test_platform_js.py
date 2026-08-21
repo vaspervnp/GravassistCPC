@@ -235,6 +235,78 @@ def reenter_check(tmp, fail):
     return None
 
 
+# ΣΤΕΡΕΗ ΑΠΟ ΠΑΝΤΟΥ, ΚΑΙ ΣΤΟΝ BROWSER. Η σύγκριση καρέ-προς-καρέ τρέχει με
+# βαρύτητα προς τα κάτω και μόνο· ο κώδικας των άλλων τριών φορών δεν θα
+# εκτελούνταν ποτέ σε τεστ.
+SIDES_JS = """
+const fs = require("fs");
+global.window = {};
+eval(fs.readFileSync(process.argv[2], "utf8"));
+eval(fs.readFileSync(process.argv[3], "utf8"));
+const G = window.GRAV, D = window.GAME_DATA;
+const spec = JSON.parse(fs.readFileSync(process.argv[4], "utf8"));
+const room = new G.Room(spec.cells, {}, spec.attrs, {}, spec.platSpec);
+const p = room.platforms[0];
+const out = { solid: [], riding: [] };
+for (const g of [0, 4, 2, 6]) {
+  room.probeG = g;
+  out.solid.push(room.solidAt(p.x + 4, p.y + 4));
+  const h = new G.Hero(room, spec.at[g][0], spec.at[g][1], g);
+  out.riding.push(h.platRiding(p));
+}
+console.log(JSON.stringify(out));
+"""
+
+
+def sides_check(tmp, fail):
+    """Στερεή από τις τέσσερις μεριές, και σε κουβαλάει από όλες."""
+    rm = P.Room(room_text())
+    pl = rm.platforms[0]
+    at = {}
+    for g in (0, 4, 2, 6):
+        fx, fy = P.off(g, 0, P.FEET_B)
+        inside = {0: (pl["x"] + pl["w"] // 2, pl["y"] + 1),
+                  4: (pl["x"] + pl["w"] // 2, pl["y"] + pl["h"] - 2),
+                  2: (pl["x"] + pl["w"] - 2, pl["y"] + pl["h"] // 2),
+                  6: (pl["x"] + 1, pl["y"] + pl["h"] // 2)}[g]
+        at[g] = (inside[0] - fx, inside[1] - fy)
+
+    cells = [[P.CHARS[ch] for ch in row] for row in build_rows()]
+    path = os.path.join(tmp, "sides.json")
+    with open(path, "w") as f:
+        json.dump({"cells": cells,
+                   "attrs": {f"{c},{r}": v for (c, r), v in rm.attrs.items()},
+                   "platSpec": {"10,14": [20, 14, CHANNEL, SPEED]},
+                   "at": {str(g): list(v) for g, v in at.items()}}, f)
+    js = os.path.join(tmp, "sides.js")
+    with open(js, "w") as f:
+        f.write(SIDES_JS)
+    r = subprocess.run([node_exe(), js,
+                        os.path.join(GAME, "data.js"),
+                        os.path.join(GAME, "physics.js"), path],
+                       capture_output=True, text=True)
+    if r.returncode:
+        return fail("οι πλευρές έσκασαν: " + (r.stderr.strip() or "?"))
+    got = json.loads(r.stdout)
+
+    want_solid, want_ride = [], []
+    for g in (0, 4, 2, 6):
+        rm.probe_g = g
+        want_solid.append(rm.solid_at(pl["x"] + 4, pl["y"] + 4))
+        h = P.Hero(rm, at[g][0], at[g][1], g)
+        want_ride.append(h.plat_riding(pl))
+    if want_solid != [True] * 4:
+        return fail(f"το ΜΟΝΤΕΛΟ δεν τη λέει στερεή από παντού: {want_solid}")
+    if want_ride != [True] * 4:
+        return fail(f"το ΜΟΝΤΕΛΟ δεν κουβαλάει από παντού: {want_ride}")
+    if got["solid"] != want_solid:
+        return fail(f"στερεότητα: JS {got['solid']} vs μοντέλο {want_solid}")
+    if got["riding"] != want_ride:
+        return fail(f"μεταφορά: JS {got['riding']} vs μοντέλο {want_ride}")
+    print("  ΟΚ   στερεή και από τις τέσσερις μεριές, και κουβαλάει από όλες")
+    return None
+
+
 def draw_check(tmp, fail):
     """Η πλατφόρμα και ο επιβάτης της στα σωστά pixel."""
     js = os.path.join(tmp, "draw.js")
@@ -279,6 +351,7 @@ def main():
     py, js = python_trace(), js_trace(tmp)
 
     # ΜΕΤΑ το js_trace: εκείνο γράφει το room.json που χρειάζεται.
+    sides_check(tmp, lambda m: (print(f"  ΛΑΘΟΣ {m}"), bad.append(m)))
     reenter_check(tmp, lambda m: (print(f"  ΛΑΘΟΣ {m}"), bad.append(m)))
     if bad:
         return 1

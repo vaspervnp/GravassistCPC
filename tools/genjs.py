@@ -123,7 +123,6 @@ def build():
                "MSG_ROW_LO": asm_equ("MSG_ROW_LO"),
                "MSG_ROW_HI": asm_equ("MSG_ROW_HI"),
                "PLAT_MAX": P.PLAT_MAX,
-               "PLAT_FACING": P.PLAT_FACING,
                "PLAT_PAUSE": P.PLAT_PAUSE, "TURRET_RANGE": P.TURRET_RANGE,
               "TURRET_RELOAD": P.TURRET_RELOAD, "TURRET_MAX": P.TURRET_MAX,
               "ARROW_DMG": list(P.ARROW_DMG),

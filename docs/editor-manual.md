@@ -176,7 +176,7 @@ geometry the hero will actually meet.
 | `v` | Spikes ↓ | Points down, base at the top. |
 | `<` | Spikes ← | Points left, base on the right. |
 | `>` | Spikes → | Points right, base on the left. |
-| `M` | Moving platform | Solid from **above** only; carries whatever stands on it. |
+| `M` | Moving platform | Solid from **every side**, like a wall; carries whatever stands on it, with any gravity. |
 | `m` | Moving platform, parked | The same, starting still until a switch sets it going. |
 | `I` | Turret ↕ | Shoots up or down, towards whichever side you are on. |
 | `=` | Turret ↔ | Shoots left or right. |

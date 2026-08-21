@@ -649,8 +649,6 @@ def defs_asm(rooms=()):
             f"PLAT_TICK_X     equ {300 * P.PLAT_XSTEP}",
             "; Η παύση στα άκρα, σε παλμούς του ρολογιού 1/300.",
             f"PLAT_PAUSE      equ {P.PLAT_PAUSE * 300}",
-            "; Στερεή μόνο από πάνω: η βαρύτητα που την κάνει πάτωμα.",
-            f"PLAT_GRAV       equ {(P.PLAT_FACING + 4) % 8}",
             f"CRATE_TICKS     equ {P.CRATE_TICKS}",
             f"FALL_SAFE       equ {P.FALL_SAFE}",
             f"FALL_V0         equ {P.FALL_V0}",

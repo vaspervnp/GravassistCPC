@@ -201,21 +201,61 @@ def main():
     check("…και όντως έφτασε στο άκρο μέσα σε αυτά", reached,
           f"max x={far} από {rm.platforms[0]['bx']}")
 
-    print("--- στέρεη ΜΟΝΟ από πάνω (ο κανόνας των πλατφορμών μιας κατεύθυνσης)")
+    print("--- στερεή ΑΠΟ ΠΑΝΤΟΥ, σαν τοίχος")
     rm = model([(10, 15, "M"), (11, 15, "M")], "plat 10 15 20 15 0 24\n")
     load(t, rm)
     py = P.GRID_Y0 + 15 * P.CELL
-    for px, g, want, label in ((10 * P.CELL + 4, 0, True, "πάνω της, βαρύτητα κάτω"),
-                               (10 * P.CELL + 4, 4, False, "ίδιο σημείο, ανάποδη βαρύτητα"),
-                               (30 * P.CELL, 0, False, "μακριά της")):
+    for g in (0, 4, 2, 6):
         t.poke(t.sym("HERO_G"), bytes((g,)))
-        t.call("PLAT_SOLID", bc=px, de=py + 2)
+        t.call("PLAT_SOLID", bc=10 * P.CELL + 4, de=py + 2)
         got = bool(t.m.f & 1)
         rm.probe_g = g
-        want_model = bool(rm.plat_at(px, py + 2)) \
-            and (P.PLAT_FACING + 4) % 8 == g
-        check(f"  {label}", got == want, f"CF={int(got)}")
-        check(f"  …και το μοντέλο συμφωνεί", want_model == want)
+        want = bool(rm.plat_at(10 * P.CELL + 4, py + 2))
+        check(f"  βαρύτητα {g}: στερεή", got, f"CF={int(got)}")
+        check(f"  …και το μοντέλο συμφωνεί", want == got)
+    t.call("PLAT_SOLID", bc=30 * P.CELL, de=py + 2)
+    check("  μακριά της: κενό", not (t.m.f & 1))
+
+    print("--- …και σε ΚΟΥΒΑΛΑΕΙ με όποια φορά κι αν πατάς")
+    # ΤΟ ps_riding ΞΑΝΑΓΡΑΦΤΗΚΕ ΓΙ' ΑΥΤΟ: μετρούσε τα πέλματα με σκέτη πρόσθεση,
+    # που ισχύει μόνο με βαρύτητα προς τα κάτω. Τώρα περνά από το h_point, με
+    # τους ίδιους πίνακες που χρησιμοποιεί όλη η φυσική. Χωρίς αυτόν τον έλεγχο
+    # ο κώδικας για τις άλλες τρεις φορές δεν θα εκτελούνταν ποτέ σε τεστ.
+    for g in (0, 4, 2, 6):
+        rm = model([(10, 15, "M"), (11, 15, "M")], "plat 10 15 20 15 0 24\n")
+        load(t, rm)
+        c = rec(t)
+        # Ο ήρωας με τα πέλματά του ΜΕΣΑ στην πλατφόρμα, από τη μεριά που τον
+        # φέρνει αυτή η βαρύτητα. Το off() είναι του μοντέλου — ίδιος πίνακας.
+        fx, fy = P.off(g, 0, P.FEET_B)
+        # ΤΑ ΠΕΛΜΑΤΑ ΔΕΙΧΝΟΥΝ ΠΡΟΣ ΤΗ ΒΑΡΥΤΗΤΑ, άρα η πλατφόρμα είναι ΑΠΟ ΕΚΕΙΝΗ
+        # τη μεριά του: με βαρύτητα 2 (αριστερά) πατάει τη ΔΕΞΙΑ της όψη. Τα
+        # είχα ανάποδα και ο ήρωας έμπαινε ΜΕΣΑ της — το ps_riding έλεγε «ναι»
+        # και το ps_carry ακύρωνε την κίνηση, που έμοιαζε με σφάλμα του κώδικα.
+        inside = (c["x"] + c["w"] // 2, c["y"] + 1) if g == 0 else \
+                 (c["x"] + c["w"] // 2, c["y"] + c["h"] - 2) if g == 4 else \
+                 (c["x"] + c["w"] - 2, c["y"] + c["h"] // 2) if g == 2 else \
+                 (c["x"] + 1, c["y"] + c["h"] // 2)
+        t.poke16(t.sym("HERO_X"), inside[0] - fx)
+        t.poke16(t.sym("HERO_Y"), inside[1] - fy)
+        t.poke(t.sym("HERO_G"), bytes((g,)))
+        t.m.ix = t.sym("PLAT_TAB")
+        t.call("PS_RIDING")
+        check(f"βαρύτητα {g}: ο Z80 βλέπει ότι την πατάει", bool(t.m.f & 1),
+              f"ήρωας ({t.peek16(t.sym('HERO_X'))},{t.peek16(t.sym('HERO_Y'))})")
+
+        install_clock(t, 4)
+        hx0, hy0 = t.peek16(t.sym("HERO_X")), t.peek16(t.sym("HERO_Y"))
+        px0, py0 = c["x"], c["y"]
+        t.call("PLAT_STEP")             # ορίζει το ρολόι
+        for _ in range(12):
+            t.call("PLAT_STEP")
+        c2 = rec(t)
+        moved = (c2["x"] - px0, c2["y"] - py0)
+        hero = (t.peek16(t.sym("HERO_X")) - hx0, t.peek16(t.sym("HERO_Y")) - hy0)
+        check(f"βαρύτητα {g}: ταξιδεύει μαζί της",
+              moved != (0, 0) and hero == moved,
+              f"πλατφόρμα +{moved}, ήρωας +{hero}")
 
     print("--- ο διακόπτης του καναλιού τη σταματάει και την ξεκινάει")
     rm = model([(10, 15, "M"), (11, 15, "M")], "plat 10 15 20 15 5 24\n")

@@ -150,8 +150,6 @@ PLAT_TICK       equ 300
 PLAT_TICK_X     equ 1200
 ; Η παύση στα άκρα, σε παλμούς του ρολογιού 1/300.
 PLAT_PAUSE      equ 600
-; Στερεή μόνο από πάνω: η βαρύτητα που την κάνει πάτωμα.
-PLAT_GRAV       equ 0
 CRATE_TICKS     equ 4
 FALL_SAFE       equ 36
 FALL_V0         equ 256
