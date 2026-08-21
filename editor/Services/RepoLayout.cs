@@ -22,6 +22,35 @@ public sealed class RepoLayout
     public const string PathKey = "RepoPath";
     public const string PathVar = "gravassistRepo";
 
+    /// <summary>
+    /// Πού είναι το <c>wwwroot</c> — ΨΑΧΝΟΝΤΑΣ, όπως και η ρίζα του repo.
+    ///
+    /// ΤΟ BUILD OUTPUT ΔΕΝ ΤΟ ΑΝΤΙΓΡΑΦΕΙ: τα static web assets λύνονται από
+    /// manifest που δείχνει στις πηγές, και το content root είναι ο κατάλογος
+    /// από τον οποίο ξεκίνησε η διεργασία. Τρέχοντας το DLL από αλλού, ή με
+    /// <c>--contentRoot</c>, το wwwroot δεν βρίσκεται και ΚΑΘΕ στατικό αρχείο
+    /// γυρνά 404 — ενώ ο editor φαίνεται μια χαρά, γιατί οι σελίδες του είναι
+    /// μεταγλωττισμένες μέσα στο DLL. Το test run πέθαινε ακριβώς έτσι, με
+    /// σκέτο «HTTP ERROR 404» και κανένα άλλο σημάδι.
+    ///
+    /// Το σημάδι είναι το <c>game/play.html</c>: αν λείπει, ο φάκελος μπορεί
+    /// να λέγεται wwwroot αλλά δεν είναι ο δικός μας.
+    /// </summary>
+    public static string? FindWebRoot(params string?[] starts)
+    {
+        foreach (var start in starts)
+        {
+            if (string.IsNullOrWhiteSpace(start)) continue;
+            for (var d = new DirectoryInfo(Path.GetFullPath(start));
+                 d is not null; d = d.Parent)
+                foreach (var cand in new[] { Path.Combine(d.FullName, "wwwroot"),
+                                             Path.Combine(d.FullName, "editor", "wwwroot") })
+                    if (File.Exists(Path.Combine(cand, "game", "play.html")))
+                        return cand;
+        }
+        return null;
+    }
+
     /// <summary>Τα σημάδια ότι βρήκαμε τη ρίζα: αυτά ακριβώς θέλει το χτίσιμο.</summary>
     private static readonly string[] Markers = ["Makefile", "tools/genasm.py"];
 

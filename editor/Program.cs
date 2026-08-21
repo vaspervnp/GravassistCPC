@@ -2,7 +2,17 @@ using GravassistEditor.Services;
 using Microsoft.AspNetCore.HttpOverrides;
 
 // Level editor του GRAVASSIST — τοπικό εργαλείο, χωρίς εξαρτήσεις από internet.
-var builder = WebApplication.CreateBuilder(args);
+
+// ΤΟ wwwroot ΒΡΙΣΚΕΤΑΙ, ΔΕΝ ΥΠΟΤΙΘΕΤΑΙ. Δες RepoLayout.FindWebRoot: το build
+// output δεν το αντιγράφει, οπότε όποιος ξεκινήσει το DLL από άλλον κατάλογο
+// έπαιρνε 404 σε κάθε στατικό αρχείο — και το test run είναι στατικό αρχείο.
+var webRoot = RepoLayout.FindWebRoot(Directory.GetCurrentDirectory(),
+                                     AppContext.BaseDirectory);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    WebRootPath = webRoot,
+});
 
 builder.Services.AddControllersWithViews();
 
@@ -78,6 +88,16 @@ if (!app.Environment.IsDevelopment())
 // αλλαγή, έβλεπες την προηγούμενη έκδοση, και το συμπέρασμα ήταν λάθος χωρίς
 // κανένα σημάδι. Μια δοκιμή που δείχνει παλιά δεδομένα είναι χειρότερη από
 // καθόλου δοκιμή.
+// ΚΑΙ ΤΟ ΛΕΕΙ ΔΥΝΑΤΑ ΑΝ ΔΕΝ ΤΟ ΒΡΗΚΕ: αλλιώς η μόνη ένδειξη είναι ένα 404 σε
+// νέα καρτέλα, που μοιάζει με σπασμένο test run και όχι με λάθος εκκίνηση.
+if (webRoot is null)
+    app.Logger.LogError(
+        "Δεν βρέθηκε το wwwroot (ψάχνω game/play.html). Το test run και κάθε "
+        + "άλλο στατικό αρχείο θα γυρνούν 404. Ξεκίνα τον editor από τη ρίζα "
+        + "του repo: dotnet run --project editor");
+else
+    app.Logger.LogInformation("Στατικά αρχεία από {WebRoot}", webRoot);
+
 app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx =>

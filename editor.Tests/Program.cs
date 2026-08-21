@@ -72,6 +72,32 @@ Check("…και ΔΕΝ βλέπει τα αρχεία του πρώτου",
 Check("οι φάκελοι χρηστών δεν αντιγράφονται σε νέους",
     !Directory.Exists(Path.Combine(dir2, "a_at_b.com")));
 
+// --- το wwwroot βρίσκεται από όπου κι αν ξεκινήσει ο editor
+// ΤΟ ΣΦΑΛΜΑ ΠΟΥ ΤΟ ΓΕΝΝΗΣΕ: το build output ΔΕΝ αντιγράφει το wwwroot, οπότε
+// τρέχοντας το DLL από άλλον κατάλογο κάθε στατικό αρχείο γύριζε 404 — και το
+// test run του browser ΕΙΝΑΙ στατικό αρχείο. Η σελίδα του editor δούλευε
+// κανονικά (είναι μεταγλωττισμένη), οπότε το μόνο σημάδι ήταν ένα «HTTP ERROR
+// 404» σε νέα καρτέλα.
+var repoHere = RepoLayout.Find(Directory.GetCurrentDirectory())
+               ?? RepoLayout.Find(AppContext.BaseDirectory);
+Check("το wwwroot βρίσκεται από τη ρίζα του repo",
+    RepoLayout.FindWebRoot(repoHere) is not null, repoHere ?? "(χωρίς ρίζα)");
+Check("…και από τον κατάλογο του DLL, όπου δεν υπάρχει wwwroot",
+    RepoLayout.FindWebRoot(AppContext.BaseDirectory) is not null,
+    AppContext.BaseDirectory);
+Check("…και ΔΕΝ βρίσκεται εκεί που δεν υπάρχει",
+    RepoLayout.FindWebRoot(Path.GetTempPath()) is null);
+// ΦΑΚΕΛΟΣ ΠΟΥ ΛΕΓΕΤΑΙ wwwroot ΑΛΛΑ ΔΕΝ ΕΙΝΑΙ Ο ΔΙΚΟΣ ΜΑΣ. Χωρίς αυτό, ένας
+// έλεγχος «υπάρχει κατάλογος wwwroot;» περνούσε — και θα σέρβιρε τα λάθος
+// αρχεία, ή κανένα, με τον editor να δείχνει μια χαρά.
+var fakeWeb = Path.Combine(sandbox, "notours", "wwwroot");
+Directory.CreateDirectory(fakeWeb);
+Check("φάκελος wwwroot ΧΩΡΙΣ το game/play.html δεν μετράει",
+    RepoLayout.FindWebRoot(Path.Combine(sandbox, "notours")) is null,
+    fakeWeb);
+Check("το σημάδι είναι το game/play.html, όχι το όνομα του φακέλου",
+    File.Exists(Path.Combine(RepoLayout.FindWebRoot(repoHere)!, "game", "play.html")));
+
 // --- η παλέτα υπάρχει ΚΑΙ σηκώνεται
 // ΟΧΙ ΜΟΝΟ ΤΟ check_palette.py: εκείνο διαβάζει το αρχείο με regex. Εδώ ο
 // κατάλογος ΧΤΙΖΕΤΑΙ — αν ο στατικός αρχικοποιητής σκάσει, η σελίδα του editor
