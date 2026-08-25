@@ -972,6 +972,19 @@ def main():
     check("κελί χωρίς τηλεμεταφορά δεν έχει βελάκι",
           trm.teleport_hint((5, 5)) is None)
 
+    # ΤΟ ΜΗΝΥΜΑ ΕΙΣΟΔΟΥ: μία γραμμή, αυτούσια, με όριο μήκους.
+    mrows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    base = ";\n" + "\n".join("".join(r) for r in mrows) + "\ngravity 0\n"
+    check("το «msg» διαβάζεται αυτούσιο",
+          P.Room(base + "msg MIND THE SPIKES").message == "MIND THE SPIKES")
+    check("…και τα εσωτερικά κενά μένουν",
+          P.Room(base + "msg TWO  SPACES").message == "TWO  SPACES")
+    check("χωρίς δήλωση, κανένα μήνυμα", P.Room(base).message == "")
+    check("κόβεται στο όριο των 38",
+          len(P.Room(base + "msg " + "X" * 60).message) == P.MSG_MAX,
+          str(len(P.Room(base + "msg " + "X" * 60).message)))
+
     # ΚΑΝΑΛΙ «ΟΛΟΙ ΜΑΖΙ»: δύο διακόπτες ή δύο πλάκες ανοίγουν μαζί μία πύλη.
     def combo_room(a, b, declare=True):
         rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \

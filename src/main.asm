@@ -21,6 +21,7 @@ SCR_SET_MODE    equ  #BC0E      ; A = mode (καθαρίζει την οθόνη
 SCR_SET_INK     equ  #BC32      ; A=pen, B=colour1, C=colour2
 SCR_SET_BORDER  equ  #BC38      ; B=colour1, C=colour2
 MC_WAIT_FLYBACK equ  #BD19      ; αναμονή flyback (sync 50 Hz)
+SCR_CLEAR       equ  #BC14      ; καθαρίζει την οθόνη με pen 0
 KM_TEST_KEY     equ  #BB1E      ; A=key nr -> NZ αν πατημένο (ΧΑΛΑΕΙ A,C,F,HL)
 TXT_SET_CURSOR  equ  #BB75      ; H = στήλη, L = γραμμή (και οι δύο από 1)
 TXT_SET_PEN     equ  #BB90      ; A = pen
@@ -114,6 +115,10 @@ LOW_ENERGY      equ  3          ; κάτω από αυτό, η μπάρα κοκ
 ; Η ΘΕΣΗ ΑΠΟΦΕΥΓΕΙ ΤΗΝ ΠΟΡΤΑ: αν ο ήρωας είναι στο πάνω μισό, το μήνυμα πάει
 ; χαμηλά, αλλιώς ψηλά. Έτσι δεν σκεπάζει ποτέ αυτό που περιγράφει, όπου κι αν
 ; έχει βάλει την πόρτα ο σχεδιαστής.
+; Η γραμμή ΚΕΙΜΕΝΟΥ του μηνύματος εισόδου: το κέντρο των 25.
+; ΟΧΙ «MSG_ROW»: το rasm δεν ξεχωρίζει πεζά από κεφαλαία και υπάρχει ήδη
+; μεταβλητή msg_row για τα μηνύματα των αντικειμένων.
+ENTRY_ROW       equ  12
 MSG_ROW_HI      equ  7          ; γραμμή πλέγματος όταν ο ήρωας είναι χαμηλά
 MSG_ROW_LO      equ  16         ; …και όταν είναι ψηλά
 MSG_NONE        equ  #FF        ; δεν φαίνεται μήνυμα
@@ -1773,6 +1778,68 @@ hs_autokey_e:
 hs_gkey:        db hs_gkey_e-hs_gkey-1
                 db "Up or down to open with key"
 hs_gkey_e:
+
+;---------------------------------------------------------------------
+; room_msg_show — το μήνυμα της αίθουσας, ΠΡΙΝ ζωγραφιστεί το δωμάτιο
+;
+;   ΣΕ ΑΔΕΙΑ ΟΘΟΝΗ ΚΑΙ ΜΕ ΑΝΑΜΟΝΗ: αν τυπωνόταν πάνω στην αίθουσα θα ήταν
+;   δυσανάγνωστο, και χωρίς αναμονή θα περνούσε σε ένα καρέ. Ο παίκτης το
+;   διώχνει με το ΙΔΙΟ πλήκτρο που ανοίγει πόρτες — ένα πλήκτρο για «συνέχισε».
+;
+;   Η ΜΟΥΣΙΚΗ ΣΥΝΕΧΙΖΕΙ: ο βρόχος αναμονής καλεί music_step σε κάθε flyback,
+;   αλλιώς η νότα που έπαιζε θα κρατούσε όσο διαβάζει ο παίκτης.
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+room_msg_show:  ld   a,(room_msg_n)
+                or   a
+                ret  z                  ; αίθουσα χωρίς μήνυμα: τίποτα
+                call SCR_CLEAR
+
+                ld   a,(room_msg_n)     ; στήλη = (40 - μήκος) / 2 + 1
+                ld   b,a
+                ld   a,40
+                sub  b
+                srl  a
+                inc  a
+                ld   h,a
+                ld   l,ENTRY_ROW        ; η μεσαία γραμμή κειμένου
+                ld   de,(room_msg)
+                ld   a,INK_HERO_PEN
+                push bc
+                call TXT_SET_PEN
+                pop  bc
+                call menu_puts
+
+                ld   h,(40-MSG_GO_N)/2+1    ; και η οδηγία, μια γραμμή πιο κάτω
+                ld   l,ENTRY_ROW+2
+                ld   de,msg_go
+                ld   b,MSG_GO_N
+                call menu_puts
+
+                ; ΠΡΩΤΑ ΝΑ ΤΟ ΑΦΗΣΕΙ: μπήκες στην αίθουσα πατώντας ΠΑΝΩ ή ΚΑΤΩ
+                ; και το πλήκτρο είναι ακόμα κάτω — χωρίς αυτό το μήνυμα θα
+                ; εξαφανιζόταν την ίδια στιγμή που εμφανίστηκε.
+rms_rel:        call MC_WAIT_FLYBACK
+                call music_step
+                call read_use
+                or   a
+                jr   nz,rms_rel
+rms_wait:       call MC_WAIT_FLYBACK
+                call music_step
+                call read_use
+                or   a
+                jr   z,rms_wait
+                ; …και να το αφήσει ΞΑΝΑ, αλλιώς το ίδιο πάτημα θα άνοιγε
+                ; αμέσως την πρώτη πόρτα της καινούργιας αίθουσας.
+rms_rel2:       call MC_WAIT_FLYBACK
+                call music_step
+                call read_use
+                or   a
+                jr   nz,rms_rel2
+                ret
+
+msg_go:         db "PRESS SPACE TO GO ON"
+MSG_GO_N        equ 20
 
 ;---------------------------------------------------------------------
 ; scr_addr — διεύθυνση οθόνης για (στήλη byte, scanline)

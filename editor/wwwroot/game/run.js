@@ -16,6 +16,10 @@
   };
 
   const keys = new Set();
+  // Το μήνυμα εισόδου της αίθουσας: κείμενο, «φαίνεται τώρα», «αφέθηκε το
+  // πλήκτρο». Η γραμμή και η οδηγία έρχονται ΑΠΟ ΤΟΝ Z80 μέσω του data.js —
+  // δύο αντίγραφα του ίδιου κειμένου αποκλίνουν σιωπηλά.
+  let entryMsg = "", entryHeld = false, entryReleased = false;
   addEventListener("keydown", e => {
     keys.add(e.code);
     if (e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
@@ -91,6 +95,15 @@
       return "This gate has nothing to open it";
     }
     return "";
+  }
+
+  /// Το μήνυμα εισόδου από την ουρά: ό,τι ακολουθεί το «msg », αυτούσιο ως το
+  /// τέλος της γραμμής — τα εσωτερικά κενά μετράνε στο κεντράρισμα.
+  /// ΞΕΧΩΡΙΣΤΗ ΣΥΝΑΡΤΗΣΗ ΓΙΑ ΝΑ ΔΟΚΙΜΑΖΕΤΑΙ: το tools/test_message_js.py την
+  /// καλεί, αντί να ξαναγράφει την ίδια έκφραση και να ελέγχει τον εαυτό του.
+  function parseMessage(foot) {
+    const m = foot.match(/^[ \t]*msg[ \t]+(.*?)[ \t]*$/im);
+    return m ? m[1].slice(0, 38) : "";
   }
 
   function trailEnter(current, entering) {
@@ -170,6 +183,11 @@
     scoreFirst = scoreEnterRoom(roomNumberOf(name));
     tick = 0; hist = []; paraFrame = 0; paraTick = 0;
     note.textContent = "";
+    // ΤΟ ΜΗΝΥΜΑ ΤΗΣ ΑΙΘΟΥΣΑΣ ΚΡΑΤΑΕΙ ΤΟ ΠΑΙΧΝΙΔΙ: μπαίνει σε άδεια οθόνη και
+    // φεύγει με πάτημα, όπως στον Amstrad. Χωρίς αναμονή θα περνούσε σε ένα
+    // καρέ και δεν θα το διάβαζε κανείς.
+    entryMsg = (meta.message || "").slice(0, D.K.MSG_MAX);
+    entryHeld = !!entryMsg;
   }
 
   function stuck() {
@@ -421,6 +439,22 @@
 
   function frame() {
     if (ended) { freezeNote(); return D.K.CPC_VSYNC_IDLE; }
+    // ΟΣΟ ΦΑΙΝΕΤΑΙ ΤΟ ΜΗΝΥΜΑ, ΤΙΠΟΤΑ ΔΕΝ ΤΡΕΧΕΙ: ούτε φυσική ούτε σχεδίαση
+    // της αίθουσας. Ο ήρωας δεν πρέπει να πέφτει όσο ο παίκτης διαβάζει.
+    if (entryHeld) {
+      screen.clear();
+      screen.flush();
+      screen.text(entryMsg, D.K.ENTRY_ROW,
+                  Math.floor((40 - entryMsg.length) / 2) + 1);
+      screen.text(D.MSG_GO, D.K.ENTRY_ROW + 2,
+                  Math.floor((40 - D.MSG_GO.length) / 2) + 1);
+      // Άφησε το πλήκτρο πρώτα: μπήκες πατώντας ΠΑΝΩ ή ΚΑΤΩ στην πόρτα.
+      const pressed = keys.has("ArrowDown") || keys.has("ArrowUp")
+                   || keys.has("Space");
+      if (!pressed) entryReleased = true;
+      else if (entryReleased) { entryHeld = false; entryReleased = false; }
+      return D.K.CPC_VSYNC_IDLE;
+    }
     const { walk, run } = input();
     hero.update(walk, run);      // το τρέξιμο είναι ΣΗΜΑΙΑ, όχι δεύτερη ενημέρωση
     scoreEvents(hero);
@@ -711,6 +745,9 @@
           [m[4] === undefined ? D.K.TURRET_COOL : +m[4],
            m[5] === undefined ? 0 : +m[5]];
       }
+      // ΜΗΝΥΜΑ ΕΙΣΟΔΟΥ: ό,τι ακολουθεί το «msg », αυτούσιο ως το τέλος της
+      // γραμμής — τα κενά μετράνε στο κεντράρισμα.
+      const message = parseMessage(foot);
       // ΚΑΝΑΛΙΑ ΠΟΥ ΘΕΛΟΥΝ ΟΛΟΥΣ ΤΟΥΣ ΕΝΕΡΓΟΠΟΙΗΤΕΣ ΤΟΥΣ: «all <κανάλι>».
       let allChan = 0;
       for (const m of foot.matchAll(/^\s*all\s+([1-7])\s*$/gim))
@@ -744,7 +781,7 @@
       // πυργίσκους — και στις δύο καταστάσεις του καθενός.
       for (const t of D.WIRED) spreadKind(cells, attrs, t);
       rooms[name] = { cells, start, exits, teleports, twoWay, arrive, arriveG,
-                      attrs, turretArg, platSpec, allChan,
+                      attrs, turretArg, platSpec, allChan, message,
                       pristine: cells.map(r => r.slice()) };
       const o = document.createElement("option");
       o.value = name; o.textContent = name;
@@ -808,7 +845,7 @@
   // συμφωνούν, και ο μόνος τρόπος να το ελέγξει κανείς είναι να καλέσει ΤΗΝ
   // ΙΔΙΑ συνάρτηση που τρέχει εδώ. Ξαναγραμμένη μέσα στο τεστ θα έλεγχε τον
   // εαυτό της. Δες tools/test_keys_js.py.
-  window.GRAV_TEST = { hintFor };
+  window.GRAV_TEST = { hintFor, parseMessage };
 
   load();
 })(window.GAME_DATA, window.GRAV, window.GRAV_RENDER);

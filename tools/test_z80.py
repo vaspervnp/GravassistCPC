@@ -767,6 +767,89 @@ def main():
     check("…και σβήνει μόλις βγει", t.peek(t.sym("HERO_ZONE"))[0] == 0,
           str(t.peek(t.sym("HERO_ZONE"))[0]))
 
+    # ΤΟ ΜΗΝΥΜΑ ΕΙΣΟΔΟΥ ΤΗΣ ΑΙΘΟΥΣΑΣ, ΜΕ ΤΟΥΣ ΧΑΡΑΚΤΗΡΕΣ ΤΟΥ.
+    #
+    # Το firmware δεν υπάρχει εδώ, οπότε το στήνουμε: το TXT_OUTPUT γράφει σε
+    # buffer αντί για οθόνη, το TXT_SET_CURSOR φυλάει τη θέση, και το
+    # KM_TEST_KEY «πατιέται» κάθε οκτώ κλήσεις ώστε ο βρόχος αναμονής —
+    # άφησε, πάτα, άφησε — να τελειώσει αντί να κρεμάσει.
+    mt = Z80Test()
+    mt.fake_set_load()
+    mt.stub("RENDER_ROOM")
+    BUF, PTR, CUR, KCNT = 0x0200, 0x0300, 0x0302, 0x0304
+    mt.poke16(PTR, BUF)
+    mt.poke16(KCNT, 0)
+    mt.poke(0xBB5A, bytes([                 # TXT_OUTPUT: A -> buffer
+        0x2A, PTR & 0xFF, PTR >> 8,         # ld hl,(PTR)
+        0x77,                               # ld (hl),a
+        0x23,                               # inc hl
+        0x22, PTR & 0xFF, PTR >> 8,         # ld (PTR),hl
+        0xC9]))
+    mt.poke(0xBB75, bytes([                 # TXT_SET_CURSOR: H,L -> CUR
+        0x22, CUR & 0xFF, CUR >> 8,         # ld (CUR),hl
+        0xC9]))
+    CLR = 0x0306
+    mt.poke(CLR, b"\x00")
+    mt.poke(0xBC14, bytes([                 # SCR_CLEAR: αφήνει σημάδι
+        0x3E, 0x01,                         # ld a,1
+        0x32, CLR & 0xFF, CLR >> 8,         # ld (CLR),a
+        0xC9]))
+    mt.poke(0xBB1E, bytes([                 # KM_TEST_KEY: πατημένο ανά οκτάδες
+        0x2A, KCNT & 0xFF, KCNT >> 8,       # ld hl,(KCNT)
+        0x23,                               # inc hl
+        0x22, KCNT & 0xFF, KCNT >> 8,       # ld (KCNT),hl
+        0x7D,                               # ld a,l
+        0xE6, 0x08,                         # and 8
+        0xC9]))
+
+    MSG = "MIND THE SPIKES"
+    mrows = [list("#" * P.COLS)] \
+        + [list("#" + "." * (P.COLS - 2) + "#") for _ in range(P.ROWS - 2)] \
+        + [list("#" * P.COLS)]
+    mrm = P.Room(";\n" + "\n".join("".join(r) for r in mrows)
+                 + f"\ngravity 0\nmsg {MSG}")
+    mrm.number, mrm.path = 1, ""
+    mt.poke(mt.sym("SET_BUF"), RF.build_set([mrm]))
+    mt.poke(mt.sym("SET_CUR"), b"\x01")
+    mt.poke(mt.sym("JR_COUNT"), b"\x00")
+    mt.poke(mt.sym("SEALED"), bytes(32))
+    mt.poke(mt.sym("TRAIL_N"), b"\x00")
+    mt.poke(mt.sym("PLATE_PREV"), b"\x00")
+    mt.call("ROOM_LOAD", a=1)
+    check("ο Z80 διάβασε το μήνυμα της αίθουσας",
+          mt.peek(mt.sym("ROOM_MSG_N"), 1)[0] == len(MSG),
+          f"{mt.peek(mt.sym('ROOM_MSG_N'), 1)[0]} vs {len(MSG)}")
+
+    mt.poke16(PTR, BUF)
+    mt.poke(BUF, b"\x00" * 64)
+    mt.call("ROOM_MSG_SHOW", timeout=20.0)
+    printed = bytes(mt.peek(BUF, mt.peek16(PTR) - BUF)).decode("ascii", "replace")
+    check("…και το τύπωσε ολόκληρο", MSG in printed, repr(printed))
+    # ΣΕ ΑΔΕΙΑ ΟΘΟΝΗ: τυπωμένο πάνω στην προηγούμενη αίθουσα θα ήταν
+    # δυσανάγνωστο, και κανένας άλλος έλεγχος δεν το βλέπει αυτό.
+    check("…αφού καθάρισε την οθόνη", mt.peek(CLR, 1)[0] == 1)
+    check("…μαζί με την οδηγία για το πώς συνεχίζεις",
+          "PRESS" in printed, repr(printed))
+    # ΚΕΝΤΡΑΡΙΣΜΕΝΟ: η στήλη είναι (40 - μήκος)/2 + 1, με τα ίδια νούμερα που
+    # χρησιμοποιεί και το κεντραρισμένο μήνυμα των αντικειμένων.
+    # Ο τελευταίος δρομέας είναι της ΟΔΗΓΙΑΣ, όχι του μηνύματος.
+    want_col = (40 - 20) // 2 + 1
+    check("…κεντραρισμένη κι εκείνη",
+          mt.peek(CUR + 1, 1)[0] == want_col,
+          f"στήλη {mt.peek(CUR + 1, 1)[0]} vs {want_col}")
+
+    # ΑΙΘΟΥΣΑ ΧΩΡΙΣ ΜΗΝΥΜΑ: ΔΕΝ σταματά και δεν τυπώνει τίποτα. Χωρίς αυτό, μια
+    # παράλειψη στον έλεγχο μήκους θα κρέμαγε κάθε αίθουσα του παιχνιδιού.
+    prm = P.Room(";\n" + "\n".join("".join(r) for r in mrows) + "\ngravity 0")
+    prm.number, prm.path = 1, ""
+    mt.poke(mt.sym("SET_BUF"), RF.build_set([prm]))
+    mt.poke(mt.sym("JR_COUNT"), b"\x00")
+    mt.call("ROOM_LOAD", a=1)
+    mt.poke16(PTR, BUF)
+    mt.call("ROOM_MSG_SHOW", timeout=5.0)
+    check("αίθουσα χωρίς μήνυμα: δεν τυπώνει και δεν περιμένει",
+          mt.peek16(PTR) == BUF, f"{mt.peek16(PTR) - BUF} bytes")
+
     # ΚΑΝΑΛΙ «ΟΛΟΙ ΜΑΖΙ»: δύο διακόπτες ανοίγουν μαζί μία πύλη.
     #
     # Ο έλεγχος τρέχει τον ΙΔΙΟ ήρωα σε Z80 και μοντέλο και συγκρίνει την πύλη

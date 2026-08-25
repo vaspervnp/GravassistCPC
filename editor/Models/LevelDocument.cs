@@ -281,6 +281,42 @@ public sealed class LevelDocument
             Footer.Add(string.Create(CultureInfo.InvariantCulture, $"all {ch}"));
     }
 
+    /// <summary>
+    /// Το μήνυμα που δείχνεται ΠΡΙΝ ζωγραφιστεί η αίθουσα — η γραμμή «msg …».
+    /// Μία γραμμή: στο MODE 1 υπάρχουν 40 στήλες κειμένου και ένα κεντραρισμένο
+    /// μήνυμα που τυλίγεται παύει να είναι κεντραρισμένο.
+    /// </summary>
+    public string Message
+    {
+        get
+        {
+            foreach (var line in Footer)
+            {
+                var m = MessagePattern.Match(line);
+                if (m.Success) return m.Groups[1].Value;
+            }
+
+            return "";
+        }
+        set
+        {
+            Footer.RemoveAll(l => MessagePattern.IsMatch(l));
+            // ΜΟΝΟ ASCII ΚΑΙ ΜΙΑ ΓΡΑΜΜΗ: ο εκτυπωτής του firmware δεν ξέρει
+            // άλλο, και ένα «\n» στην ουρά θα έσπαγε το αρχείο σε δύο δηλώσεις.
+            var text = new string((value ?? "").Where(c => c >= ' ' && c < (char)127)
+                                               .ToArray()).Trim();
+            if (text.Length > MessageMax) text = text[..MessageMax];
+            if (text.Length > 0) Footer.Add("msg " + text);
+        }
+    }
+
+    /// <summary>Πόσοι χαρακτήρες χωρούν — ίδιο με το MSG_MAX του physics.py.</summary>
+    public const int MessageMax = 38;
+
+    private static readonly Regex MessagePattern =
+        new(@"^\s*msg[ \t]+(.*?)\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly Regex AllPattern =
         new(@"^\s*all\s+([1-7])\s*$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);

@@ -23,6 +23,7 @@ tools/genasm.py τα βγάζει ως SET_NUMBERS/SET_OFFS — μην τα γρ
     dw  start_x, start_y
     db  start_g
     db  all_chan                   ; bit ανά κανάλι: θέλει ΟΛΟΥΣ τους ενεργοποιητές
+    db  len, κείμενο*              ; μήνυμα εισόδου· len = 0 σημαίνει κανένα
     (col,row,room,two)*   #FF      έξοδοι
     (origin,col,row,g)*   #FF      σημεία άφιξης
     (col,row,dcol,drow)*  #FF      τηλεμεταφορές
@@ -54,7 +55,7 @@ MAGIC = b"GRS"
 # έκδοσης 1 περνούσε την υπογραφή 'GRS' και ξεδιπλωνόταν σε σκουπίδια. Το ίδιο
 # θα γινόταν με σετ της 2 τώρα: ο Z80 θα διάβαζε τα RLE κελιά ως πίνακα
 # πυργίσκων και θα ξεδίπλωνε την αίθουσα από λάθος θέση.
-VERSION = 5
+VERSION = 6
 # ΑΙΘΟΥΣΕΣ ΑΝΑ ΑΡΧΕΙΟ — και το μέγεθος των πινάκων της κεφαλίδας.
 #
 # Ήταν 40, έπεσε σε 4, μετά σε 2, μετά σε 1 — κάθε φορά επειδή ο buffer του
@@ -249,6 +250,13 @@ def room_record(room):
     # («αυτά τα δύο μαζί»), και στο byte ιδιοτήτων του κελιού δεν υπάρχει
     # ελεύθερο bit — τα τρία είναι το κανάλι και το τέταρτο το LOCK_AUTO.
     out.append(room.all_chan & 0xFF)
+    # ΤΟ ΜΗΝΥΜΑ ΕΙΣΟΔΟΥ, ΜΕ ΤΟ ΜΗΚΟΣ ΜΠΡΟΣΤΑ. Χωρίς μήκος ο Z80 θα έψαχνε
+    # τερματικό byte μέσα σε κείμενο που το γράφει ο σχεδιαστής — και η πρώτη
+    # φορά που θα έγραφε τον λάθος χαρακτήρα θα διάβαζε την υπόλοιπη αίθουσα
+    # ως κείμενο. ASCII μόνο: ο firmware εκτυπωτής δεν ξέρει άλλο.
+    text = room.message.encode("ascii", "replace")[:P.MSG_MAX]
+    out.append(len(text))
+    out += text
     # Η ΠΛΑΤΦΟΡΜΑ ΔΕΝ ΠΕΡΝΑΕΙ ΑΠΟ ΤΟΝ ΙΔΙΟ ΔΡΟΜΟ. Ο διακόπτης τη σταματά μέσα
     # από το gate_toggle, που στα κανάλια «όλοι μαζί» παραδίδει τη δουλειά στο
     # plate_step — και εκείνο γράφει ΚΕΛΙΑ, όχι τον πίνακα των πλατφορμών. Το
@@ -435,7 +443,9 @@ def parse_set(data, name="(σετ)"):
                          int.from_bytes(data[pos + 2:pos + 4], "little"),
                          data[pos + 4])
         room["all_chan"] = data[pos + 5]
-        pos += 6
+        mlen = data[pos + 6]
+        room["message"] = data[pos + 7:pos + 7 + mlen].decode("ascii", "replace")
+        pos += 7 + mlen
         room["exits"], pos = table(pos, 4, "εξόδων")
         room["arrivals"], pos = table(pos, 4, "αφίξεων")
         room["teleports"], pos = table(pos, 4, "τηλεμεταφορών")

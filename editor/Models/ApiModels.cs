@@ -64,7 +64,8 @@ public sealed record LevelDto(
     IReadOnlyList<AttrDto> Attrs,
     IReadOnlyList<TurretDto> Turrets,
     IReadOnlyList<PlatformDto> Platforms,
-    IReadOnlyList<int> AllChannels);
+    IReadOnlyList<int> AllChannels,
+    string Message);
 
 /// <summary>
 /// Αίτημα αποθήκευσης από τον browser.
@@ -98,6 +99,9 @@ public sealed class SaveLevelRequest
     /// Δύο διακόπτες ή δύο πλάκες μαζί ανοίγουν την πύλη τους.
     /// </summary>
     public List<int> AllChannels { get; set; } = [];
+
+    /// <summary>Το μήνυμα που δείχνεται πριν ζωγραφιστεί η αίθουσα.</summary>
+    public string Message { get; set; } = "";
 }
 
 /// <summary>Ενιαία μορφή απάντησης σφάλματος (ελληνικό μήνυμα).</summary>

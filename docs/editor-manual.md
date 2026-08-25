@@ -408,6 +408,12 @@ when you want spikes that **start** retracted. There are four and not one becaus
 direction has to survive being pulled in — a spike that pops back out facing a different
 way is a different trap.
 
+**Message on entry** (File panel). One line, up to 38 characters, ASCII only — the
+Amstrad's font has no Greek. When the player walks into this room the screen goes blank,
+the message appears centred with `PRESS SPACE TO GO ON` beneath it, and the room is drawn
+once they press up, down or space. Leave it empty for no message. The line in the file is
+`msg <text>`, and everything after the space is the text, spaces included.
+
 **Wiring a second actuator.** There is no second box, and there does not need to be:
 the channel *is* the wire. Type the same channel number on the second switch or plate and
 it drives the same targets. The end of each wiring row counts what shares the channel —

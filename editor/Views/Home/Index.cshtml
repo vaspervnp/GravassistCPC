@@ -402,6 +402,12 @@
                 <span class="gravhint" id="room-gravity-hint"></span>
             </div>
             <div class="gravline">
+                <label for="room-msg">Message on entry</label>
+                <input id="room-msg" type="text" maxlength="38" style="flex:1"
+                       placeholder="shown centred before the room is drawn"
+                       title="One line, up to 38 characters, ASCII only — the Amstrad font has no Greek. It appears on an empty screen when the player enters this room and clears when they press up, down or space. Empty means no message." />
+            </div>
+            <div class="gravline">
                 <label>Channels needing ALL actuators</label>
                 <span id="all-chans"
                       title="Tick a channel and its gate opens only when EVERY switch and plate on that channel is on. Unticked, any one of them flips it."></span>
@@ -657,6 +663,13 @@
         // πύλη τους. Ιδιότητα του ΚΑΝΑΛΙΟΥ και όχι του κελιού — ο συνδυασμός
         // είναι η σχέση, όχι ο καθένας χωριστά.
         let allChannels = [];
+        // ΜΗΝΥΜΑ ΕΙΣΟΔΟΥ: μία γραμμή, δείχνεται πριν ζωγραφιστεί η αίθουσα.
+        const msgInput = document.getElementById("room-msg");
+        let roomMessage = "";
+        msgInput.addEventListener("input", function () {
+            roomMessage = msgInput.value;
+            dirty = true;
+        });
         const allBox = document.getElementById("all-chans");
         function renderAllChans() {
             allBox.textContent = "";
@@ -1916,6 +1929,7 @@
                 times: new Map(turretTimes), plats: new Map(platVals),
                 gravity: startGravity,
                 allChannels: allChannels,
+                message: roomMessage,
             };
         }
 
@@ -1932,6 +1946,8 @@
             startGravity = s.gravity;
             allChannels = (s.allChannels || []).slice();
             renderAllChans();
+            roomMessage = s.message || "";
+            msgInput.value = roomMessage;
             gravSel.value = String(startGravity);
             renderGravHint();
             drawAll();
@@ -2437,6 +2453,8 @@
             startGravity = dto.gravity || 0;
             allChannels = (dto.allChannels || []).slice();
             renderAllChans();
+            roomMessage = dto.message || "";
+            msgInput.value = roomMessage;
             gravSel.value = String(startGravity);
             renderGravHint();
             // Ο server δίνει τους προορισμούς στο αναγνωριστικό κάθε ομάδας· το
@@ -2575,6 +2593,7 @@
                 footer: footer,
                 gravity: startGravity,
                 allChannels: allChannels,
+                message: roomMessage,
                 exits: exitGroups.map(g => ({
                     col: g.col, row: g.row, room: g.room, cells: g.cells.length,
                     twoWay: !!g.twoWay,

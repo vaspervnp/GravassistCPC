@@ -42,6 +42,15 @@ def asm_equ(name, path="src/main.asm"):
     return int(m.group(1))
 
 
+def asm_string(label, path="src/main.asm"):
+    """Ένα `db "…"` του asm, διαβασμένο από εκεί που ζει."""
+    text = open(os.path.join(ROOT, path)).read()
+    m = re.search(rf'^{label}:\s*db\s+"([^"]*)"', text, re.M)
+    if not m:
+        raise SystemExit(f"το {label} δεν βρέθηκε ως κείμενο στο {path}")
+    return m.group(1)
+
+
 def sprite_frames(frames):
     """Frames σε συμπαγή μορφή: μία συμβολοσειρά ψηφίων pen ανά γραμμή."""
     return ["".join("".join(str(v) for v in row) for row in f) for f in frames]
@@ -121,6 +130,11 @@ def build():
                "PLAT_SPEED": P.PLAT_SPEED,
                "PLAT_SPEED_MAX": P.PLAT_SPEED_MAX,
                "PLAT_XSTEP": P.PLAT_XSTEP,
+               "MSG_MAX": P.MSG_MAX,
+               # Η γραμμή και η οδηγία του μηνύματος εισόδου ΑΠΟ ΤΟΝ Z80: ο
+               # browser πρέπει να δείχνει ό,τι δείχνει η δισκέτα, και δύο
+               # αντίγραφα του ίδιου κειμένου αποκλίνουν σιωπηλά.
+               "ENTRY_ROW": asm_equ("ENTRY_ROW"),
                "MSG_ROW_LO": asm_equ("MSG_ROW_LO"),
                "MSG_ROW_HI": asm_equ("MSG_ROW_HI"),
                "PLAT_MAX": P.PLAT_MAX,
@@ -159,6 +173,8 @@ def build():
         # ΟΙ ΘΕΣΕΙΣ ΤΟΥ HUD, σε στήλες byte, από ΜΙΑ πηγή. Ήταν γραμμένες με
         # το χέρι και στις δύο γλώσσες, και όταν μετακινήθηκαν τα βελάκια ο
         # editor έδειχνε άλλο HUD από το παιχνίδι.
+        # Η οδηγία κάτω από το μήνυμα εισόδου, από το src/main.asm.
+        "MSG_GO": asm_string("msg_go"),
         "HUD": {"bolt": 0, "energy": 2, "inv": 22,
                 "star": 56, "score_col": 30,
                 "grav_w": 76, "grav_h": 78, "score_digits": 6},

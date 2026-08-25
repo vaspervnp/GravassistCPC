@@ -657,6 +657,13 @@ rl_have:        pop  af
                 ld   a,(hl)             ; ποια κανάλια θέλουν ΟΛΟΥΣ τους
                 inc  hl                 ; ενεργοποιητές τους, ένα bit το καθένα
                 ld   (all_chan),a
+                ld   a,(hl)             ; μήνυμα εισόδου: μήκος και κείμενο
+                inc  hl
+                ld   (room_msg_n),a
+                ld   (room_msg),hl      ; ΔΕΙΚΤΗΣ, όχι αντίγραφο: το σετ μένει
+                ld   e,a                ; στη μνήμη όσο παίζεται η αίθουσα
+                ld   d,0
+                add  hl,de
 
                 ld   (room_exits),hl    ; οι τρεις πίνακες είναι στη σειρά, ο
                 call skip_tab           ; καθένας ως το #FF του
@@ -708,10 +715,13 @@ rl_have:        pop  af
                 ld   (hero_state),a
                 ld   a,1
                 ld   (hud_dirty),a
+                call room_msg_show      ; ΠΡΙΝ ζωγραφιστεί, όχι από πάνω της
                 jp   render_room
 
 room_exits      dw 0
 all_chan        db 0            ; bit ανά κανάλι «όλοι μαζί»
+room_msg        dw 0            ; μήνυμα εισόδου: δείκτης και μήκος
+room_msg_n      db 0
 room_tps        dw 0
 room_arr        dw 0
 cur_room        db 0
