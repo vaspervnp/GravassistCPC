@@ -718,6 +718,47 @@ class Room:
                             return nc, nr, g
         return None
 
+    # Ο ΟΚΤΑΝΤΑΣ ΜΙΑΣ ΔΙΑΦΟΡΑΣ ΚΕΛΙΩΝ, στην ΙΔΙΑ αρίθμηση με τη βαρύτητα:
+    # 0 κάτω, 2 αριστερά, 4 πάνω, 6 δεξιά, τα μονά διαγώνια. Ο πίνακας γυρίζει
+    # (πρόσημο x, πρόσημο y) σε δείκτη — ο Z80 τον έχει αυτούσιο.
+    OCTANT = {GSTEP[g]: g for g in range(8)}
+
+    @staticmethod
+    def octant_of(dx, dy):
+        """Ποια από τις οκτώ φορές δείχνει προς το (dx, dy); None αν είναι μηδέν.
+
+        ΔΙΑΓΩΝΙΑ ΜΟΝΟ ΟΤΑΝ ΤΗΝ ΑΞΙΖΕΙ: η μικρή συνιστώσα πρέπει να είναι
+        τουλάχιστον η μισή της μεγάλης. Αλλιώς προορισμός είκοσι κελιά δεξιά
+        και ένα κάτω θα έδειχνε λοξά — δηλαδή θα έλεγε ψέματα.
+        """
+        sx = (dx > 0) - (dx < 0)
+        sy = (dy > 0) - (dy < 0)
+        ax, ay = abs(dx), abs(dy)
+        if ax and ay * 2 < ax:
+            sy = 0
+        elif ay and ax * 2 < ay:
+            sx = 0
+        return Room.OCTANT.get((sx, sy))
+
+    def teleport_hint(self, cell):
+        """Πού δείχνει η τηλεμεταφορά αυτού του κελιού.
+
+        OUT: (φορά, στήλη, γραμμή) — η φορά προς το ταίρι της και ΤΟ ΚΕΛΙ όπου
+        μπαίνει το βελάκι: το διπλανό προς τα εκεί, ώστε να μην το σκεπάζει ο
+        ήρωας που στέκεται μέσα στην τηλεμεταφορά. Στην άκρη του πλέγματος
+        μαζεύεται πάνω στο ίδιο το κελί της. None αν δεν είναι δηλωμένη.
+        """
+        dest = self.teleports.get(tuple(cell))
+        if dest is None:
+            return None
+        col, row = cell
+        g = Room.octant_of(dest[0] - col, dest[1] - row)
+        if g is None:
+            return None                 # δείχνει στον εαυτό της
+        dx, dy = GSTEP[g]
+        return (g, max(0, min(COLS - 1, col + dx)),
+                max(0, min(ROWS - 1, row + dy)))
+
     def teleport_groups(self):
         """[(πάνω-αριστερό κελί, κελί προορισμού ή None, [κελιά])] ανά ομάδα."""
         return [(g[0], self.teleports[g[0]], g) for g in self._groups_of(TELEPORT)]

@@ -276,6 +276,9 @@ ml_anim:        call music_step         ; ΠΡΙΝ το flyback: το SOUND QUEU
                 call plat_draw
                 call arrow_draw         ; ΜΕΤΑ τον ήρωα: ένα βέλος από πάνω του
                                         ; πρέπει να φαίνεται
+                ; ΚΑΙ ΜΕΤΑ ΤΟΝ ΗΡΩΑ ΚΙ ΑΥΤΟ: το ορθογώνιο που ξαναγράφει ο
+                ; ήρωας πιάνει και τα διπλανά κελιά, όπου κάθεται το βελάκι.
+                call tp_arrow
                 call draw_hud
                 call score_draw
                 call hint_msg
@@ -855,17 +858,16 @@ pp_rot:         ld   a,(hero_g)
                 ld   a,(hl)
                 ld   (pp_h),a
 
-                ; ΦΡΑΓΜΑ: ο GTAB καλύπτει b από -GTAB_OFF και πάνω. Με μεγαλύτερη
-                ; απόσταση ο δείκτης γίνεται αρνητικός και διαβάζονται σκουπίδια
-                ; — ακριβώς αυτό συνέβαινε με PARA_DIST=16.
-                assert PARA_DIST<=GTAB_OFF
-                ld   a,-PARA_DIST+GTAB_OFF   ; μετατόπιση ΑΝΤΙΘΕΤΑ στη βαρύτητα
+                ; ΦΡΑΓΜΑ: ο GTAB φτάνει ως TAB_HALF θέσεις εκατέρωθεν. Με
+                ; μεγαλύτερη απόσταση θα διαβάζονταν σκουπίδια — ακριβώς αυτό
+                ; συνέβαινε με PARA_DIST=16.
+                assert PARA_DIST<=TAB_HALF
+                ld   a,-PARA_DIST       ; μετατόπιση ΑΝΤΙΘΕΤΑ στη βαρύτητα
                 ld   hl,gtab
-                call h_tabptr
-                ld   a,(hl)
+                call h_tabval
+                ld   a,c
                 ld   (pp_dx),a
-                inc  hl
-                ld   a,(hl)
+                ld   a,b
                 ld   (pp_dy),a
 
                 ld   a,(pp_dx)          ; px = hero_x + dx - πλάτος/2
@@ -1374,7 +1376,8 @@ draw_garrow:    push hl
                 ld   (dga_src),hl
                 ld   a,c
                 ld   (dga_col),a
-                ld   b,0                ; scanline 0 = πρώτη γραμμή του HUD
+                ld   a,(dga_row)        ; πρώτη γραμμή σάρωσης· 0 = το HUD
+                ld   b,a
 dga_line:       push bc
                 ld   a,(dga_col)
                 ld   c,a
@@ -1386,13 +1389,17 @@ dga_line:       push bc
                 ld   (dga_src),hl
                 pop  bc
                 inc  b
-                ld   a,b
-                cp   8
-                jr   c,dga_line
+                ld   a,(dga_row)
+                add  a,8
+                cp   b
+                jr   nz,dga_line
                 ret
 
 dga_src         dw 0
 dga_col         db 0
+; Η γραμμή όπου ξεκινά το βελάκι. Μηδέν για το HUD· το βελάκι της
+; τηλεμεταφοράς τη βάζει στο κελί του και την ξαναμηδενίζει.
+dga_row         db 0
 
 ;---------------------------------------------------------------------
 ; hint_msg — μήνυμα για ΟΤΙ έχει ο ήρωας κάτω/γύρω του

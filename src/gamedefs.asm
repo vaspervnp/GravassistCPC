@@ -60,7 +60,8 @@ T_GRAVLOCK_R     equ 49
 START_ROOM      equ 1
 
 ; Γεωμετρία πινάκων — εδώ ώστε να είναι ορατή σε assert του main.asm
-TAB_ROW         equ 64
+TAB_ROW         equ 34
+TAB_HALF        equ 16
 RTAB_OFF        equ 16
 GTAB_OFF        equ 15
 

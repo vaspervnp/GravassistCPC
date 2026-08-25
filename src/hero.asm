@@ -909,33 +909,224 @@ ha_y:           add  a,a
                 jp   cell_at
 
 ;---------------------------------------------------------------------
-; h_teleport — στο ταίρι του. Η φορά βαρύτητας ΔΙΑΤΗΡΕΙΤΑΙ: αλλιώς η
-;   τηλεμεταφορά θα ήταν και κρυφό flip, απρόβλεπτο για τον παίκτη.
+; ramp_g — η φορά βαρύτητας που στέκεται πάνω στον τύπο A
+;   OUT: A = φορά, ή NO_GROUND αν δεν είναι ράμπα
+; ΑΛΛΟΙΩΝΕΙ: AF, DE, HL
 ;---------------------------------------------------------------------
-h_teleport:     ld   hl,(room_tps)
-tp_lp:          ld   a,(hl)
+ramp_g:         sub  RAMP_FIRST         ; οι τέσσερις ράμπες είναι συνεχόμενες
+                cp   4
+                jr   c,rg_yes
+                ld   a,NO_GROUND
+                ret
+rg_yes:         ld   e,a
+                ld   d,0
+                ld   hl,ramp_g4
+                add  hl,de
+                ld   a,(hl)
+                ret
+
+;---------------------------------------------------------------------
+; tp_find — η εγγραφή τηλεμεταφοράς του κελιού (cell_col, cell_row)
+;
+;   ΞΕΧΩΡΙΣΤΑ ΑΠΟ ΤΟ h_teleport, γιατί τη θέλει και το βελάκι που δείχνει πού
+;   βγάζει: την ίδια αναζήτηση γραμμένη δύο φορές θα την άλλαζε κάποτε κανείς
+;   μόνο στη μία.
+;   OUT: CF=1 βρέθηκε, HL -> dcol, drow
+; ΑΛΛΟΙΩΝΕΙ: AF, BC, HL
+;---------------------------------------------------------------------
+tp_find:        ld   hl,(room_tps)
+tpf_lp:         ld   a,(hl)
                 cp   #FF
-                ret  z                  ; αδήλωτη: δεν κάνει τίποτα
+                jr   z,tpf_no
                 ld   b,a                ; col
                 inc  hl
                 ld   c,(hl)             ; row
                 inc  hl
                 ld   a,(cell_col)
                 cp   b
-                jr   nz,tp_next
+                jr   nz,tpf_next
                 ld   a,(cell_row)
                 cp   c
-                jr   z,tp_found
-tp_next:        inc  hl                 ; προσπέρασε dcol, drow
+                jr   z,tpf_yes
+tpf_next:       inc  hl                 ; προσπέρασε dcol, drow
                 inc  hl
-                jr   tp_lp
+                jr   tpf_lp
+tpf_yes:        scf
+                ret
+tpf_no:         or   a
+                ret
 
-tp_found:       call hero_to_cell       ; HL -> dcol, drow
+;---------------------------------------------------------------------
+; h_teleport — στο ταίρι του. Η φορά βαρύτητας ΔΙΑΤΗΡΕΙΤΑΙ: αλλιώς η
+;   τηλεμεταφορά θα ήταν και κρυφό flip, απρόβλεπτο για τον παίκτη.
+;---------------------------------------------------------------------
+h_teleport:     call tp_find
+                ret  nc                 ; αδήλωτη: δεν κάνει τίποτα
+                call hero_to_cell       ; HL -> dcol, drow
                 ld   a,1
                 ld   (hero_warp),a      ; η σχεδίαση σβήνει ΡΗΤΑ την παλιά θέση
                 ld   a,SFXID_TELE
                 jp   sfx_play
 
+
+;---------------------------------------------------------------------
+; tp_arrow — το βελάκι που δείχνει ΠΟΥ ΒΓΑΖΕΙ η τηλεμεταφορά που πατάς
+;
+;   Ο προορισμός δηλώνεται και μπορεί να είναι οπουδήποτε στην αίθουσα: χωρίς
+;   σημάδι ο παίκτης πατάει και μαθαίνει πού βγήκε ΑΦΟΥ βγει.
+;
+;   ΣΤΟ ΔΙΠΛΑΝΟ ΚΕΛΙ, ΟΧΙ ΣΤΟ ΔΙΚΟ ΤΗΣ: μέσα στην τηλεμεταφορά στέκεται ο
+;   ήρωας και θα το έκρυβε ολόκληρο. Στην άκρη του πλέγματος μαζεύεται πάνω
+;   της — καλύτερα μισοκρυμμένο παρά έξω από την οθόνη.
+;
+;   Η ΤΕΧΝΗ ΕΙΝΑΙ ΤΩΝ ΒΕΛΩΝ ΤΟΥ HUD: ο παίκτης διαβάζει ήδη αυτά τα σχήματα ως
+;   φορές, και δεν κοστίζει ούτε ένα byte καινούργιο σχέδιο.
+; ΑΛΛΟΙΩΝΕΙ: τα πάντα
+;---------------------------------------------------------------------
+tp_arrow:       call ta_erase           ; ό,τι φαινόταν πριν, φεύγει πρώτο
+                ld   bc,(hero_x)
+                ld   de,(hero_y)
+                call cell_at            ; ορίζει και τα cell_col/cell_row
+                cp   T_TELEPORT
+                ret  nz
+                call tp_find
+                ret  nc
+                ld   a,(hl)             ; dx = dcol - col
+                ld   b,a
+                ld   a,(cell_col)
+                neg
+                add  a,b
+                ld   d,a
+                inc  hl
+                ld   a,(hl)             ; dy = drow - row
+                ld   b,a
+                ld   a,(cell_row)
+                neg
+                add  a,b
+                ld   e,a
+                call oct_of             ; D = dx, E = dy -> A = φορά
+                inc  a                  ; #FF: δείχνει στον εαυτό της
+                ret  z
+                dec  a
+
+                push af                 ; το ΔΙΠΛΑΝΟ κελί προς τα εκεί
+                add  a,a
+                ld   e,a
+                ld   d,0
+                ld   hl,gstep
+                add  hl,de
+                ld   a,(cell_col)       ; τα -1 του πίνακα είναι 255: η
+                add  a,(hl)             ; πρόσθεση σε 8 bit βγάζει το σωστό
+                cp   LVL_COLS
+                jr   c,ta_cok
+                ld   a,(cell_col)       ; έξω από το πλέγμα: πάνω στο κελί της
+ta_cok:         ld   c,a
+                inc  hl
+                ld   a,(cell_row)
+                add  a,(hl)
+                cp   LVL_ROWS
+                jr   c,ta_rok
+                ld   a,(cell_row)
+ta_rok:         ld   b,a
+                ld   (ta_cell),bc       ; C = στήλη, B = γραμμή
+                ld   a,b                ; γραμμή κελιού -> γραμμή σάρωσης
+                add  a,a
+                add  a,a
+                add  a,a
+                add  a,LVL_Y0
+                ld   (dga_row),a
+                ld   a,c
+                add  a,a                ; στήλη κελιού -> στήλη byte
+                ld   c,a
+                ld   hl,grav_gfx_world
+                pop  af
+                call draw_garrow
+                ld   a,1
+                ld   (ta_on),a
+                xor  a                  ; το HUD ξαναγράφει από τη γραμμή 0
+                ld   (dga_row),a
+                ret
+
+; --- ta_erase: ξαναζωγραφίζει το πλακίδιο κάτω από το βελάκι, αν φαίνεται
+ta_erase:       ld   a,(ta_on)
+                or   a
+                ret  z
+                xor  a
+                ld   (ta_on),a
+                ld   bc,(ta_cell)       ; C = στήλη, B = γραμμή
+                jp   draw_tile
+
+ta_cell         db 0,0
+ta_on           db 0
+
+;---------------------------------------------------------------------
+; oct_of — ποια από τις οκτώ φορές δείχνει προς το (D = dx, E = dy);
+;
+;   ΔΙΑΓΩΝΙΑ ΜΟΝΟ ΟΤΑΝ ΤΗΝ ΑΞΙΖΕΙ: η μικρή συνιστώσα πρέπει να είναι
+;   τουλάχιστον η μισή της μεγάλης. Αλλιώς προορισμός είκοσι κελιά δεξιά και
+;   ένα κάτω θα έδειχνε λοξά — δηλαδή θα έλεγε ψέματα.
+;   Μεταγραφή του Room.octant_of του tools/physics.py.
+; OUT: A = φορά 0..7, ή #FF αν το (dx,dy) είναι μηδέν
+; ΑΛΛΟΙΩΝΕΙ: AF, BC, DE, HL
+;---------------------------------------------------------------------
+oct_of:         ld   a,d
+                call oc_split           ; A = πρόσημο, B = απόλυτη τιμή
+                ld   h,a                ; H = sx
+                ld   c,b                ; C = |dx|
+                ld   a,e
+                call oc_split
+                ld   l,a                ; L = sy, B = |dy|
+                ld   a,c
+                or   a
+                jr   z,oc_vert
+                ld   a,b                ; |dy|*2 < |dx| -> καθαρά οριζόντια
+                add  a,a
+                cp   c
+                jr   nc,oc_vert
+                ld   l,0
+                jr   oc_tab
+oc_vert:        ld   a,b
+                or   a
+                jr   z,oc_tab
+                ld   a,c                ; |dx|*2 < |dy| -> καθαρά κατακόρυφα
+                add  a,a
+                cp   b
+                jr   nc,oc_tab
+                ld   h,0
+oc_tab:         ld   a,h                ; (sx+1)*3 + (sy+1)
+                inc  a
+                ld   b,a
+                add  a,a
+                add  a,b
+                ld   b,a
+                ld   a,l
+                inc  a
+                add  a,b
+                ld   e,a
+                ld   d,0
+                ld   hl,oc_dirs
+                add  hl,de
+                ld   a,(hl)
+                ret
+
+; --- oc_split: A προσημασμένο -> A = πρόσημο (-1/0/1), B = απόλυτη τιμή
+oc_split:       or   a
+                ret  z                  ; μηδέν: πρόσημο 0, B δεν πειράζει
+                ld   b,a
+                bit  7,a
+                ld   a,1
+                ret  z
+                ld   a,b
+                neg
+                ld   b,a
+                ld   a,-1
+                ret
+
+; (sx,sy) -> φορά, με τη σειρά (-1,0,1) x (-1,0,1). Ίδια αρίθμηση με το
+; GSTEP του μοντέλου: 0 κάτω, 2 αριστερά, 4 πάνω, 6 δεξιά.
+oc_dirs:        db   3,2,1
+                db   4,#FF,0
+                db   5,6,7
 
 ;---------------------------------------------------------------------
 ; crate_step — τα κιβώτια πέφτουν προς την ΤΡΕΧΟΥΣΑ φορά βαρύτητας
@@ -1522,11 +1713,7 @@ h_align:        call h_support
                 or   a
                 ret  z                  ; κενό -> τίποτα
 
-                ld   e,a
-                ld   d,0
-                ld   hl,ramp_grav
-                add  hl,de
-                ld   a,(hl)
+                call ramp_g
                 cp   NO_GROUND
                 jr   z,ha_flat
 
@@ -1601,20 +1788,13 @@ h_corner:       call h_wall_a           ; A = WALL_A * d
                 ld   (hero_g),a
 
                 call h_wall_a
-                add  a,RTAB_OFF
                 ld   hl,rtab
-                call h_tabptr
-                ld   c,(hl)
-                inc  hl
-                ld   b,(hl)
+                call h_tabval
                 ld   (h_nr),bc
 
-                ld   a,FEET_B+GTAB_OFF
+                ld   a,FEET_B
                 ld   hl,gtab
-                call h_tabptr
-                ld   c,(hl)
-                inc  hl
-                ld   b,(hl)
+                call h_tabval
                 ld   (h_ng),bc
 
                 ld   a,(h_nr)           ; x = cx + nr.x - ng.x
@@ -1666,12 +1846,9 @@ h_pivot:        ld   (h_newg),a
 
                 ld   a,(h_newg)
                 ld   (hero_g),a
-                ld   a,FEET_B+GTAB_OFF
+                ld   a,FEET_B
                 ld   hl,gtab
-                call h_tabptr
-                ld   c,(hl)
-                inc  hl
-                ld   b,(hl)
+                call h_tabval
 
                 ld   a,c                ; κέντρο = επαφή - FEET_B*G_νέο
                 neg
@@ -1727,11 +1904,7 @@ hs_ok:          scf
 h_slipping:     call h_support
                 or   a
                 jr   z,hsl_no           ; κενό: πτώση, όχι γλίστρημα
-                ld   e,a
-                ld   d,0
-                ld   hl,ramp_grav
-                add  hl,de
-                ld   a,(hl)
+                call ramp_g
                 cp   NO_GROUND
                 jr   z,hsl_flat
                 ld   hl,hero_g          ; ράμπα: μόνο η δική της φορά στέκεται
@@ -1837,21 +2010,13 @@ h_point:        ld   (h_pa),a
                 ld   (h_pb),a
 
                 ld   a,(h_pa)
-                add  a,RTAB_OFF
                 ld   hl,rtab
-                call h_tabptr
-                ld   c,(hl)
-                inc  hl
-                ld   b,(hl)
+                call h_tabval
                 ld   (h_pd),bc
 
                 ld   a,(h_pb)
-                add  a,GTAB_OFF
                 ld   hl,gtab
-                call h_tabptr
-                ld   c,(hl)
-                inc  hl
-                ld   b,(hl)
+                call h_tabval
 
                 ld   a,(h_pd)           ; dx = rtab.x + gtab.x
                 add  a,c
@@ -1868,23 +2033,51 @@ h_point:        ld   (h_pa),a
                 pop  bc                 ; BC = x
                 ret
 
-; h_tabptr — HL = πίνακας + g*TAB_ROW + A*2
-h_tabptr:       push hl
-                ld   e,a
-                ld   d,0
+; h_tabval — η μετατόπιση του πίνακα HL στη θέση A
+;
+;   ΜΙΣΟΣ ΠΙΝΑΚΑΣ: gtab και rtab είναι ΑΚΡΙΒΩΣ αντισυμμετρικοί — η θέση -k
+;   είναι το αντίθετο της +k, σε κάθε φορά και για κάθε k. Κρατιόνταν και οι
+;   δύο μισές: 480 bytes για δεδομένα που βγαίνουν με ένα neg. Ο έλεγχος της
+;   αντισυμμετρίας ζει στο tools/genasm.py, όπου χτίζονται οι πίνακες.
+;
+; IN:  A = θέση ΜΕ ΠΡΟΣΗΜΟ, HL = πίνακας
+; OUT: C = dx, B = dy      ΑΛΛΟΙΩΝΕΙ: AF, DE, HL
+;---------------------------------------------------------------------
+h_tabval:       ld   d,a                ; D = η θέση όπως δόθηκε
+                or   a
+                jp   p,htv_abs
+                neg
+htv_abs:        push de
+                push hl
+                ld   e,a                ; E = |θέση|
                 ld   a,(hero_g)
                 ld   l,a
                 ld   h,0
                 add  hl,hl              ; g*2
+                ld   b,h
+                ld   c,l
                 add  hl,hl              ; *4
                 add  hl,hl              ; *8
                 add  hl,hl              ; *16
                 add  hl,hl              ; *32
-                add  hl,hl              ; *64 = TAB_ROW
+                add  hl,bc              ; *34 = TAB_ROW
+                ld   d,0
                 add  hl,de
-                add  hl,de
+                add  hl,de              ; + θέση*2
                 pop  de
-                add  hl,de
+                add  hl,de              ; + βάση πίνακα
+                ld   c,(hl)
+                inc  hl
+                ld   b,(hl)
+                pop  de                 ; D = η θέση όπως δόθηκε
+                bit  7,d
+                ret  z
+                ld   a,c                ; αρνητική: το αντίθετο ζεύγος
+                neg
+                ld   c,a
+                ld   a,b
+                neg
+                ld   b,a
                 ret
 
 ;---------------------------------------------------------------------

@@ -212,7 +212,7 @@ three settings live in the *Wiring — targets* panel — see §8.
 | `+` | Energy | Pickup: +2 energy. |
 | `P` | Parachute | Pickup: cancels fall damage. |
 | `k` | Key | Pickup: opens the locks with the matching identity. |
-| `T` | Teleporter | Sends you to another cell of the **same** room. |
+| `T` | Teleporter | Sends you to another cell of the **same** room. While you stand on one, a small arrow appears in the next cell pointing at where it will send you. |
 | `B` | Crate | **Not solid.** You walk through it, pick it up with the action key and drop it where you stand. Crates fall with gravity and stack on solids. |
 
 ### Mechanisms

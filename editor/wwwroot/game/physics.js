@@ -140,6 +140,33 @@
            : [p.x + p.rdx, p.y - D.CELL, D.CELL, D.CELL];
     }
 
+    /// Ποια από τις οκτώ φορές δείχνει προς το (dx, dy); null αν είναι μηδέν.
+    /// ΔΙΑΓΩΝΙΑ ΜΟΝΟ ΟΤΑΝ ΤΗΝ ΑΞΙΖΕΙ — η μικρή συνιστώσα τουλάχιστον η μισή
+    /// της μεγάλης, αλλιώς προορισμός είκοσι κελιά δεξιά και ένα κάτω θα
+    /// έδειχνε λοξά. Μεταγραφή του Room.octant_of του tools/physics.py.
+    static octantOf(dx, dy) {
+      let sx = Math.sign(dx), sy = Math.sign(dy);
+      const ax = Math.abs(dx), ay = Math.abs(dy);
+      if (ax && ay * 2 < ax) sy = 0;
+      else if (ay && ax * 2 < ay) sx = 0;
+      for (let g = 0; g < 8; g++)
+        if (D.GSTEP[g][0] === sx && D.GSTEP[g][1] === sy) return g;
+      return null;
+    }
+
+    /// Πού δείχνει η τηλεμεταφορά αυτού του κελιού: [φορά, στήλη, γραμμή] —
+    /// το ΔΙΠΛΑΝΟ κελί προς τα εκεί, ώστε να μην το σκεπάζει ο ήρωας που
+    /// στέκεται μέσα της. Στην άκρη μαζεύεται πάνω στο ίδιο της το κελί.
+    teleportHint(cell) {
+      const dest = this.teleports[cell[0] + "," + cell[1]];
+      if (!dest) return null;
+      const g = Room.octantOf(dest[0] - cell[0], dest[1] - cell[1]);
+      if (g === null) return null;
+      const [dx, dy] = D.GSTEP[g];
+      return [g, Math.max(0, Math.min(D.COLS - 1, cell[0] + dx)),
+              Math.max(0, Math.min(D.ROWS - 1, cell[1] + dy))];
+    }
+
     /// Πατάει το pixel (px,py) πάνω σε πλατφόρμα;
     platAt(px, py) {
       for (const p of this.platforms)

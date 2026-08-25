@@ -24,6 +24,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 ROW = 32            # εγγραφές ανά γραμμή πίνακα (64 bytes) — δύναμη του 2 ώστε
                     # ο δείκτης στον Z80 να είναι μόνο ολισθήσεις
+HALF = 16           # οι πίνακες κρατούν k = 0..HALF· δες h_tabval
 RTAB_OFF = 16       # a  = -16..15
 GTAB_OFF = 15       # b  = -15..16
 
@@ -44,29 +45,39 @@ def tables_asm():
            "",
            ""]
 
-    out.append("; RTAB[g][a+16] — μετατόπιση a pixel ΚΑΘΕΤΑ στη βαρύτητα")
+    # ΜΙΣΟΙ ΠΙΝΑΚΕΣ: gtab και rtab είναι ΑΚΡΙΒΩΣ αντισυμμετρικοί — η θέση -k
+    # είναι το αντίθετο της +k, σε κάθε φορά και για κάθε k. Αποθηκεύονταν και
+    # οι δύο μισές, δηλαδή 480 bytes για δεδομένα που βγαίνουν με ένα neg. Το
+    # h_tabval του src/hero.asm παίρνει προσημασμένο δείκτη και αντιστρέφει.
+    for name, tab, span in (("rtab", P.RTAB, P.RSPAN), ("gtab", P.GTAB, P.GSPAN)):
+        for g in range(8):
+            for k in range(HALF + 1):
+                pos = tab[g][span + k] if k <= span else (0, 0)
+                neg = tab[g][span - k] if k <= span else (0, 0)
+                if pos != tuple(-v for v in neg):
+                    raise SystemExit(
+                        f"ο {name} δεν είναι αντισυμμετρικός στο g={g} k={k}: "
+                        f"{pos} vs {neg} — το h_tabval το προϋποθέτει")
+
+    out.append("; RTAB[g][a] — μετατόπιση a pixel ΚΑΘΕΤΑ στη βαρύτητα, a = 0..%d" % HALF)
+    out.append("; Οι αρνητικές θέσεις βγαίνουν με άρνηση· δες h_tabval.")
     out.append("rtab:")
     for g in range(8):
         vals = []
-        for i in range(ROW):
-            a = i - RTAB_OFF
-            if -P.RSPAN <= a <= P.RSPAN:
-                dx, dy = P.RTAB[g][a + P.RSPAN]
-            else:
-                dx = dy = 0                       # εκτός εύρους: δεν χρησιμοποιείται
+        for k in range(HALF + 1):
+            dx, dy = P.RTAB[g][P.RSPAN + k] if k <= P.RSPAN else (0, 0)
             vals += [dx, dy]
         out.append(f"                ; g={g}")
         for i in range(0, len(vals), 16):
             out.append("                db " + ",".join(str(sb(v)) for v in vals[i:i+16]))
 
     out.append("")
-    out.append("; GTAB[g][b+15] — μετατόπιση b pixel ΚΑΤΑ τη βαρύτητα")
+    out.append("; GTAB[g][b] — μετατόπιση b pixel ΚΑΤΑ τη βαρύτητα, b = 0..%d" % HALF)
     out.append("gtab:")
     for g in range(8):
         vals = []
-        for i in range(ROW):
-            b = i - GTAB_OFF
-            dx, dy = P.GTAB[g][b + P.GSPAN]
+        for k in range(HALF + 1):
+            dx, dy = P.GTAB[g][P.GSPAN + k] if k <= P.GSPAN else (0, 0)
             vals += [dx, dy]
         out.append(f"                ; g={g}")
         for i in range(0, len(vals), 16):
@@ -79,12 +90,17 @@ def tables_asm():
     out.append("rstep:          db " + ",".join(
         f"{sb(P.RSTEP[g][0])},{sb(P.RSTEP[g][1])}" for g in range(8)))
     out.append("")
-    out.append("; Η φορά βαρύτητας που 'στέκεται' πάνω σε κάθε τύπο κελιού.")
-    out.append("; #FF = το κελί δεν επιβάλλει φορά (κενό ή επίπεδο στερεό).")
-    # ΟΛΟΙ οι τύποι, όχι μόνο οι 6 της γεωμετρίας: το h_align δεικτοδοτεί
-    # αυτόν τον πίνακα με τον τύπο κελιού, που πλέον φτάνει το 25.
-    rg = [P.RAMP_GRAVITY.get(i, 255) for i in range(P.NTYPES)]
-    out.append("ramp_grav:      db " + ",".join(str(v) for v in rg))
+    out.append("; Η φορά βαρύτητας που 'στέκεται' πάνω σε κάθε ΡΑΜΠΑ.")
+    out.append("; ΤΕΣΣΕΡΙΣ ΤΙΜΕΣ, ΟΧΙ ΜΙΑ ΑΝΑ ΤΥΠΟ: ήταν πίνακας όλων των τύπων")
+    out.append("; με #FF παντού αλλού — πενήντα bytes για τέσσερις απαντήσεις.")
+    out.append("; Οι ράμπες είναι συνεχόμενοι τύποι, οπότε ο δείκτης βγαίνει με")
+    out.append("; μια αφαίρεση· το ramp_g του src/hero.asm το κάνει.")
+    ramps = sorted(P.RAMP_GRAVITY)
+    if ramps != list(range(ramps[0], ramps[0] + 4)):
+        raise SystemExit("οι ράμπες δεν είναι πια συνεχόμενοι τύποι: "
+                         f"{ramps} — το ramp_g του hero.asm το προϋποθέτει")
+    out.append(f"RAMP_FIRST      equ {ramps[0]}")
+    out.append("ramp_g4:        db " + ",".join(str(P.RAMP_GRAVITY[t]) for t in ramps))
     out.append("")
     return "\n".join(out)
 
@@ -543,7 +559,8 @@ def defs_asm(rooms=()):
             f"START_ROOM      equ {START_ROOM if START_ROOM is not None else first}",
             "",
             "; Γεωμετρία πινάκων — εδώ ώστε να είναι ορατή σε assert του main.asm",
-            f"TAB_ROW         equ {ROW*2}",
+            f"TAB_ROW         equ {(HALF + 1) * 2}",
+            f"TAB_HALF        equ {HALF}",
             f"RTAB_OFF        equ {RTAB_OFF}",
             f"GTAB_OFF        equ {GTAB_OFF}",
             "",

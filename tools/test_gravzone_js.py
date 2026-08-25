@@ -56,6 +56,10 @@ for (const key in blob.cells) {
   }
   out[key] = seen;
 }
+// ΚΑΙ ΤΟ ΒΕΛΑΚΙ ΤΗΣ ΤΗΛΕΜΕΤΑΦΟΡΑΣ: ίδια αρίθμηση φορών, άλλος κανόνας.
+const troom = new G.Room(blob.tcells, blob.tps, {}, {}, {});
+out.__tp = [troom.teleportHint([10, 22]), troom.teleportHint([30, 5]),
+            troom.teleportHint([5, 5])];
 console.log(JSON.stringify(out));
 """
 
@@ -76,8 +80,15 @@ def main():
     tmp = os.path.join(ROOT, "build", "zonejs")
     os.makedirs(tmp, exist_ok=True)
     blob = os.path.join(tmp, "zones.json")
+    trows = [list("#" * P.COLS)] \
+        + [list("#" + "." * (P.COLS - 2) + "#") for _ in range(P.ROWS - 2)] \
+        + [list("#" * P.COLS)]
+    trows[22][10] = "T"
+    trows[5][30] = "T"
     with open(blob, "w") as f:
-        json.dump({"cells": cells}, f)
+        json.dump({"cells": cells,
+                   "tcells": [[P.CHARS[ch] for ch in row] for row in trows],
+                   "tps": {"10,22": [30, 5], "30,5": [10, 22]}}, f)
     js = os.path.join(tmp, "zones.js")
     with open(js, "w") as f:
         f.write(JS)
@@ -104,6 +115,14 @@ def main():
               set(model) == {want}, str(sorted(set(model))))
         check(f"ζώνη «{ch}»: η JavaScript λέει το ίδιο",
               got[ch] == model, f"{got[ch]} vs {model}")
+
+    # ΤΟ ΒΕΛΑΚΙ ΤΗΣ ΤΗΛΕΜΕΤΑΦΟΡΑΣ, απέναντι στο μοντέλο.
+    trm = P.Room(";\n" + "\n".join("".join(r) for r in trows)
+                 + "\ngravity 0\ntp 10 22 30 5\ntp 30 5 10 22")
+    want = [list(trm.teleport_hint((10, 22))), list(trm.teleport_hint((30, 5))),
+            trm.teleport_hint((5, 5))]
+    check("το βελάκι της τηλεμεταφοράς: ίδιο με το μοντέλο",
+          got["__tp"] == want, f"{got['__tp']} vs {want}")
 
     print("ΟΛΑ ΣΩΣΤΑ" if not FAILS else "ΑΠΕΤΥΧΑΝ: " + ", ".join(FAILS))
     return 1 if FAILS else 0

@@ -756,6 +756,88 @@ def main():
         check(f"ζώνη «{ch}» στον Z80: φορά {want} από όποια κι αν μπεις",
               got == {want}, str(sorted(str(x) for x in got)))
 
+    # ΟΙ ΠΙΝΑΚΕΣ ΓΕΩΜΕΤΡΙΑΣ, ΚΑΘΕ ΘΕΣΗ ΚΑΙ ΚΑΘΕ ΦΟΡΑ.
+    #
+    # Κρατούνται ΜΙΣΟΙ — μόνο οι θετικές θέσεις — και η αρνητική βγαίνει με
+    # άρνηση, γιατί είναι ακριβώς αντισυμμετρικοί. ΚΑΝΕΝΑ τεστ δεν κοίταζε την
+    # αρνητική πλευρά: αφαιρώντας την άρνηση, ΟΛΟΙ οι έλεγχοι έμεναν πράσινοι
+    # ενώ ο ήρωας ψηλάφιζε με τα πόδια του στη λάθος μεριά. Εδώ ελέγχονται και
+    # οι 528 θέσεις απέναντι στο μοντέλο.
+    bad_tab = []
+    for g in range(8):
+        t.poke(t.sym("HERO_G"), bytes((g,)))
+        for name, tab, span in (("rtab", P.RTAB, P.RSPAN),
+                                ("gtab", P.GTAB, P.GSPAN)):
+            for k in range(-16, 17):
+                t.call("H_TABVAL", a=k & 0xFF, hl=t.sym(name.upper()))
+                got = (t.m.c - 256 if t.m.c > 127 else t.m.c,
+                       t.m.b - 256 if t.m.b > 127 else t.m.b)
+                want = tab[g][span + k] if abs(k) <= span else (0, 0)
+                if got != tuple(want):
+                    bad_tab.append(f"{name}[{g}][{k}] {got} vs {tuple(want)}")
+    check("οι μισοί πίνακες δίνουν ό,τι και οι ολόκληροι του μοντέλου, "
+          "και στις 528 θέσεις", not bad_tab,
+          f"{len(bad_tab)} διαφορές: {bad_tab[:3]}")
+
+    # ΤΟ ΒΕΛΑΚΙ ΤΗΣ ΤΗΛΕΜΕΤΑΦΟΡΑΣ, ΣΤΟΝ Z80 ΚΑΙ ΜΕ ΤΑ PIXEL ΤΟΥ.
+    #
+    # Δεν αρκεί «ζωγράφισε κάτι»: πρέπει να είναι ΤΟ ΒΕΛΟΣ ΤΗΣ ΣΩΣΤΗΣ ΦΟΡΑΣ,
+    # στο κελί που λέει το μοντέλο. Η φορά υπολογίζεται χωριστά σε Python και
+    # σε Z80, και μια διαφωνία εκεί δείχνει τον παίκτη προς τα αλλού.
+    #
+    # ΔΙΚΟ ΤΟΥ ΣΤΙΓΜΙΟΤΥΠΟ, ΜΕ ΠΡΑΓΜΑΤΙΚΟ draw_tile: παραπάνω είναι stubbed για
+    # να μη ζωγραφίζει θόρυβος, και το σβήσιμο του βελακιού ΠΕΡΝΑΕΙ από εκείνο
+    # — ο έλεγχος «έσβησε;» θα μετρούσε μια ρουτίνα που δεν τρέχει.
+    tt = Z80Test()
+    tt.fake_set_load()
+    tt.stub("RENDER_ROOM")
+    tt.call("INIT_LINETAB")             # χωρίς αυτόν το scr_addr δίνει σκουπίδια
+    trows = [list("#" * P.COLS)] \
+        + [list("#" + "." * (P.COLS - 2) + "#") for _ in range(P.ROWS - 2)] \
+        + [list("#" * P.COLS)]
+    trows[22][10] = "T"
+    trows[5][30] = "T"
+    ttxt = ";\n" + "\n".join("".join(r) for r in trows) \
+        + "\ngravity 0\ntp 10 22 30 5\ntp 30 5 10 22"
+    trm = P.Room(ttxt)
+    trm.number, trm.path = 1, ""
+    tt.poke(tt.sym("SET_BUF"), RF.build_set([trm]))
+    tt.poke(tt.sym("SET_CUR"), b"\x01")
+    tt.poke(tt.sym("JR_COUNT"), b"\x00")
+    tt.call("ROOM_LOAD", a=1)
+
+    def arrow_band(col, row):
+        y = P.GRID_Y0 + row * P.CELL
+        return [0xC000 + ((y + i) & 7) * 0x800 + ((y + i) >> 3) * 80 + col * 2
+                for i in range(P.CELL)]
+
+    def stand_on(cell):
+        tt.poke16(tt.sym("HERO_X"), cell[0] * P.CELL + 4)
+        tt.poke16(tt.sym("HERO_Y"), P.GRID_Y0 + cell[1] * P.CELL + 4)
+        tt.call("TP_ARROW")
+
+    for src, label in (((10, 22), "κάτω αριστερά"), ((30, 5), "πάνω δεξιά")):
+        want = trm.teleport_hint(src)
+        band = arrow_band(want[1], want[2])
+        for a in band:
+            tt.poke(a, b"\x00\x00")
+        stand_on(src)
+        got = [b for a in band for b in tt.peek(a, 2)]
+        art = list(tt.peek(tt.sym("GRAV_GFX_WORLD") + want[0] * 16, 16))
+        check(f"τηλεμεταφορά {label}: το βελάκι της φοράς {want[0]} στο κελί "
+              f"{want[1]},{want[2]}", got == art,
+              f"{sum(1 for b in got if b)} bytes μελάνι")
+
+    # …και σβήνει μόλις φύγεις: αλλιώς μένει να δείχνει κάπου για πάντα.
+    want = trm.teleport_hint((10, 22))
+    band = arrow_band(want[1], want[2])
+    stand_on((10, 22))
+    lit = sum(1 for a in band for b in tt.peek(a, 2) if b)
+    stand_on((20, 22))                  # κελί χωρίς τηλεμεταφορά
+    check("και σβήνει μόλις φύγεις από την τηλεμεταφορά",
+          lit and not sum(1 for a in band for b in tt.peek(a, 2) if b),
+          f"{lit} bytes πριν, {sum(1 for a in band for b in tt.peek(a, 2) if b)} μετά")
+
     # Η σημαία που διαβάζει ο ήχος: χωρίς αυτήν τα παράσιτα δεν ξέρουν πότε
     # να ξεκινήσουν. Ο ήρωας είναι ΜΕΣΑ στη ζώνη μετά τα 200 frames.
     check("η ζώνη αφήνει σημάδι για τον ήχο",

@@ -112,6 +112,17 @@
         for (let u = 0; u < D.CELL; u++)
           if (rp[v][u]) this.px(p.x + p.rdx + u, p.y - D.CELL + v, rp[v][u]);
     }
+    /// Το βελάκι της τηλεμεταφοράς, σε ΚΕΛΙ. Ίδια τέχνη με τα βελάκια
+    /// βαρύτητας του HUD — ο παίκτης διαβάζει ήδη αυτά τα σχήματα ως φορές,
+    /// και έτσι δεν κοστίζει ούτε ένα byte καινούργιο σχέδιο στον Amstrad.
+    tpArrow(dir, col, row) {
+      const art = D.GRAV_PX[0][dir];
+      for (let v = 0; v < D.CELL; v++)
+        for (let u = 0; u < D.CELL; u++)
+          if (art[v][u]) this.px(col * D.CELL + u, D.GRID_Y0 + row * D.CELL + v,
+                                 art[v][u]);
+    }
+
     sprite(px, cx, cy) {                 // κεντραρισμένο, pen 0 = διαφανές
       const h = px.length, w = px[0].length;
       const x0 = Math.round(cx - w / 2), y0 = Math.round(cy - h / 2);

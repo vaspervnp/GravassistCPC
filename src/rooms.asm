@@ -417,21 +417,21 @@ tile_gfx:
                 db #00,#00
                 ; 45 PLATFORM
                 db #FF,#FF
-                db #0F,#0F
-                db #0F,#0F
-                db #0F,#0F
-                db #0F,#0F
-                db #0F,#0F
-                db #0F,#0F
-                db #AA,#AA
+                db #8F,#1F
+                db #8F,#1F
+                db #8F,#1F
+                db #8F,#1F
+                db #8F,#1F
+                db #8F,#1F
+                db #FF,#FF
                 ; 46 PLATFORM_OFF
                 db #FF,#FF
-                db #0F,#0F
-                db #0F,#0F
-                db #0F,#0F
-                db #0F,#0F
-                db #0F,#0F
-                db #0F,#0F
+                db #8F,#1F
+                db #8F,#1F
+                db #8F,#1F
+                db #8F,#1F
+                db #8F,#1F
+                db #8F,#1F
                 db #FF,#FF
                 ; 47 GRAVLOCK_U
                 db #00,#00
