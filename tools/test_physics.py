@@ -936,14 +936,39 @@ def main():
     hint = trm.teleport_hint((10, 22))
     check("δείχνει προς το ταίρι της", hint[0] == P.Room.octant_of(20, -17),
           str(hint))
-    check("…και μπαίνει ΠΑΝΩ στον προορισμό, όχι δίπλα σου",
-          (hint[1], hint[2]) == (30, 5), str(hint))
-    check("…και από την άλλη μεριά, ανάποδα",
-          trm.teleport_hint((30, 5))[1:] == (10, 22),
-          str(trm.teleport_hint((30, 5))))
-    edge = trm.teleport_hint((0, 12))
-    check("ο προορισμός είναι πάντα μέσα στο πλέγμα",
-          0 <= edge[1] < P.COLS and 0 <= edge[2] < P.ROWS, str(edge))
+    check("…και μπαίνει ΔΙΠΛΑ στον προορισμό, όχι πάνω του",
+          (hint[1], hint[2]) != (30, 5)
+          and max(abs(hint[1] - 30), abs(hint[2] - 5)) == 1, str(hint))
+    check("…σε ΚΕΝΟ κελί", trm.cell(hint[1], hint[2]) == P.EMPTY,
+          P.TYPE_NAMES[trm.cell(hint[1], hint[2])])
+    check("…και δείχνει ΠΡΟΣ τον προορισμό",
+          hint[0] == P.Room.octant_of(30 - hint[1], 5 - hint[2]), str(hint))
+    check("…ξεκινώντας από τη μεριά που έρχεσαι",
+          (hint[1], hint[2]) == (29, 6), str(hint))
+
+    # ΠΙΑΣΜΕΝΗ Η ΜΕΡΙΑ ΠΟΥ ΕΡΧΕΣΑΙ: γυρίζει τον κύκλο και βρίσκει άλλο κενό.
+    brows = [r[:] for r in trows]
+    brows[6][29] = "#"
+    brm = P.Room(";\n" + "\n".join("".join(r) for r in brows)
+                 + "\ngravity 0\ntp 10 22 30 5\ntp 30 5 10 22")
+    bh = brm.teleport_hint((10, 22))
+    check("με τοίχο εκεί, βρίσκει άλλο κενό διπλανό",
+          brm.cell(bh[1], bh[2]) == P.EMPTY
+          and max(abs(bh[1] - 30), abs(bh[2] - 5)) == 1, str(bh))
+    check("…και δείχνει πάλι προς τον προορισμό",
+          bh[0] == P.Room.octant_of(30 - bh[1], 5 - bh[2]), str(bh))
+
+    # ΤΙΠΟΤΑ ΕΛΕΥΘΕΡΟ ΓΥΡΩ ΤΟΥ: πάνω του, παρά καθόλου.
+    crows = [r[:] for r in trows]
+    for dc in (-1, 0, 1):
+        for dr in (-1, 0, 1):
+            if (dc, dr) != (0, 0):
+                crows[5 + dr][30 + dc] = "#"
+    crm = P.Room(";\n" + "\n".join("".join(r) for r in crows)
+                 + "\ngravity 0\ntp 10 22 30 5\ntp 30 5 10 22")
+    ch = crm.teleport_hint((10, 22))
+    check("χωρίς κανένα κενό διπλανό, μπαίνει πάνω του",
+          (ch[1], ch[2]) == (30, 5), str(ch))
     check("κελί χωρίς τηλεμεταφορά δεν έχει βελάκι",
           trm.teleport_hint((5, 5)) is None)
 

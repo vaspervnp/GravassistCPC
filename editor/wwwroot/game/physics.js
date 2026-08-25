@@ -155,14 +155,21 @@
     }
 
     /// Πού ΒΓΑΖΕΙ η τηλεμεταφορά αυτού του κελιού: [φορά, στήλη, γραμμή] —
-    /// το κελί ΠΡΟΟΡΙΣΜΟΥ και η φορά της διαδρομής. Το βελάκι μπαίνει πάνω
-    /// στον προορισμό: αυτό ρωτάει ο παίκτης, «πού θα βρεθώ;».
+    /// ένα ΚΕΝΟ κελί δίπλα στον προορισμό και η φορά προς αυτόν. Πάνω του θα
+    /// έκρυβε το πλακίδιο που δείχνει· σε γεμάτο κελί θα έκρυβε κάτι άλλο.
+    /// Μεταγραφή του Room.teleport_hint του tools/physics.py.
     teleportHint(cell) {
       const dest = this.teleports[cell[0] + "," + cell[1]];
       if (!dest) return null;
       const g = Room.octantOf(dest[0] - cell[0], dest[1] - cell[1]);
       if (g === null) return null;
-      return [g, dest[0], dest[1]];
+      for (let i = 0; i < 8; i++) {
+        const k = (g + 4 + i) % 8;      // πρώτα η μεριά που έρχεσαι
+        const nc = dest[0] + D.GSTEP[k][0], nr = dest[1] + D.GSTEP[k][1];
+        if (nc < 0 || nr < 0 || nc >= D.COLS || nr >= D.ROWS) continue;
+        if (this.cell(nc, nr) === T.EMPTY) return [(k + 4) % 8, nc, nr];
+      }
+      return [g, dest[0], dest[1]];     // τίποτα ελεύθερο γύρω του
     }
 
     /// Πατάει το pixel (px,py) πάνω σε πλατφόρμα;

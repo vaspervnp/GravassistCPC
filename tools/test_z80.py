@@ -828,20 +828,58 @@ def main():
               f"{want[1]},{want[2]}", got == art,
               f"{sum(1 for b in got if b)} bytes μελάνι")
 
-    # …και ΞΑΝΑΦΕΡΝΕΙ ΤΟ ΠΛΑΚΙΔΙΟ μόλις φύγεις. Όχι «μένει κενό»: το βελάκι
-    # κάθεται πάνω στην τηλεμεταφορά προορισμού, οπότε από κάτω του υπάρχει
-    # σχήμα — και αν δεν επιστρέψει, ο παίκτης έχασε έναν teleporter από την
-    # οθόνη του.
+    # ΠΙΑΣΜΕΝΗ Η ΚΟΝΤΙΝΗ ΜΕΡΙΑ: γυρίζει τον κύκλο και βρίσκει άλλο κενό. Χωρίς
+    # αυτό το σενάριο, ο έλεγχος «είναι κενό;» μπορεί να λείπει εντελώς και
+    # όλα να δείχνουν σωστά — η πρώτη υποψήφια θέση είναι σχεδόν πάντα κενή.
+    brows = [r[:] for r in trows]
+    brows[6][29] = "#"
+    btxt = ";\n" + "\n".join("".join(r) for r in brows) \
+        + "\ngravity 0\ntp 10 22 30 5\ntp 30 5 10 22"
+    brm = P.Room(btxt)
+    brm.number, brm.path = 1, ""
+    tt.poke(tt.sym("SET_BUF"), RF.build_set([brm]))
+    tt.poke(tt.sym("JR_COUNT"), b"\x00")
+    tt.call("ROOM_LOAD", a=1)
+    stand_on((10, 22))
+    want = brm.teleport_hint((10, 22))
+    got = (tt.peek(tt.sym("TA_CELL"), 1)[0], tt.peek(tt.sym("TA_CELL") + 1, 1)[0],
+           tt.peek(tt.sym("TA_DIR"), 1)[0])
+    check("με πιασμένη την κοντινή μεριά, ίδια επιλογή με το μοντέλο",
+          got == (want[1], want[2], want[0]),
+          f"Z80 {got} vs μοντέλο {want}")
+    tt.poke(tt.sym("SET_BUF"), RF.build_set([trm]))   # πίσω στο καθαρό δωμάτιο
+    tt.poke(tt.sym("JR_COUNT"), b"\x00")
+    tt.call("ROOM_LOAD", a=1)
+
+    # …και ΞΑΝΑΦΕΡΝΕΙ ό,τι ήταν από κάτω μόλις φύγεις. Το βελάκι κάθεται σε
+    # κενό κελί, οπότε εδώ αυτό σημαίνει «κενό» — αλλά το μέτρο είναι το
+    # πλακίδιο του κελιού, όχι το μηδέν: αν αύριο βρεθεί δίπλα σε κάτι, ο
+    # έλεγχος πρέπει να εξακολουθεί να λέει την αλήθεια.
     want = trm.teleport_hint((10, 22))
     band = arrow_band(want[1], want[2])
     stand_on((10, 22))
     arrow = [b for a in band for b in tt.peek(a, 2)]
     stand_on((20, 22))                  # κελί χωρίς τηλεμεταφορά
     after = [b for a in band for b in tt.peek(a, 2)]
-    tile = list(tt.peek(tt.sym("TILE_GFX") + P.TELEPORT * 16, 16))
-    check("φεύγοντας, το πλακίδιο της τηλεμεταφοράς ξαναφαίνεται",
+    under = tt.peek(tt.sym("CELL_BUF") + want[2] * P.COLS + want[1], 1)[0]
+    tile = list(tt.peek(tt.sym("TILE_GFX") + under * 16, 16))
+    check("φεύγοντας, ξαναφαίνεται το πλακίδιο από κάτω του",
           after == tile and arrow != tile,
-          f"{sum(1 for b in after if b)} bytes, πλακίδιο {sum(1 for b in tile if b)}")
+          f"τύπος {P.TYPE_NAMES[under]}, {sum(1 for b in after if b)} bytes")
+
+    # ΚΑΙ ΔΕΝ ΚΡΥΒΕΙ ΤΗΝ ΠΛΑΤΦΟΡΜΑ ΠΟΥ ΔΕΙΧΝΕΙ: το πλακίδιο του προορισμού
+    # πρέπει να είναι στην οθόνη όσο φαίνεται το βελάκι.
+    # Το δωμάτιο ΔΕΝ έχει ζωγραφιστεί εδώ (το render_room είναι stubbed), οπότε
+    # το πλακίδιο του προορισμού μπαίνει ρητά — αλλιώς ο έλεγχος θα σύγκρινε
+    # άδεια οθόνη με άδεια οθόνη και θα περνούσε για λάθος λόγο.
+    tt.m.bc = (5 << 8) | 30             ; # B = γραμμή, C = στήλη
+    tt.call("DRAW_TILE", bc=(5 << 8) | 30)
+    stand_on((10, 22))
+    dband = arrow_band(30, 5)
+    on_dest = [b for a in dband for b in tt.peek(a, 2)]
+    tpt = list(tt.peek(tt.sym("TILE_GFX") + P.TELEPORT * 16, 16))
+    check("ο προορισμός μένει ορατός δίπλα στο βελάκι", on_dest == tpt,
+          f"{sum(1 for b in on_dest if b)} bytes")
 
     # Η σημαία που διαβάζει ο ήχος: χωρίς αυτήν τα παράσιτα δεν ξέρουν πότε
     # να ξεκινήσουν. Ο ήρωας είναι ΜΕΣΑ στη ζώνη μετά τα 200 frames.
