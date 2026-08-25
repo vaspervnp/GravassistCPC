@@ -408,6 +408,11 @@ when you want spikes that **start** retracted. There are four and not one becaus
 direction has to survive being pulled in — a spike that pops back out facing a different
 way is a different trap.
 
+**Wiring a second actuator.** There is no second box, and there does not need to be:
+the channel *is* the wire. Type the same channel number on the second switch or plate and
+it drives the same targets. The end of each wiring row counts what shares the channel —
+`2 actuators → 1 target` — so you can see it took.
+
 **Channels needing ALL actuators** (File panel). Tick a channel and its targets open
 only when **every** switch and plate on that channel is on — two switches, or two plates,
 or one of each. Untick it and the old rule applies: any one of them flips the targets.

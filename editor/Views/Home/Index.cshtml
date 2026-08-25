@@ -432,6 +432,13 @@
                 &quot;unwired&quot; and writes nothing to the file. Hover a row to
                 see the connection on the grid. Pressing a switch does not consume
                 it &mdash; step on it again to close the gates.
+                <br>
+                <b>A second actuator needs no second box.</b> Type the same channel
+                on it and it is wired to the same targets &mdash; the count at the
+                end of each row tells you how many share it. By default any one of
+                them flips the targets; tick that channel under <b>Channels needing
+                ALL actuators</b> in the File panel and they must <b>all</b> be on
+                at once.
             </div>
         </div>
 
@@ -663,6 +670,7 @@
                     if (cb.checked) allChannels.push(ch);
                     allChannels.sort((a, b) => a - b);
                     dirty = true;
+                    renderAttrPanels();     // η περίληψη δείχνει το «ALL required»
                 });
                 const lb = document.createElement("label");
                 lb.htmlFor = id; lb.textContent = ch;
@@ -1024,6 +1032,29 @@
             renderAttrPanel(keyListEl, ["gate", "lock", "spikes", "turret"]);
         }
 
+        // ΠΟΣΟΙ ΜΟΙΡΑΖΟΝΤΑΙ ΑΥΤΟ ΤΟ ΚΑΝΑΛΙ. Το καλώδιο ΕΙΝΑΙ ο αριθμός: δύο
+        // διακόπτες με το ίδιο κανάλι είναι ήδη συνδεδεμένοι στην ίδια πύλη,
+        // χωρίς δεύτερο κουτάκι πουθενά. Χωρίς αυτή τη γραμμή όμως δεν
+        // φαίνεται πουθενά ότι έγινε — και ο σχεδιαστής ψάχνει κουτάκι.
+        const ACTUATOR_KINDS = ["sw", "plate", "key"];
+        const TARGET_KINDS = ["gate", "lock", "spikes", "turret"];
+        function chanCount(kinds, ch) {
+            let n = 0;
+            for (const k of kinds)
+                for (const g of attrGroups.get(k) || [])
+                    if ((g.value & 7) === ch) n++;
+            return n;
+        }
+        function chanSummary(ch) {
+            if (!ch) return "";
+            const a = chanCount(ACTUATOR_KINDS, ch);
+            const t = chanCount(TARGET_KINDS, ch);
+            const all = allChannels.includes(ch);
+            const parts = [a + (a === 1 ? " actuator" : " actuators"),
+                           t + (t === 1 ? " target" : " targets")];
+            return parts.join(" \u2192 ") + (all ? " · ALL required" : "");
+        }
+
         function renderAttrPanel(el, kinds) {
             el.textContent = "";
             let any = false;
@@ -1108,6 +1139,11 @@
                         attrHighlight = null;
                         renderAttrLinks();
                     });
+
+                    const note = document.createElement("span");
+                    note.className = "link-pos";
+                    note.textContent = chanSummary(ident);
+                    row.appendChild(note);
 
                     row.insertBefore(input, row.firstChild);
                     row.insertBefore(pos, row.firstChild);
