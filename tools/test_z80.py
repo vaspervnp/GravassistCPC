@@ -756,6 +756,65 @@ def main():
         check(f"ζώνη «{ch}» στον Z80: φορά {want} από όποια κι αν μπεις",
               got == {want}, str(sorted(str(x) for x in got)))
 
+    # Η σημαία που διαβάζει ο ήχος: χωρίς αυτήν τα παράσιτα δεν ξέρουν πότε
+    # να ξεκινήσουν. Ο ήρωας είναι ΜΕΣΑ στη ζώνη μετά τα 200 frames.
+    check("η ζώνη αφήνει σημάδι για τον ήχο",
+          t.peek(t.sym("HERO_ZONE"))[0] == 1,
+          str(t.peek(t.sym("HERO_ZONE"))[0]))
+    t.poke16(t.sym("HERO_X"), 30 * P.CELL + 4)   # έξω από τη ζώνη
+    t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + 21 * P.CELL + 4)
+    t.call("HERO_UPDATE", a=0)
+    check("…και σβήνει μόλις βγει", t.peek(t.sym("HERO_ZONE"))[0] == 0,
+          str(t.peek(t.sym("HERO_ZONE"))[0]))
+
+    # ΚΑΝΑΛΙ «ΟΛΟΙ ΜΑΖΙ»: δύο διακόπτες ανοίγουν μαζί μία πύλη.
+    #
+    # Ο έλεγχος τρέχει τον ΙΔΙΟ ήρωα σε Z80 και μοντέλο και συγκρίνει την πύλη
+    # καρέ προς καρέ: η διαφορά που κινδυνεύει εδώ δεν είναι «ανοίγει;» αλλά
+    # ΠΟΤΕ ανοίγει — ο Z80 ξαναϋπολογίζει μέσα στο plate_step, το μοντέλο μέσα
+    # στο πάτημα, και ένα καρέ διαφορά είναι σφάλμα.
+    crows = [list("#" * P.COLS)] \
+        + [list("#" + "." * (P.COLS - 2) + "#") for _ in range(P.ROWS - 2)] \
+        + [list("#" * P.COLS)]
+    crows[22][10] = "S"
+    crows[22][14] = "S"
+    for r in range(18, 23):
+        crows[r][25] = "G"
+    ctxt = ";\n" + "\n".join("".join(r) for r in crows) + "\ngravity 0\nall 3\n" \
+        + "sw 10 22 3\nsw 14 22 3\n" \
+        + "\n".join(f"gate 25 {r} 3" for r in range(18, 23))
+    crm = P.Room(ctxt)
+    crm.number, crm.path = 1, ""
+    t.poke(set_buf, RF.build_set([crm]))
+    t.poke(t.sym("SET_CUR"), b"\x01")
+    t.poke(t.sym("JR_COUNT"), b"\x00")
+    t.poke(t.sym("PLATE_PREV"), b"\x00")
+    t.call("ROOM_LOAD", a=1)
+    check("ο Z80 διάβασε ποια κανάλια θέλουν όλους",
+          t.peek(t.sym("ALL_CHAN"), 1)[0] == crm.all_chan,
+          f"{t.peek(t.sym('ALL_CHAN'), 1)[0]} vs {crm.all_chan}")
+
+    ref = P.Hero(P.Room(ctxt), 10 * P.CELL + 4, P.GRID_Y0 + 21 * P.CELL + 4, 0)
+    t.poke16(t.sym("HERO_X"), 10 * P.CELL + 4)
+    t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + 21 * P.CELL + 4)
+    t.poke(t.sym("HERO_G"), b"\x00")
+    t.poke(t.sym("HERO_STATE"), b"\x02")
+    zgate = lambda: t.peek(t.sym("CELL_BUF") + 22 * P.COLS + 25, 1)[0]
+    seen, diff = [], None
+    for i in range(120):
+        d = 0 if i < 30 else 1
+        t.call("HERO_UPDATE", a=d)
+        ref.update(d)
+        seen.append(zgate())
+        if zgate() != ref.room.cell(25, 22) and diff is None:
+            diff = (i, P.TYPE_NAMES[zgate()],
+                    P.TYPE_NAMES[ref.room.cell(25, 22)])
+    check("δύο διακόπτες: Z80 και μοντέλο ανοίγουν το ΙΔΙΟ καρέ",
+          diff is None, str(diff))
+    check("…και η πύλη όντως πέρασε από κλειστή σε ανοιχτή",
+          P.GATE in seen and P.GATE_OPEN in seen,
+          str(sorted({P.TYPE_NAMES[v] for v in seen})))
+
     # ΟΙ ΠΙΝΑΚΕΣ ΓΕΩΜΕΤΡΙΑΣ, ΚΑΘΕ ΘΕΣΗ ΚΑΙ ΚΑΘΕ ΦΟΡΑ.
     #
     # Κρατούνται ΜΙΣΟΙ — μόνο οι θετικές θέσεις — και η αρνητική βγαίνει με
@@ -881,16 +940,6 @@ def main():
     check("ο προορισμός μένει ορατός δίπλα στο βελάκι", on_dest == tpt,
           f"{sum(1 for b in on_dest if b)} bytes")
 
-    # Η σημαία που διαβάζει ο ήχος: χωρίς αυτήν τα παράσιτα δεν ξέρουν πότε
-    # να ξεκινήσουν. Ο ήρωας είναι ΜΕΣΑ στη ζώνη μετά τα 200 frames.
-    check("η ζώνη αφήνει σημάδι για τον ήχο",
-          t.peek(t.sym("HERO_ZONE"))[0] == 1,
-          str(t.peek(t.sym("HERO_ZONE"))[0]))
-    t.poke16(t.sym("HERO_X"), 30 * P.CELL + 4)   # έξω από τη ζώνη
-    t.poke16(t.sym("HERO_Y"), P.GRID_Y0 + 21 * P.CELL + 4)
-    t.call("HERO_UPDATE", a=0)
-    check("…και σβήνει μόλις βγει", t.peek(t.sym("HERO_ZONE"))[0] == 0,
-          str(t.peek(t.sym("HERO_ZONE"))[0]))
 
     # ΤΟ ΜΗΝΥΜΑ ΚΑΙ Η ΕΝΕΡΓΕΙΑ ΠΡΕΠΕΙ ΝΑ ΣΥΜΦΩΝΟΥΝ.
     #

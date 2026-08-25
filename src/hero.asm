@@ -138,6 +138,30 @@ hu_done:        call h_support
                 jp   h_track
 
 ;---------------------------------------------------------------------
+; sw_state — τι είναι ο τύπος A: 0 όχι διακόπτης, 1 σβηστός, 2 γυρισμένος
+;
+;   Το plate_step μετράει τώρα και τους διακόπτες, και χρειάζεται και τα δύο:
+;   «είναι ενεργοποιητής;» και «είναι ενεργός;». Ο πίνακας ζευγών τα λέει και
+;   τα δύο — ζυγή θέση σβηστός, μονή γυρισμένος.
+; ΑΛΛΟΙΩΝΕΙ: AF, B, HL
+;---------------------------------------------------------------------
+sw_state:       ld   hl,sw_tab
+                ld   b,SW_PAIRS
+sws_lp:         cp   (hl)
+                jr   z,sws_off
+                inc  hl
+                cp   (hl)
+                jr   z,sws_on
+                inc  hl
+                djnz sws_lp
+                xor  a
+                ret
+sws_off:        ld   a,1
+                ret
+sws_on:         ld   a,2
+                ret
+
+;---------------------------------------------------------------------
 ; sw_pair — A = switch type, out A = its other face, CF=1 if it was a switch
 ;
 ;   ΞΕΧΩΡΙΣΤΑ ΑΠΟ ΤΟ ΓΡΑΨΙΜΟ: ο διακόπτης που ταξιδεύει πάνω σε κινούμενη
@@ -630,6 +654,9 @@ rl_have:        pop  af
                 inc  hl
                 ld   (hero_g),a
                 ld   (world_g),a
+                ld   a,(hl)             ; ποια κανάλια θέλουν ΟΛΟΥΣ τους
+                inc  hl                 ; ενεργοποιητές τους, ένα bit το καθένα
+                ld   (all_chan),a
 
                 ld   (room_exits),hl    ; οι τρεις πίνακες είναι στη σειρά, ο
                 call skip_tab           ; καθένας ως το #FF του
@@ -684,6 +711,7 @@ rl_have:        pop  af
                 jp   render_room
 
 room_exits      dw 0
+all_chan        db 0            ; bit ανά κανάλι «όλοι μαζί»
 room_tps        dw 0
 room_arr        dw 0
 cur_room        db 0

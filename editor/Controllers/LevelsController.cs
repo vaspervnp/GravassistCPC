@@ -82,6 +82,7 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
                                               p.Channel, p.Speed)));
 
             doc.StartGravity = request.Gravity;
+            doc.SetAllChannels(request.AllChannels);
 
             var warnings = store.Save(request.Name, doc);
             return Ok(new
@@ -349,6 +350,6 @@ public sealed class LevelsController(LevelStore store) : ControllerBase
 
         return new LevelDto(name, doc.Rows, doc.Header, doc.Footer,
             exits, teleports, RoomNaming.NumberOf(name), doc.StartGravity, attrs,
-            turrets, platforms);
+            turrets, platforms, doc.AllChannels);
     }
 }

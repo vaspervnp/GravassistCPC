@@ -42,7 +42,7 @@
   for (const k in OPEN_OF) SHUT_OF[OPEN_OF[k]] = +k;
 
   class Room {
-    constructor(cells, teleports, attrs, turretArg, platSpec) {
+    constructor(cells, teleports, attrs, turretArg, platSpec, allChan) {
       this.cells = cells.map(r => r.slice());
       this.probeG = 0;
       // Ιδιότητα ανά κελί: κανάλι για διακόπτες/πόρτες, ταυτότητα για
@@ -50,6 +50,8 @@
       // κελί κρατά την κατάστασή του, όπως και στον Amstrad.
       this.attrs = attrs || {};           // "c,r" -> 0..ATTR_MAX-1
       this.teleports = teleports || {};   // "c,r" -> [dc, dr]
+      // Ποια κανάλια θέλουν ΟΛΟΥΣ τους ενεργοποιητές τους (bit ανά κανάλι).
+      this.allChan = allChan || 0;
       // Πυργίσκοι: "c,r" -> [φόρτιση, αυτόματο διάστημα] σε δευτερόλεπτα.
       this.turretArg = turretArg || {};
       this.buildPlatforms(platSpec || {});
@@ -152,6 +154,28 @@
       for (let g = 0; g < 8; g++)
         if (D.GSTEP[g][0] === sx && D.GSTEP[g][1] === sy) return g;
       return null;
+    }
+
+    /// Είναι ΟΛΟΙ οι ενεργοποιητές του καναλιού ενεργοί; Το κλειδί δεν
+    /// μετράει: ξοδεύεται, δεν είναι κατάσταση που κρατιέται. Κανάλι χωρίς
+    /// κανέναν δεν είναι «όλοι ενεργοί» — αλλιώς πύλη με λάθος αριθμό θα
+    /// άνοιγε μόνη της. Μεταγραφή του Hero.chan_all_on του physics.py.
+    chanAllOn(channel, body) {
+      let seen = false;
+      for (const k in this.attrs) {
+        if ((this.attrs[k] & 7) !== channel) continue;
+        const [c, r] = k.split(",").map(Number);
+        const t = this.cell(c, r);
+        if (D.PROPS[t] & D.F.SWITCH) {
+          seen = true;
+          if (!D.SWITCH_ON.includes(t)) return false;
+        } else if (t === T.PLATE || t === T.PLATE_DOWN) {
+          seen = true;
+          if (!(t === T.PLATE_DOWN || (c === body[0] && r === body[1])))
+            return false;
+        }
+      }
+      return seen;
     }
 
     /// Πού ΒΓΑΖΕΙ η τηλεμεταφορά αυτού του κελιού: [φορά, στήλη, γραμμή] —
@@ -523,7 +547,11 @@
         // 50 φορές το δευτερόλεπτο.
         this.sfx.push("switch");
         this.events.push("switch");
-        this.toggleTargets(this.room.attr(col, row));
+        const ch = this.room.attr(col, row);
+        // ΣΤΑ ΚΑΝΑΛΙΑ «ΟΛΟΙ ΜΑΖΙ» ΔΕΝ ΕΝΑΛΛΑΣΣΕΙ, ΥΠΟΛΟΓΙΖΕΙ: με δύο διακόπτες
+        // η εναλλαγή θα σήμαινε ότι ο δεύτερος ακυρώνει τον πρώτο.
+        if (this.room.allChan >> ch & 1) this.chanDrive(ch);
+        else this.toggleTargets(ch);
       }
       this.prevBody = col + "," + row;
       this.touchRider();
@@ -754,12 +782,25 @@
         if (v === T.PLATE_DOWN || (c === bc && r === br)) held.add(ch);
       }
       for (const ch of chans) {
+        if (this.room.allChan >> ch & 1) continue;   // τα κρίνει ο βρόχος κάτω
         const want = held.has(ch);
         if (this.plateOn[ch] === want) continue;
         this.plateOn[ch] = want;
         if (want) this.sfx.push("plate");
         this.setTargets(ch, want);
       }
+      // ΚΑΘΕ ΚΑΝΑΛΙ «ΟΛΟΙ ΜΑΖΙ», ΚΑΘΕ ΚΑΡΕ: μπορεί να αποτελείται μόνο από
+      // διακόπτες, οπότε ο βρόχος των πλακών δεν θα το έβλεπε ποτέ.
+      for (let ch = 1; ch < D.K.ATTR_MAX; ch++)
+        if (this.room.allChan >> ch & 1) this.chanDrive(ch);
+    }
+
+    /// Ξαναϋπολογίζει τους στόχους ενός καναλιού «ΟΛΟΙ ΜΑΖΙ».
+    chanDrive(ch) {
+      const want = this.room.chanAllOn(ch, this.bodyCell());
+      if (this.plateOn[ch] === want) return;
+      this.plateOn[ch] = want;
+      this.setTargets(ch, want);
     }
 
     setTargets(channel, opened) {

@@ -972,6 +972,73 @@ def main():
     check("κελί χωρίς τηλεμεταφορά δεν έχει βελάκι",
           trm.teleport_hint((5, 5)) is None)
 
+    # ΚΑΝΑΛΙ «ΟΛΟΙ ΜΑΖΙ»: δύο διακόπτες ή δύο πλάκες ανοίγουν μαζί μία πύλη.
+    def combo_room(a, b, declare=True):
+        rows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+            + [list("#" * 40)]
+        rows[22][10] = a
+        rows[22][14] = b
+        for r in range(18, 23):
+            rows[r][25] = "G"
+        kind = {"S": "sw", "p": "plate"}
+        foot = ["gravity 0"] + (["all 3"] if declare else []) \
+            + [f"{kind[a]} 10 22 3", f"{kind[b]} 14 22 3"] \
+            + [f"gate 25 {r} 3" for r in range(18, 23)]
+        rm = P.Room(";\n" + "\n".join("".join(r) for r in rows) + "\n"
+                    + "\n".join(foot))
+        return rm, P.Hero(rm, 10 * 8 + 4, P.GRID_Y0 + 21 * 8 + 4, 0)
+
+    rm, h = combo_room("S", "S")
+    for _ in range(30):
+        h.update(0)
+    check("δύο διακόπτες: ο ένας δεν φτάνει",
+          rm.cell(25, 22) == P.GATE, P.TYPE_NAMES[rm.cell(25, 22)])
+    for _ in range(60):
+        h.update(1)
+    check("…και οι δύο μαζί ανοίγουν",
+          rm.cell(25, 22) == P.GATE_OPEN, P.TYPE_NAMES[rm.cell(25, 22)])
+    # Γυρίζοντας τον έναν πίσω, ξανακλείνει: ο κανόνας κρατά και ανάποδα.
+    for _ in range(60):
+        h.update(-1)
+    check("…και ξανακλείνει μόλις σβήσει ο ένας",
+          rm.cell(25, 22) == P.GATE, P.TYPE_NAMES[rm.cell(25, 22)])
+
+    # ΔΥΟ ΠΛΑΚΕΣ: η μία πατιέται από τον ήρωα, η άλλη θέλει κιβώτιο. Χωρίς
+    # δεύτερο βάρος η πύλη μένει κλειστή, όσο κι αν στέκεσαι πάνω στην πρώτη.
+    rm, h = combo_room("p", "p")
+    for _ in range(30):
+        h.update(0)
+    check("δύο πλάκες: μία μόνο δεν φτάνει",
+          rm.cell(25, 22) == P.GATE, P.TYPE_NAMES[rm.cell(25, 22)])
+    rm.cells[22][14] = P.PLATE_DOWN     # κιβώτιο στη δεύτερη
+    for _ in range(4):
+        h.update(0)
+    check("…με βάρος και στις δύο, ανοίγει",
+          rm.cell(25, 22) == P.GATE_OPEN, P.TYPE_NAMES[rm.cell(25, 22)])
+
+    # ΚΑΝΑΛΙ ΔΗΛΩΜΕΝΟ «ΟΛΟΙ ΜΑΖΙ» ΧΩΡΙΣ ΚΑΝΕΝΑΝ ΕΝΕΡΓΟΠΟΙΗΤΗ: η πύλη ΔΕΝ
+    # ανοίγει. Το «όλοι ενεργοί» πάνω σε άδειο σύνολο είναι αληθές στα
+    # μαθηματικά και καταστροφικό στο παιχνίδι — η πύλη θα άνοιγε μόνη της, και
+    # ο σχεδιαστής που ξέχασε να βάλει τους διακόπτες δεν θα το μάθαινε ποτέ.
+    erows = [list("#" * 40)] + [list("#" + "." * 38 + "#") for _ in range(22)] \
+        + [list("#" * 40)]
+    for r in range(18, 23):
+        erows[r][25] = "G"
+    erm = P.Room(";\n" + "\n".join("".join(r) for r in erows) + "\ngravity 0\nall 5\n"
+                 + "\n".join(f"gate 25 {r} 5" for r in range(18, 23)))
+    eh = P.Hero(erm, 10 * 8 + 4, P.GRID_Y0 + 21 * 8 + 4, 0)
+    for _ in range(20):
+        eh.update(0)
+    check("κανάλι «όλοι μαζί» ΧΩΡΙΣ ενεργοποιητές: η πύλη μένει κλειστή",
+          erm.cell(25, 22) == P.GATE, P.TYPE_NAMES[erm.cell(25, 22)])
+
+    # ΧΩΡΙΣ ΤΗ ΔΗΛΩΣΗ, Ο ΠΑΛΙΟΣ ΚΑΝΟΝΑΣ: ο ένας διακόπτης αρκεί.
+    rm, h = combo_room("S", "S", declare=False)
+    for _ in range(30):
+        h.update(0)
+    check("χωρίς «all», ένας διακόπτης ανοίγει όπως πάντα",
+          rm.cell(25, 22) == P.GATE_OPEN, P.TYPE_NAMES[rm.cell(25, 22)])
+
     # ΠΑΥΣΗ ΣΤΑ ΑΚΡΑ. Χωρίς αυτήν γύριζε ακαριαία και το παράθυρο για να
     # ανέβεις ή να κατέβεις ήταν ένα καρέ.
     rm = proom("14 14", speed=100)

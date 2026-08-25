@@ -63,7 +63,8 @@ public sealed record LevelDto(
     int Gravity,
     IReadOnlyList<AttrDto> Attrs,
     IReadOnlyList<TurretDto> Turrets,
-    IReadOnlyList<PlatformDto> Platforms);
+    IReadOnlyList<PlatformDto> Platforms,
+    IReadOnlyList<int> AllChannels);
 
 /// <summary>
 /// Αίτημα αποθήκευσης από τον browser.
@@ -91,6 +92,12 @@ public sealed class SaveLevelRequest
 
     /// <summary>Οι κινούμενες πλατφόρμες — μία εγγραφή ανά ομάδα κελιών.</summary>
     public List<PlatformDto> Platforms { get; set; } = [];
+
+    /// <summary>
+    /// Κανάλια που θέλουν ΟΛΟΥΣ τους ενεργοποιητές τους — οι γραμμές «all N».
+    /// Δύο διακόπτες ή δύο πλάκες μαζί ανοίγουν την πύλη τους.
+    /// </summary>
+    public List<int> AllChannels { get; set; } = [];
 }
 
 /// <summary>Ενιαία μορφή απάντησης σφάλματος (ελληνικό μήνυμα).</summary>

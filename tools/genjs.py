@@ -75,6 +75,7 @@ def build():
 
         # Off <-> on for every switch facing. A table and not arithmetic: the
         # eight type numbers are not contiguous.
+        "SWITCH_ON": sorted(P.SWITCH_OFF_OF),
         "SWITCH_FLIP": {str(k): v for k, v in
                         list(P.SWITCH_ON_OF.items()) + list(P.SWITCH_OFF_OF.items())},
 

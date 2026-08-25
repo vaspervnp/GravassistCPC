@@ -355,7 +355,16 @@ ca_none:        xor  a
 ;---------------------------------------------------------------------
 gate_toggle:    or   a
                 ret  z                  ; κανάλι 0: κανείς δεν το ελέγχει
+                ; ΚΑΝΑΛΙ «ΟΛΟΙ ΜΑΖΙ»: ΔΕΝ εναλλάσσει, ξαναϋπολογίζει. Με δύο
+                ; διακόπτες η εναλλαγή θα σήμαινε ότι ο δεύτερος ακυρώνει τον
+                ; πρώτο — η πύλη θα άνοιγε με έναν και θα έκλεινε με δύο. Το
+                ; plate_step είναι ήδη ο υπολογισμός· δεν γράφεται δεύτερος.
                 ld   (gt_chan),a
+                call ps_bit
+                ld   hl,all_chan
+                and  (hl)
+                jp   nz,plate_step
+                ld   a,(gt_chan)
                 ; ΚΑΙ ΟΙ ΠΛΑΤΦΟΡΜΕΣ, ΑΠΟ ΤΟΝ ΠΙΝΑΚΑ ΤΟΥΣ. Ο βρόχος από κάτω
                 ; σαρώνει ΚΕΛΙΑ, και η πλατφόρμα έχει φύγει από το δικό της με
                 ; το πρώτο της βήμα — διακόπτης που κοιτάζει μόνο κελιά θα τη
@@ -522,6 +531,8 @@ plate_step:     ld   bc,(hero_x)        ; ποιο κελί πατάει το Σ
 
                 xor  a
                 ld   (ps_mask),a
+                ld   (ps_any),a
+                ld   (ps_offm),a
                 ld   hl,(room_attrs)
 ps_lp:          ld   a,(hl)
                 cp   #FF
@@ -536,33 +547,85 @@ ps_lp:          ld   a,(hl)
                 ld   (ps_chan),a
                 push hl
 
-                push bc                 ; είναι πλάκα;
+                push bc                 ; τι κάθεται εκεί;
                 call cell_addr
                 pop  bc
                 ld   a,(hl)
-                cp   T_PLATE_DOWN
-                jr   z,ps_hold          ; με κιβώτιο: πατημένη μόνη της
-                cp   T_PLATE
-                jr   nz,ps_next
+                ld   (ps_type),a
 
-                ld   a,(ps_bcol)        ; αλλιώς: την πατάει ο ήρωας;
+                ; ΚΑΙ ΟΙ ΔΙΑΚΟΠΤΕΣ, ΟΧΙ ΜΟΝΟ ΟΙ ΠΛΑΚΕΣ. Ο ίδιος βρόχος μετράει
+                ; τώρα ΚΑΘΕ ενεργοποιητή του καναλιού: το ps_any λέει «υπάρχει»
+                ; και το ps_offm «υπάρχει και είναι σβηστός». Από τα δύο βγαίνει
+                ; το «όλοι μαζί», χωρίς δεύτερη σάρωση.
+                cp   T_PLATE_DOWN
+                jr   z,ps_on            ; πλάκα με κιβώτιο: πατημένη μόνη της
+                cp   T_PLATE
+                jr   z,ps_plate
+                call sw_state           ; 0 = ούτε διακόπτης, 1 = σβηστός, 2 = γυρισμένος
+                dec  a
+                jr   z,ps_off           ; σβηστός διακόπτης
+                dec  a
+                jr   z,ps_on            ; γυρισμένος
+                jr   ps_next            ; τίποτα από τα δύο
+
+ps_plate:       ld   a,(ps_bcol)        ; την πατάει ο ήρωας;
                 cp   c
-                jr   nz,ps_next
+                jr   nz,ps_off
                 ld   a,(ps_brow)
                 cp   b
-                jr   nz,ps_next
+                jr   nz,ps_off
 
-ps_hold:        ld   a,(ps_chan)
+ps_on:          ld   a,(ps_chan)        ; ενεργός
+                call ps_bit
+                ld   hl,ps_any
+                or   (hl)
+                ld   (hl),a
+                ld   a,(ps_type)        ; ΤΟ ΠΑΛΙΟ ps_mask ΜΟΝΟ ΓΙΑ ΠΛΑΚΕΣ: τα
+                cp   T_PLATE            ; κανάλια χωρίς «όλοι μαζί» δουλεύουν
+                jr   z,ps_pmask         ; ακριβώς όπως πριν
+                cp   T_PLATE_DOWN
+                jr   nz,ps_next
+ps_pmask:       ld   a,(ps_chan)
                 call ps_bit
                 ld   hl,ps_mask
                 or   (hl)
                 ld   (hl),a
+                jr   ps_next
+
+ps_off:         ld   a,(ps_chan)        ; υπάρχει, αλλά δεν είναι ενεργός
+                call ps_bit
+                ld   hl,ps_any
+                or   (hl)
+                ld   (hl),a
+                ld   a,(ps_chan)
+                call ps_bit
+                ld   hl,ps_offm
+                or   (hl)
+                ld   (hl),a
 
 ps_next:        pop  hl
-                jr   ps_lp
+                jp   ps_lp
+
+                ; ΤΑ ΚΑΝΑΛΙΑ «ΟΛΟΙ ΜΑΖΙ» ΠΑΙΡΝΟΥΝ ΑΛΛΗ ΑΠΑΝΤΗΣΗ: ανοιχτά όταν
+                ; υπάρχει ενεργοποιητής και ΚΑΝΕΝΑΣ δεν είναι σβηστός. Τα
+                ; υπόλοιπα κρατούν την παλιά — όποια πλάκα πατιέται.
+ps_done:        ld   a,(all_chan)
+                ld   b,a
+                cpl
+                ld   c,a                ; C = τα κανάλια που ΔΕΝ είναι «όλοι μαζί»
+                ld   a,(ps_mask)
+                and  c
+                ld   c,a
+                ld   a,(ps_offm)
+                cpl
+                ld   hl,ps_any
+                and  (hl)
+                and  b
+                or   c
+                ld   (ps_mask),a
 
                 ; Μόνο τα κανάλια που ΑΛΛΑΞΑΝ ξαναγράφουν πύλες.
-ps_done:        ld   a,(ps_mask)
+                ld   a,(ps_mask)
                 ld   hl,plate_prev
                 xor  (hl)
                 ret  z                  ; τίποτα δεν άλλαξε
@@ -616,6 +679,9 @@ ps_brow         db 0
 ps_chan         db 0
 ps_ch           db 0
 ps_mask         db 0
+ps_any          db 0            ; κανάλια που ΕΧΟΥΝ ενεργοποιητή
+ps_offm         db 0            ; …και έχουν έναν ΣΒΗΣΤΟ
+ps_type         db 0
 ps_diff         db 0
 plate_prev      db 0
 

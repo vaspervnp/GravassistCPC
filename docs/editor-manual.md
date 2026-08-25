@@ -408,6 +408,13 @@ when you want spikes that **start** retracted. There are four and not one becaus
 direction has to survive being pulled in — a spike that pops back out facing a different
 way is a different trap.
 
+**Channels needing ALL actuators** (File panel). Tick a channel and its targets open
+only when **every** switch and plate on that channel is on — two switches, or two plates,
+or one of each. Untick it and the old rule applies: any one of them flips the targets.
+The line in the file is `all <channel>`. A key is not part of the combination: it is
+spent rather than held, so it still opens what it opens on its own. Moving platforms are
+not driven by these channels — the build says so if you wire one.
+
 **Opening with a key** works from two places: the cell you are **standing on**, and the
 one you are **facing**. A gate is solid, so you never stand on the side of it — you walk
 up to it and press up or down. The hint line says so when you are carrying its key.

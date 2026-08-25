@@ -377,6 +377,8 @@ class Room:
 
         # Ρυθμίσεις δωματίου, ΜΕΤΑ το πλέγμα
         self.start_g = 0
+        # Ποια κανάλια θέλουν ΟΛΟΥΣ τους ενεργοποιητές τους (bit ανά κανάλι).
+        self.all_chan = 0
         decl = {}                       # (col,row) -> αίθουσα προορισμού
         tpd = {}                        # (col,row) -> κελί προορισμού
         two = {}                        # (col,row) -> διπλής κατεύθυνσης;
@@ -407,6 +409,13 @@ class Room:
                     arr[key] = (int(m.group(5)), int(m.group(6)))
                 if m.group(7):
                     arg[key] = int(m.group(7))
+            # ΚΑΝΑΛΙ ΠΟΥ ΘΕΛΕΙ ΟΛΟΥΣ ΤΟΥΣ ΕΝΕΡΓΟΠΟΙΗΤΕΣ ΤΟΥ, όχι όποιονδήποτε:
+            # δύο διακόπτες ή δύο πλάκες μαζί ανοίγουν την πύλη. Δήλωση ανά
+            # ΚΑΝΑΛΙ και όχι ανά κελί, γιατί ο συνδυασμός είναι ιδιότητα της
+            # σχέσης — «αυτά τα δύο μαζί» — και όχι του καθενός χωριστά.
+            m = re.match(r"\s*all\s+([1-7])\s*$", ln, re.I)
+            if m:
+                self.all_chan |= 1 << int(m.group(1))
             m = re.match(r"\s*tp\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", ln, re.I)
             if m:
                 a, b, c, d = (int(x) for x in m.groups())
@@ -1261,11 +1270,19 @@ class Hero:
             if t == PLATE_DOWN or (c, r) == body:
                 held.add(v)
         for ch in chans:
+            if self.room.all_chan >> ch & 1:
+                continue                # τα κρίνει ο βρόχος από κάτω
             want = ch in held
             if self.plate_on.get(ch) == want:
                 continue
             self.plate_on[ch] = want
             self.set_targets(ch, want)
+        # ΚΑΘΕ ΚΑΝΑΛΙ «ΟΛΟΙ ΜΑΖΙ», ΚΑΘΕ ΚΑΡΕ, με ή χωρίς πλάκα: μπορεί να
+        # αποτελείται μόνο από διακόπτες, οπότε ο βρόχος των πλακών από πάνω
+        # δεν θα το έβλεπε ποτέ.
+        for ch in range(1, ATTR_MAX):
+            if self.room.all_chan >> ch & 1:
+                self.chan_drive(ch)
 
     # ΕΝΑΣ ΚΟΣΜΟΣ ΑΡΙΘΜΩΝ. Ενεργοποιητές (διακόπτης, πλάκα, κλειδί) και στόχοι
     # (πύλη, κλειδαριά, αγκάθια) μοιράζονται τους ίδιους αριθμούς 1-7. Ήταν
@@ -1279,6 +1296,39 @@ class Hero:
                SPIKE_D: SPIKE_D_OFF, SPIKE_R: SPIKE_R_OFF,
                TURRET_V: TURRET_V_OFF, TURRET_H: TURRET_H_OFF}
     SHUT_OF = {v: k for k, v in OPEN_OF.items()}
+
+    def chan_all_on(self, channel):
+        """Είναι ΟΛΟΙ οι ενεργοποιητές αυτού του καναλιού ενεργοί;
+
+        Ενεργός σημαίνει: διακόπτης γυρισμένος, πλάκα πατημένη. Το κλειδί ΔΕΝ
+        μετράει — ξοδεύεται, δεν είναι κατάσταση που κρατιέται, και ένα κανάλι
+        που περιμένει κλειδί «πάντα πατημένο» δεν θα άνοιγε ποτέ.
+
+        Κανάλι χωρίς κανέναν ενεργοποιητή δεν είναι «όλοι ενεργοί»: αλλιώς μια
+        πύλη με λάθος αριθμό θα άνοιγε μόνη της.
+        """
+        body = (self.x // CELL, (self.y - GRID_Y0) // CELL)
+        seen = False
+        for (c, r), v in self.room.attrs.items():
+            if (v & 7) != channel:
+                continue
+            t = self.room.cells[r][c]
+            if t in SWITCHES:
+                seen = True
+                if t not in SWITCH_OFF_OF:      # SWITCH_OFF_OF: ON -> OFF
+                    return False
+            elif t in (PLATE, PLATE_DOWN):
+                seen = True
+                if not (t == PLATE_DOWN or (c, r) == body):
+                    return False
+        return seen
+
+    def chan_drive(self, channel):
+        """Ξαναϋπολογίζει τους στόχους ενός καναλιού «ΟΛΟΙ ΜΑΖΙ»."""
+        want = self.chan_all_on(channel)
+        if self.plate_on.get(channel) != want:
+            self.plate_on[channel] = want
+            self.set_targets(channel, want)
 
     def set_targets(self, channel, opened):
         """Βάζει ΚΑΘΕ στόχο ενός καναλιού σε συγκεκριμένη κατάσταση.
@@ -1411,7 +1461,14 @@ class Hero:
             # see what they have already flipped without remembering.
             self.room.cells[row][col] = (SWITCH_ON_OF.get(t)
                                          or SWITCH_OFF_OF[t])
-            self.toggle_targets(self.room.attr(col, row))
+            ch = self.room.attr(col, row)
+            # ΣΤΑ ΚΑΝΑΛΙΑ «ΟΛΟΙ ΜΑΖΙ» ΔΕΝ ΕΝΑΛΛΑΣΣΕΙ, ΥΠΟΛΟΓΙΖΕΙ: με δύο
+            # διακόπτες η εναλλαγή θα σήμαινε ότι ο δεύτερος ακυρώνει τον
+            # πρώτο, δηλαδή η πύλη θα άνοιγε με έναν και θα έκλεινε με δύο.
+            if self.room.all_chan >> ch & 1:
+                self.chan_drive(ch)
+            else:
+                self.toggle_targets(ch)
         self.prev_body = (col, row)
         self._touch_rider()
 

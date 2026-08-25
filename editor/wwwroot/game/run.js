@@ -156,7 +156,7 @@
     // πυργίσκος έπαιζε με τις προεπιλογές, δηλαδή ο ρυθμός δεν υπήρχε.
     const meta = rooms[name] || {};
     room = new G.Room(cells, meta.teleports, meta.attrs, meta.turretArg,
-                      meta.platSpec);
+                      meta.platSpec, meta.allChan);
     hero = new G.Hero(room, startPos[0], startPos[1], startPos[2]);
     // Ο ΠΑΙΚΤΗΣ ΚΡΑΤΑΕΙ Ο,ΤΙ ΚΟΥΒΑΛΑΕΙ. Ο νέος ήρωας ξεκινούσε με γεμάτη
     // ενέργεια και άδεια χέρια, οπότε κάθε πόρτα ήταν και μια δωρεάν γέμιση —
@@ -711,6 +711,10 @@
           [m[4] === undefined ? D.K.TURRET_COOL : +m[4],
            m[5] === undefined ? 0 : +m[5]];
       }
+      // ΚΑΝΑΛΙΑ ΠΟΥ ΘΕΛΟΥΝ ΟΛΟΥΣ ΤΟΥΣ ΕΝΕΡΓΟΠΟΙΗΤΕΣ ΤΟΥΣ: «all <κανάλι>».
+      let allChan = 0;
+      for (const m of foot.matchAll(/^\s*all\s+([1-7])\s*$/gim))
+        allChan |= 1 << +m[1];
       // ΚΙΝΟΥΜΕΝΕΣ ΠΛΑΤΦΟΡΜΕΣ: το δεύτερο άκρο, το κανάλι και η ταχύτητα.
       // Δεν περνάνε από τον πίνακα ιδιοτήτων όπως ο πυργίσκος — η πλατφόρμα
       // φεύγει από το κελί της, οπότε το κανάλι ζει στον δικό της πίνακα.
@@ -740,7 +744,7 @@
       // πυργίσκους — και στις δύο καταστάσεις του καθενός.
       for (const t of D.WIRED) spreadKind(cells, attrs, t);
       rooms[name] = { cells, start, exits, teleports, twoWay, arrive, arriveG,
-                      attrs, turretArg, platSpec,
+                      attrs, turretArg, platSpec, allChan,
                       pristine: cells.map(r => r.slice()) };
       const o = document.createElement("option");
       o.value = name; o.textContent = name;

@@ -72,6 +72,21 @@ Check("…και ΔΕΝ βλέπει τα αρχεία του πρώτου",
 Check("οι φάκελοι χρηστών δεν αντιγράφονται σε νέους",
     !Directory.Exists(Path.Combine(dir2, "a_at_b.com")));
 
+// --- κανάλια «όλοι μαζί»: γράφονται και διαβάζονται από την ουρά
+var cdoc = LevelDocument.CreateRoom(1);
+cdoc.SetAllChannels([3, 3, 5, 9, 0]);
+Check("γράφονται μία φορά, ταξινομημένα, μόνο τα 1-7",
+    string.Join(",", cdoc.AllChannels) == "3,5",
+    string.Join(",", cdoc.AllChannels));
+Check("…ως γραμμές «all N» στην ουρά",
+    cdoc.Footer.Count(l => l.Trim() == "all 3") == 1
+    && cdoc.Footer.Count(l => l.Trim() == "all 5") == 1,
+    string.Join(" | ", cdoc.Footer));
+cdoc.SetAllChannels([]);
+Check("δεύτερη αποθήκευση δεν αφήνει ορφανές γραμμές",
+    !cdoc.Footer.Any(l => l.TrimStart().StartsWith("all ", StringComparison.OrdinalIgnoreCase)),
+    string.Join(" | ", cdoc.Footer));
+
 // --- το wwwroot βρίσκεται από όπου κι αν ξεκινήσει ο editor
 // ΤΟ ΣΦΑΛΜΑ ΠΟΥ ΤΟ ΓΕΝΝΗΣΕ: το build output ΔΕΝ αντιγράφει το wwwroot, οπότε
 // τρέχοντας το DLL από άλλον κατάλογο κάθε στατικό αρχείο γύριζε 404 — και το

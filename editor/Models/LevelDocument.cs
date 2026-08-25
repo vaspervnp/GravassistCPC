@@ -249,6 +249,42 @@ public sealed class LevelDocument
         new(@"^\s*gravity\s+([0-7])\s*$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>
+    /// Τα κανάλια που θέλουν ΟΛΟΥΣ τους ενεργοποιητές τους — οι γραμμές
+    /// «all N» της ουράς.
+    ///
+    /// ΓΙΑΤΙ ΑΝΑ ΚΑΝΑΛΙ ΚΑΙ ΟΧΙ ΑΝΑ ΚΕΛΙ: ο συνδυασμός είναι ιδιότητα της
+    /// σχέσης — «αυτά τα δύο μαζί» — και όχι του καθενός χωριστά. Στο byte
+    /// ιδιοτήτων του κελιού δεν υπάρχει και ελεύθερο bit: τα τρία είναι το
+    /// κανάλι και το τέταρτο το «ανοίγει με το άγγιγμα».
+    /// </summary>
+    public IReadOnlyList<int> AllChannels
+    {
+        get
+        {
+            var set = new SortedSet<int>();
+            foreach (var line in Footer)
+            {
+                var m = AllPattern.Match(line);
+                if (m.Success)
+                    set.Add(int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture));
+            }
+
+            return set.ToList();
+        }
+    }
+
+    public void SetAllChannels(IEnumerable<int> channels)
+    {
+        Footer.RemoveAll(l => AllPattern.IsMatch(l));
+        foreach (var ch in channels.Where(c => c >= 1 && c <= 7).Distinct().OrderBy(c => c))
+            Footer.Add(string.Create(CultureInfo.InvariantCulture, $"all {ch}"));
+    }
+
+    private static readonly Regex AllPattern =
+        new(@"^\s*all\s+([1-7])\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     public void SetExitLinks(IEnumerable<ExitLink> links)
     {
         Footer.RemoveAll(ExitGraph.IsExitLine);

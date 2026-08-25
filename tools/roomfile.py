@@ -22,6 +22,7 @@ tools/genasm.py τα βγάζει ως SET_NUMBERS/SET_OFFS — μην τα γρ
 
     dw  start_x, start_y
     db  start_g
+    db  all_chan                   ; bit ανά κανάλι: θέλει ΟΛΟΥΣ τους ενεργοποιητές
     (col,row,room,two)*   #FF      έξοδοι
     (origin,col,row,g)*   #FF      σημεία άφιξης
     (col,row,dcol,drow)*  #FF      τηλεμεταφορές
@@ -53,7 +54,7 @@ MAGIC = b"GRS"
 # έκδοσης 1 περνούσε την υπογραφή 'GRS' και ξεδιπλωνόταν σε σκουπίδια. Το ίδιο
 # θα γινόταν με σετ της 2 τώρα: ο Z80 θα διάβαζε τα RLE κελιά ως πίνακα
 # πυργίσκων και θα ξεδίπλωνε την αίθουσα από λάθος θέση.
-VERSION = 4
+VERSION = 5
 # ΑΙΘΟΥΣΕΣ ΑΝΑ ΑΡΧΕΙΟ — και το μέγεθος των πινάκων της κεφαλίδας.
 #
 # Ήταν 40, έπεσε σε 4, μετά σε 2, μετά σε 1 — κάθε φορά επειδή ο buffer του
@@ -243,6 +244,20 @@ def room_record(room):
     out += room.start_x.to_bytes(2, "little")
     out += room.start_y.to_bytes(2, "little")
     out.append(room.start_g)
+    # ΠΟΙΑ ΚΑΝΑΛΙΑ ΘΕΛΟΥΝ ΟΛΟΥΣ ΤΟΥΣ ΕΝΕΡΓΟΠΟΙΗΤΕΣ ΤΟΥΣ, ένα bit το καθένα.
+    # Ανά ΚΑΝΑΛΙ και όχι ανά κελί: ο συνδυασμός είναι ιδιότητα της σχέσης
+    # («αυτά τα δύο μαζί»), και στο byte ιδιοτήτων του κελιού δεν υπάρχει
+    # ελεύθερο bit — τα τρία είναι το κανάλι και το τέταρτο το LOCK_AUTO.
+    out.append(room.all_chan & 0xFF)
+    # Η ΠΛΑΤΦΟΡΜΑ ΔΕΝ ΠΕΡΝΑΕΙ ΑΠΟ ΤΟΝ ΙΔΙΟ ΔΡΟΜΟ. Ο διακόπτης τη σταματά μέσα
+    # από το gate_toggle, που στα κανάλια «όλοι μαζί» παραδίδει τη δουλειά στο
+    # plate_step — και εκείνο γράφει ΚΕΛΙΑ, όχι τον πίνακα των πλατφορμών. Το
+    # λέμε δυνατά αντί να το αφήσουμε να μη δουλέψει σιωπηλά στη δισκέτα.
+    for pl in room.platforms:
+        if pl["chan"] and room.all_chan >> pl["chan"] & 1:
+            print(f"  ΠΡΟΣΟΧΗ room_{room.number}: η πλατφόρμα στο κανάλι "
+                  f"{pl['chan']} δεν ελέγχεται από κανάλι «όλοι μαζί» — "
+                  f"ο διακόπτης δεν θα τη σταματά στον Amstrad.")
 
     for (c, r), dest, two, cells in room.exit_groups():
         for cc, cr in cells:
@@ -419,7 +434,8 @@ def parse_set(data, name="(σετ)"):
         room["start"] = (int.from_bytes(data[pos:pos + 2], "little"),
                          int.from_bytes(data[pos + 2:pos + 4], "little"),
                          data[pos + 4])
-        pos += 5
+        room["all_chan"] = data[pos + 5]
+        pos += 6
         room["exits"], pos = table(pos, 4, "εξόδων")
         room["arrivals"], pos = table(pos, 4, "αφίξεων")
         room["teleports"], pos = table(pos, 4, "τηλεμεταφορών")

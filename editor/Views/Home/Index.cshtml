@@ -401,6 +401,11 @@
                         title="Gravity direction when the player starts in this room (the footer's gravity line)"></select>
                 <span class="gravhint" id="room-gravity-hint"></span>
             </div>
+            <div class="gravline">
+                <label>Channels needing ALL actuators</label>
+                <span id="all-chans"
+                      title="Tick a channel and its gate opens only when EVERY switch and plate on that channel is on. Unticked, any one of them flips it."></span>
+            </div>
             <div class="hintline">The levels folder is the repo's <code>levels/</code>.
                 Rooms are <code>room_&lt;N&gt;.txt</code> files. Start gravity applies at
                 the <code>@@</code> marker; each door can override it on arrival.</div>
@@ -641,6 +646,31 @@
         const gravHint = document.getElementById("room-gravity-hint");
         fillGravity(gravSel, false);
         let startGravity = 0;
+        // ΚΑΝΑΛΙΑ «ΟΛΟΙ ΜΑΖΙ»: δύο διακόπτες ή δύο πλάκες μαζί ανοίγουν την
+        // πύλη τους. Ιδιότητα του ΚΑΝΑΛΙΟΥ και όχι του κελιού — ο συνδυασμός
+        // είναι η σχέση, όχι ο καθένας χωριστά.
+        let allChannels = [];
+        const allBox = document.getElementById("all-chans");
+        function renderAllChans() {
+            allBox.textContent = "";
+            for (let ch = 1; ch <= 7; ch++) {
+                const id = "allch-" + ch;
+                const cb = document.createElement("input");
+                cb.type = "checkbox"; cb.id = id; cb.value = ch;
+                cb.checked = allChannels.includes(ch);
+                cb.addEventListener("change", function () {
+                    allChannels = allChannels.filter(c => c !== ch);
+                    if (cb.checked) allChannels.push(ch);
+                    allChannels.sort((a, b) => a - b);
+                    dirty = true;
+                });
+                const lb = document.createElement("label");
+                lb.htmlFor = id; lb.textContent = ch;
+                lb.style.marginRight = ".6rem";
+                allBox.appendChild(cb); allBox.appendChild(lb);
+            }
+        }
+        renderAllChans();               // να υπάρχουν από την πρώτη στιγμή
         gravSel.addEventListener("change", function () {
             startGravity = parseInt(gravSel.value, 10) || 0;
             dirty = true;
@@ -1849,6 +1879,7 @@
                 tele: new Map(teleDests), attrs: new Map(attrVals),
                 times: new Map(turretTimes), plats: new Map(platVals),
                 gravity: startGravity,
+                allChannels: allChannels,
             };
         }
 
@@ -1863,6 +1894,8 @@
             turretTimes = new Map(s.times);
             platVals = new Map(s.plats);
             startGravity = s.gravity;
+            allChannels = (s.allChannels || []).slice();
+            renderAllChans();
             gravSel.value = String(startGravity);
             renderGravHint();
             drawAll();
@@ -2366,6 +2399,8 @@
             header = dto.header || [];
             footer = dto.footer || [];
             startGravity = dto.gravity || 0;
+            allChannels = (dto.allChannels || []).slice();
+            renderAllChans();
             gravSel.value = String(startGravity);
             renderGravHint();
             // Ο server δίνει τους προορισμούς στο αναγνωριστικό κάθε ομάδας· το
@@ -2503,6 +2538,7 @@
                 header: header,
                 footer: footer,
                 gravity: startGravity,
+                allChannels: allChannels,
                 exits: exitGroups.map(g => ({
                     col: g.col, row: g.row, room: g.room, cells: g.cells.length,
                     twoWay: !!g.twoWay,
