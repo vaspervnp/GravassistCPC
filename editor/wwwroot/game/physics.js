@@ -154,17 +154,15 @@
       return null;
     }
 
-    /// Πού δείχνει η τηλεμεταφορά αυτού του κελιού: [φορά, στήλη, γραμμή] —
-    /// το ΔΙΠΛΑΝΟ κελί προς τα εκεί, ώστε να μην το σκεπάζει ο ήρωας που
-    /// στέκεται μέσα της. Στην άκρη μαζεύεται πάνω στο ίδιο της το κελί.
+    /// Πού ΒΓΑΖΕΙ η τηλεμεταφορά αυτού του κελιού: [φορά, στήλη, γραμμή] —
+    /// το κελί ΠΡΟΟΡΙΣΜΟΥ και η φορά της διαδρομής. Το βελάκι μπαίνει πάνω
+    /// στον προορισμό: αυτό ρωτάει ο παίκτης, «πού θα βρεθώ;».
     teleportHint(cell) {
       const dest = this.teleports[cell[0] + "," + cell[1]];
       if (!dest) return null;
       const g = Room.octantOf(dest[0] - cell[0], dest[1] - cell[1]);
       if (g === null) return null;
-      const [dx, dy] = D.GSTEP[g];
-      return [g, Math.max(0, Math.min(D.COLS - 1, cell[0] + dx)),
-              Math.max(0, Math.min(D.ROWS - 1, cell[1] + dy))];
+      return [g, dest[0], dest[1]];
     }
 
     /// Πατάει το pixel (px,py) πάνω σε πλατφόρμα;

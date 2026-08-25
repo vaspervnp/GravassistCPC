@@ -828,15 +828,20 @@ def main():
               f"{want[1]},{want[2]}", got == art,
               f"{sum(1 for b in got if b)} bytes μελάνι")
 
-    # …και σβήνει μόλις φύγεις: αλλιώς μένει να δείχνει κάπου για πάντα.
+    # …και ΞΑΝΑΦΕΡΝΕΙ ΤΟ ΠΛΑΚΙΔΙΟ μόλις φύγεις. Όχι «μένει κενό»: το βελάκι
+    # κάθεται πάνω στην τηλεμεταφορά προορισμού, οπότε από κάτω του υπάρχει
+    # σχήμα — και αν δεν επιστρέψει, ο παίκτης έχασε έναν teleporter από την
+    # οθόνη του.
     want = trm.teleport_hint((10, 22))
     band = arrow_band(want[1], want[2])
     stand_on((10, 22))
-    lit = sum(1 for a in band for b in tt.peek(a, 2) if b)
+    arrow = [b for a in band for b in tt.peek(a, 2)]
     stand_on((20, 22))                  # κελί χωρίς τηλεμεταφορά
-    check("και σβήνει μόλις φύγεις από την τηλεμεταφορά",
-          lit and not sum(1 for a in band for b in tt.peek(a, 2) if b),
-          f"{lit} bytes πριν, {sum(1 for a in band for b in tt.peek(a, 2) if b)} μετά")
+    after = [b for a in band for b in tt.peek(a, 2)]
+    tile = list(tt.peek(tt.sym("TILE_GFX") + P.TELEPORT * 16, 16))
+    check("φεύγοντας, το πλακίδιο της τηλεμεταφοράς ξαναφαίνεται",
+          after == tile and arrow != tile,
+          f"{sum(1 for b in after if b)} bytes, πλακίδιο {sum(1 for b in tile if b)}")
 
     # Η σημαία που διαβάζει ο ήχος: χωρίς αυτήν τα παράσιτα δεν ξέρουν πότε
     # να ξεκινήσουν. Ο ήρωας είναι ΜΕΣΑ στη ζώνη μετά τα 200 frames.

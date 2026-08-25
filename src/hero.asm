@@ -991,44 +991,31 @@ tp_arrow:       call ta_erase           ; ό,τι φαινόταν πριν, φ�
                 ret  nz
                 call tp_find
                 ret  nc
-                ld   a,(hl)             ; dx = dcol - col
-                ld   b,a
-                ld   a,(cell_col)
-                neg
-                add  a,b
-                ld   d,a
+                ; ΤΟΝ ΠΡΟΟΡΙΣΜΟ ΠΡΩΤΑ, ΚΑΙ ΣΤΗ ΜΝΗΜΗ: το oct_of από κάτω χαλάει
+                ; το HL, που δείχνει μέσα στον πίνακα της τηλεμεταφοράς.
+                ld   c,(hl)             ; dcol
                 inc  hl
-                ld   a,(hl)             ; dy = drow - row
-                ld   b,a
-                ld   a,(cell_row)
+                ld   b,(hl)             ; drow
+                ld   (ta_cell),bc
+
+                ld   a,(cell_col)       ; dx = dcol - col
+                neg
+                add  a,c
+                ld   d,a
+                ld   a,(cell_row)       ; dy = drow - row
                 neg
                 add  a,b
                 ld   e,a
-                call oct_of             ; D = dx, E = dy -> A = φορά
+                call oct_of
                 inc  a                  ; #FF: δείχνει στον εαυτό της
                 ret  z
                 dec  a
+                ld   (ta_dir),a
 
-                push af                 ; το ΔΙΠΛΑΝΟ κελί προς τα εκεί
-                add  a,a
-                ld   e,a
-                ld   d,0
-                ld   hl,gstep
-                add  hl,de
-                ld   a,(cell_col)       ; τα -1 του πίνακα είναι 255: η
-                add  a,(hl)             ; πρόσθεση σε 8 bit βγάζει το σωστό
-                cp   LVL_COLS
-                jr   c,ta_cok
-                ld   a,(cell_col)       ; έξω από το πλέγμα: πάνω στο κελί της
-ta_cok:         ld   c,a
-                inc  hl
-                ld   a,(cell_row)
-                add  a,(hl)
-                cp   LVL_ROWS
-                jr   c,ta_rok
-                ld   a,(cell_row)
-ta_rok:         ld   b,a
-                ld   (ta_cell),bc       ; C = στήλη, B = γραμμή
+                ; ΤΟ ΒΕΛΑΚΙ ΠΑΝΩ ΣΤΟΝ ΠΡΟΟΡΙΣΜΟ: το ερώτημα του παίκτη είναι
+                ; «πού θα βρεθώ;». Δίπλα του απαντούσε «προς τα εκεί», που το
+                ; λέει ήδη το σχήμα του βέλους.
+                ld   bc,(ta_cell)       ; C = στήλη, B = γραμμή
                 ld   a,b                ; γραμμή κελιού -> γραμμή σάρωσης
                 add  a,a
                 add  a,a
@@ -1039,7 +1026,7 @@ ta_rok:         ld   b,a
                 add  a,a                ; στήλη κελιού -> στήλη byte
                 ld   c,a
                 ld   hl,grav_gfx_world
-                pop  af
+                ld   a,(ta_dir)
                 call draw_garrow
                 ld   a,1
                 ld   (ta_on),a
@@ -1057,6 +1044,7 @@ ta_erase:       ld   a,(ta_on)
                 jp   draw_tile
 
 ta_cell         db 0,0
+ta_dir          db 0
 ta_on           db 0
 
 ;---------------------------------------------------------------------
