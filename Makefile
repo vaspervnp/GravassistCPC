@@ -166,9 +166,11 @@ test: $(JSDATA)
 	$(PY) tools/test_gravzone_js.py
 	$(PY) tools/test_keys_js.py
 	$(PY) tools/test_andchan_js.py
+	$(PY) tools/test_message_js.py
 	$(PY) tools/test_platform_z80.py
 	$(PY) tools/test_z80.py
 	$(PY) tools/test_music.py
+	$(PY) tools/test_screenshot.py
 	@# Ο έλεγχος του προσωπικού φακέλου θέλει .NET, που δεν είναι στο PATH.
 	@if [ -x "$$HOME/.dotnet/dotnet" ]; then \
 	    "$$HOME/.dotnet/dotnet" run --project editor.Tests -v q --nologo; \
@@ -198,8 +200,14 @@ $(PARITY): tools/parity.py tools/physics.py editor/wwwroot/game/physics.js $(JSD
 trace:
 	$(PY) tools/trace.py
 
+# Στιγμιότυπα του παιχνιδιού από τον προσομοιωτή Z80 -> docs/screenshots/.
+# Το main.bin χτίζεται από τον προσομοιωτή τον ίδιο (tools/z80run.py), οπότε
+# δεν εξαρτάται από το $(BIN)· ό,τι αλλάζει στις πίστες φαίνεται εδώ.
+screenshots:
+	$(PY) tools/screenshot.py
+
 clean:
 	rm -rf build
 	rm -f assets/*-export.png
 
-.PHONY: all clean test trace sprites-init editor-data
+.PHONY: all clean test trace sprites-init editor-data screenshots

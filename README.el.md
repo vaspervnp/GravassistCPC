@@ -265,6 +265,7 @@ teleporter στην άλλη άκρη της οθόνης). Γι' αυτό το 
 | [docs/concept-art.md](docs/concept-art.md) | Το concept art και τι δεσμεύει |
 | [docs/sprites.md](docs/sprites.md) | Μορφή sprites, PNG round-trip, περιστροφή |
 | [docs/level-elements.md](docs/level-elements.md) | Τα στοιχεία πίστας και γιατί επιλέχθηκαν |
+| [docs/screenshots.md](docs/screenshots.md) | Στιγμιότυπα μενού και αιθουσών, από τον προσομοιωτή Z80 |
 | [tools/physics.py](tools/physics.py) | Το μοντέλο φυσικής — **αναφορά** για το src/hero.asm |
 | [CLAUDE.md](CLAUDE.md) | Οδηγίες toolchain και συμβάσεις κώδικα |
 

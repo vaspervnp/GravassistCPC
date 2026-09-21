@@ -38,6 +38,7 @@ make test         # μοντέλο, ΠΡΑΓΜΑΤΙΚΟΣ Z80 σε προσομ
 make trace        # οπτικό ίχνος της διαδρομής του ήρωα
 make toolchain    # ποια rasm/iDSK θα τρέξουν τελικά
 make editor-data  # δεδομένα για το test run του browser
+make screenshots  # docs/screenshots/*.png από τον προσομοιωτή Z80
 make clean
 ```
 Το `rasm` βγάζει το `build/main.bin` μέσω `save` directive μέσα στο `src/main.asm`.
@@ -97,6 +98,7 @@ tools/roomfile.py   αίθουσες -> ROOMSnn.BIN (RLE, σετ των SET_ROOM
 tools/genboss.py    η μεταγραφή του Boss Time -> tune.asm + TUNEnn.BIN
 tools/genmusic.py   ΒΙΒΛΙΟΘΗΚΗ πια: ονόματα νοτών, περίοδοι AY, κρουστά
 tools/z80run.py     τρέχει το ΠΡΑΓΜΑΤΙΚΟ main.bin σε προσομοιωτή Z80
+tools/screenshot.py στιγμιότυπα από τον ίδιο προσομοιωτή (docs/screenshots.md)
 tools/test_*.py     μοντέλο και Z80 χωριστά· parity.py: Python vs JavaScript
 tools/checkdsk.py   ότι η δισκέτα έχει όντως αίθουσες ΚΑΙ μουσική
 tools/toolchain.py  πού είναι τα rasm/iDSK (toolchain.json)

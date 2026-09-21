@@ -267,6 +267,7 @@ Z80 emulator and checks the data it produces — not a second writing of it.
 | [docs/concept-art.md](docs/concept-art.md) | The concept art and what it commits us to *(in Greek)* |
 | [docs/sprites.md](docs/sprites.md) | Sprite format, PNG round-trip, rotation *(in Greek)* |
 | [docs/level-elements.md](docs/level-elements.md) | The level elements and why they were chosen *(in Greek)* |
+| [docs/screenshots.md](docs/screenshots.md) | Screenshots of the menu and the rooms, taken from the Z80 simulator *(in Greek)* |
 | [tools/physics.py](tools/physics.py) | The physics model — **the reference** for src/hero.asm |
 | [CLAUDE.md](CLAUDE.md) | Toolchain instructions and code conventions *(in Greek)* |
 

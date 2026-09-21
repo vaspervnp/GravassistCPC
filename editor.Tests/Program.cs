@@ -72,6 +72,23 @@ Check("…και ΔΕΝ βλέπει τα αρχεία του πρώτου",
 Check("οι φάκελοι χρηστών δεν αντιγράφονται σε νέους",
     !Directory.Exists(Path.Combine(dir2, "a_at_b.com")));
 
+// --- το μήνυμα εισόδου: γράφεται, διαβάζεται, καθαρίζεται
+var mdoc = LevelDocument.CreateRoom(1);
+mdoc.Message = "MIND THE SPIKES";
+Check("το μήνυμα γίνεται γραμμή «msg …»",
+    mdoc.Footer.Any(l => l.Trim() == "msg MIND THE SPIKES"),
+    string.Join(" | ", mdoc.Footer));
+Check("…και διαβάζεται πίσω", mdoc.Message == "MIND THE SPIKES", mdoc.Message);
+mdoc.Message = "  ΕΛΛΗΝΙΚΑ και tabs\tκαι πολύ μεγάλο κείμενο που ξεπερνά το όριο ";
+Check("ό,τι δεν είναι ASCII πετιέται και το μήκος κόβεται",
+    mdoc.Message.Length <= LevelDocument.MessageMax
+    && mdoc.Message.All(c => c >= ' ' && c < (char)127),
+    $"«{mdoc.Message}»");
+mdoc.Message = "";
+Check("άδειο μήνυμα δεν αφήνει γραμμή",
+    !mdoc.Footer.Any(l => l.TrimStart().StartsWith("msg", StringComparison.OrdinalIgnoreCase)),
+    string.Join(" | ", mdoc.Footer));
+
 // --- κανάλια «όλοι μαζί»: γράφονται και διαβάζονται από την ουρά
 var cdoc = LevelDocument.CreateRoom(1);
 cdoc.SetAllChannels([3, 3, 5, 9, 0]);
